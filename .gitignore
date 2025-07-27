@@ -1,0 +1,5 @@
+# Ignore content from data
+data/*
+
+# But keep the folder and this placeholder file
+!data/.gitkeep
