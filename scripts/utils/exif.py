@@ -5,7 +5,7 @@ from PIL import Image, ExifTags
 def get_datetime_from_image(img_path):
   try: 
     image = Image.open(img_path)
-    exif_data = image.getexif()
+    exif_data = image._getexif()
     if exif_data:
       for tag, value in exif_data.items():
         decoded_tag = ExifTags.TAGS.get(tag)

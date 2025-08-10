@@ -3,3 +3,5 @@ data/*
 
 # But keep the folder and this placeholder file
 !data/.gitkeep
+
+__pycache__/
