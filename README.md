@@ -1,3 +1,3 @@
 # 🦉 Wildlife Vision
 
-An offline-first, automated image sorting pipeline for wildlife trail camera photos. This tool helps you detect and classify images as either `animal` or `empty`, rename them based on metadata, and organize them for long-term storage or further tagging (e.g., species identification).
+An offline-first set of automated image pipelines for wildlife trail camera photos. This toolset helps you organise, detect, and classify images using metadata and models to identify content in photos, making it easy to handle your photos for long-term storage and further research and tagging.
