@@ -5,7 +5,7 @@ from pathlib import Path
 from utils.files import allowed_image_exts
 from utils.exif import get_datetime_from_image
 
-def organize_photos(input_path, camera_location, output_path): 
+def organise_photos(input_path, camera_location, output_path): 
   input_path = Path(input_path).resolve()
   output_path = Path(output_path)
   
@@ -13,7 +13,7 @@ def organize_photos(input_path, camera_location, output_path):
     print(f"Input path does not exist: {input_path}")
     return
 
-  print("Organizing photos...")
+  print("Organising photos...")
   for file in input_path.iterdir():
     if file.suffix in allowed_image_exts:
       date_taken = get_datetime_from_image(file)
@@ -36,5 +36,5 @@ if __name__ == "__main__":
   camera_location = input("Enter the location of the camera: ").strip().replace(" ", "_")
   output_path = input("Enter the output folder path: ").strip()
   
-  organize_photos(input_path, camera_location, output_path)
-  print("\n Your photos have been organized successfully.")
+  organise_photos(input_path, camera_location, output_path)
+  print("\n Your photos have been organised successfully.")
