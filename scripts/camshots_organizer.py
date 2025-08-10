@@ -1,0 +1,40 @@
+import sys
+import shutil
+from pathlib import Path
+
+from utils.files import allowed_image_exts
+from utils.exif import get_datetime_from_image
+
+def organize_photos(input_path, camera_location, output_path): 
+  input_path = Path(input_path).resolve()
+  output_path = Path(output_path)
+  
+  if not input_path.exists():
+    print(f"Input path does not exist: {input_path}")
+    return
+
+  print("Organizing photos...")
+  for file in input_path.iterdir():
+    if file.suffix in allowed_image_exts:
+      date_taken = get_datetime_from_image(file)
+      date_str = date_taken.strftime("%Y%m%d")
+      time_str = date_taken.strftime("%H%M%S")
+      
+      date_folder = output_path / date_str
+      date_folder.mkdir(parents=True, exist_ok=True)
+      
+      new_filename = f"{date_str}_{time_str}__{camera_location}{file.suffix.lower()}"
+      new_file_path = date_folder / new_filename
+      
+      shutil.move(str(file), new_file_path)
+      print(f"File moved: {file.name} → {new_file_path}")
+  
+  return None
+
+if __name__ == "__main__":
+  input_path = input("Enter the input folder path: ").strip()
+  camera_location = input("Enter the location of the camera: ").strip().replace(" ", "_")
+  output_path = input("Enter the output folder path: ").strip()
+  
+  organize_photos(input_path, camera_location, output_path)
+  print("\n Your photos have been organized successfully.")
