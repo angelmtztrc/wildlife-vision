@@ -1,4 +1,5 @@
 import os
+import piexif
 from datetime import datetime
 from PIL import Image, ExifTags
 
@@ -17,3 +18,6 @@ def get_datetime_from_image(img_path):
     
   ts = os.path.getmtime(img_path)
   return datetime.fromtimestamp(ts)
+
+def set_image_metadata(img_path, tag_name, tag_value):
+  return None
