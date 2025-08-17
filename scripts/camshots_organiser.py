@@ -1,4 +1,3 @@
-import sys
 import shutil
 import argparse
 from pathlib import Path
@@ -7,8 +6,6 @@ from utils.files import allowed_image_exts
 from utils.exif import get_datetime_from_image
 
 def organise_photos(input_path, camera_location, generate_subfolders,output_path): 
-  
-  subfolder = sys.argv[1] if len(sys.argv) > 1 else None
   input_path = Path(input_path).resolve()
   output_path = Path(output_path)
   
