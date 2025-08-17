@@ -31,7 +31,7 @@ Some of the scripts may receive additional args. Read the table bellow to know h
 | camshots_organiser  | python3 scripts/camshots_organiser.py  | `--generate-subfolders` Allows to generate YYYYMMDD subfolders for better organisation | Script that organises all photos of the given input folder, renaming all the photos with the YYYYMMDD_HHMMSS_Location format and moving them to an output folder.       |
 | detection_organiser | python3 scripts/detection_organiser.py |                                                                                        | Script that organises all photos of the given input folder based in the Detection attribute and moving them to the output folder organising them by animal/empty/object |
 | predict_photo       | python3 scripts/predict_photo.py       |                                                                                        | Script that predict if the given input photo fits into the classes animal/empty/object                                                                                  |
-| train_classifier    | python3 scripts/train_classifier       |                                                                                        | Script that trains the animal_classifier model using the photos stored in dataset using the classes animal/empty/object                                                 |
+| train_classifier    | python3 scripts/train_classifier.py    |                                                                                        | Script that trains the animal_classifier model using the photos stored in dataset using the classes animal/empty/object                                                 |
 
 ### Graphical User Interfaces
 
