@@ -3,3 +3,4 @@ piexif
 torch 
 torchvision
 pandas
+tqdm
