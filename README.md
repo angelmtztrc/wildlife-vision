@@ -43,18 +43,18 @@ python3 -m gui.photo_tagger
 
 Here is the description of each GUI available:
 
-| File         | Description                                                                                                                                                                                                                                             |
-| :----------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| photo_tagger | Created to set the Detection tag for photos stored in the selected folder. Use 1, 2, 3 (empty, animal, object) to set the corresponding value to the Detection tag. The use of left/right arrow is available for returning or going to the next photo.) |
+| File         | Description                                                                                                                                                                                                                                            |
+| :----------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| photo_tagger | Created to set the Detection tag for photos stored in the selected folder. Use 1, 2, 3 (empty, animal, object) to set the corresponding value to the Detection tag. The use of left/right arrow is available for returning or going to the next photo. |
 
 ## Tag system
 
-The entire project uses the ImageDescription exiftag to store tags that helps the script identify important information for the given photo. The tags are stored in `ImageDescription` using the format `TagName=TagValue;TagName=TagValue;`. The list of used Tags is listed bellow:
+The entire project uses the ImageDescription exiftag to store tags that helps the scripts identify important information for the given photo. The tags are stored in `ImageDescription` using the format `TagName=TagValue;TagName=TagValue;`. The list of used Tags is listed bellow:
 
 | Tag       | Definition                                                                                                                         |
 | :-------- | :--------------------------------------------------------------------------------------------------------------------------------- |
 | Detection | Determines the detection value of the photo, which currently is represented using animal, empty or object.                         |
 | Location  | Determines the location of the camera, helps with organisation of the pictures. The camshots_organiser alters this tag by default. |
-| Specie    | Contains the scientific name of the Specie that appears in the photo.                                                              |
+| Specie    | Contains the scientific name of the specie that appears in the photo.                                                              |
 
 > This list contains the current used tags, but more would be added depending of the goals of the project.
