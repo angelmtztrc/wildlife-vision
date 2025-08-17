@@ -4,3 +4,4 @@ torch
 torchvision
 pandas
 tqdm
+prompt_toolkit
