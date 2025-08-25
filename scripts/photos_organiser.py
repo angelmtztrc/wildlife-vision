@@ -35,7 +35,7 @@ def organise_photos(input_path, camera_location, generate_subfolders, output_pat
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--generate-subfolders", help="Allow to generate YYYYMMDD subfolders", type=str)
+  parser.add_argument("--generate-subfolders", help="Allow to generate YYYYMMDD subfolders", action="store_true")
   
   args = parser.parse_args()
   
