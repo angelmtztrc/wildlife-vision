@@ -3,10 +3,10 @@ import argparse
 from pathlib import Path
 
 from utils.files import allowed_image_exts
-from utils.exif import get_datetime_from_image
+from utils.exif import get_datetime_from_image, set_image_metadata
 from utils.prompt import prompt, prompt_path
 
-def organise_photos(input_path, camera_location, generate_subfolders,output_path): 
+def organise_photos(input_path, camera_location, generate_subfolders, output_path): 
   input_path = Path(input_path).resolve()
   output_path = Path(output_path)
   
@@ -30,6 +30,7 @@ def organise_photos(input_path, camera_location, generate_subfolders,output_path
       new_file_path = date_folder / new_filename if generate_subfolders else output_path / new_filename
       
       shutil.move(str(file), new_file_path)
+      set_image_metadata(new_file_path, "Location", camera_location)
       print(f"File moved: {file.name} → {new_file_path}")
 
 if __name__ == "__main__":
