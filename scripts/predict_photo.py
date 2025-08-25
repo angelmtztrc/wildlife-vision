@@ -1,9 +1,10 @@
 import os
 import torch
 
-from torchvision import transforms, models
+from torchvision import datasets, transforms, models
 from PIL import Image
 from utils.prompt import prompt_path
+from torchvision.models import ResNet18_Weights
 
 # Define same transforms used for training
 transform = transforms.Compose([
@@ -12,7 +13,8 @@ transform = transforms.Compose([
 ])
 
 # The class names should match dataset subfolders
-classes = ["animal", "empty", "object"]
+dataset = datasets.ImageFolder("dataset/", transform=transform)
+classes = dataset.classes
 
 # Load model
 model = models.resnet18(weights=None)
