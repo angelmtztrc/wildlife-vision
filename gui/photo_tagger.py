@@ -78,7 +78,7 @@ class PhotoTagger:
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--no-tagged-only", help="Only display untagged photos", type=str)
+  parser.add_argument("--no-tagged-only", help="Only display untagged photos", action="store_true")
   args = parser.parse_args()
   
   root = tk.Tk()
