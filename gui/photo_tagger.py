@@ -23,7 +23,8 @@ class PhotoTagger:
     
     if no_tagged_only:
       images = [f for f in images if not get_image_metadata(os.path.join(folder, f), "Detection")]
-    else: self.images = images
+      
+    self.images = images
     
     self.label = tk.Label(root, text="", font=("Arial", 18))
     self.label.pack()
