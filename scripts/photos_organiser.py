@@ -30,7 +30,6 @@ def organise_photos(input_path, camera_location, generate_subfolders, output_pat
       new_file_path = date_folder / new_filename if generate_subfolders else output_path / new_filename
       
       shutil.move(str(file), new_file_path)
-      set_image_metadata(new_file_path, "Location", camera_location)
       print(f"File moved: {file.name} → {new_file_path}")
 
 if __name__ == "__main__":

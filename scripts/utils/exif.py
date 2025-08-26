@@ -2,9 +2,8 @@ import os
 import piexif
 from datetime import datetime
 from PIL import Image, ExifTags
-from typing import Literal
 
-
+from metadata import AvailableTags
 
 def get_datetime_from_image(img_path):
   try: 
@@ -21,8 +20,6 @@ def get_datetime_from_image(img_path):
     
   ts = os.path.getmtime(img_path)
   return datetime.fromtimestamp(ts)
-
-AvailableTags = Literal["Detection", "Location", "Specie"]
 
 def get_image_metadata(img_path, tag_name: AvailableTags):
   try:
