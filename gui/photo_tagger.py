@@ -7,6 +7,8 @@ from PIL import Image, ImageTk
 from scripts.utils.exif import set_image_metadata, get_image_metadata
 from scripts.utils.files import allowed_image_exts
 
+DEFAULT_MAX_IMAGES_PER_SESSION = 500
+
 class PhotoTagger: 
   def __init__(self, root, folder, no_tagged_only):
     self.root = root
@@ -23,7 +25,11 @@ class PhotoTagger:
     
     if no_tagged_only:
       images = [f for f in images if not get_image_metadata(os.path.join(folder, f), "Detection")]
-      
+
+    if len(images) > DEFAULT_MAX_IMAGES_PER_SESSION:      
+      images = images[:DEFAULT_MAX_IMAGES_PER_SESSION]
+    
+    images.sort(reverse=True)  
     self.images = images
     
     self.label = tk.Label(root, text="", font=("Arial", 18))
