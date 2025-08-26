@@ -3,7 +3,7 @@ import piexif
 from datetime import datetime
 from PIL import Image, ExifTags
 
-from utils.metadata import AvailableTags
+from .metadata import AvailableTags
 
 def get_datetime_from_image(img_path):
   try: 
