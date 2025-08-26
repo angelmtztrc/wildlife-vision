@@ -5,7 +5,7 @@ from typing import get_args
 
 from utils.prompt import prompt_path, prompt_choices
 from utils.exif import get_image_metadata
-from utils.metadata import AvailableTags, AvailableDetections
+from utils.metadata import AvailableDetections
 from utils.files import allowed_image_exts, safe_copy
 
 def export_by_detection(input_path: str, detection: AvailableDetections, output_path: str, dry_run: bool = False):
