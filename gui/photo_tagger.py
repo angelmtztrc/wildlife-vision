@@ -2,8 +2,11 @@ import os
 import argparse
 import tkinter as tk
 from tkinter import filedialog
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageFile
 
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+from scripts.utils.prompt import prompt_path
 from scripts.utils.exif import set_image_metadata, get_image_metadata
 from scripts.utils.files import allowed_image_exts
 
@@ -93,7 +96,8 @@ if __name__ == "__main__":
   root = tk.Tk()
   root.title("Photo Tagger")
   
-  folder = filedialog.askdirectory(title="Select a folder")
-  if folder:
-    app = PhotoTagger(root, folder, args.no_tagged_only)
+  input_path = prompt_path("Enter the input folder path: ").strip()
+
+  if input_path:
+    app = PhotoTagger(root, input_path, args.no_tagged_only)
     root.mainloop()
