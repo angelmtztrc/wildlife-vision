@@ -26,10 +26,12 @@ class PhotoTagger:
     if no_tagged_only:
       images = [f for f in images if not get_image_metadata(os.path.join(folder, f), "Detection")]
 
+    images.sort(reverse=True)  
+
     if len(images) > DEFAULT_MAX_IMAGES_PER_SESSION:      
       images = images[:DEFAULT_MAX_IMAGES_PER_SESSION]
     
-    images.sort(reverse=True)  
+    
     self.images = images
     
     self.label = tk.Label(root, text="", font=("Arial", 18))
