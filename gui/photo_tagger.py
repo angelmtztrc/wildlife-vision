@@ -40,7 +40,7 @@ class PhotoTagger:
       untagged = []
       for f in images:
         stem, _ = os.path.splitext(f)
-        if not has_detection_suffix(stem):
+        if has_detection_suffix(stem):
           continue
         detection = get_image_metadata(os.path.join(folder, f), "Detection")
         if not detection:
