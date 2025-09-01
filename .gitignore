@@ -1,10 +1,8 @@
 # Ignore content from data
-data/*
 dataset/*
 
 # But keep the folder and this placeholder file
 !dataset/.gitkeep
-!data/.gitkeep
 
 __pycache__/
 

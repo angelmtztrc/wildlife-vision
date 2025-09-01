@@ -1,0 +1,22 @@
+[
+  {
+    "id": "Homeland_Fallen_Tree",
+    "name": "Homeland - Fallen Tree",
+    "coordinates": [0, 0]
+  },
+  {
+    "id": "Homeland_Main_Woods",
+    "name": "Homeland - Main Woods",
+    "coordinates": [0, 0]
+  },
+  {
+    "id": "GF_Stream_Feeder",
+    "name": "Grandfather's Farm Stream Feeder",
+    "coordinates": [0, 0]
+  },
+  {
+    "id": "GF_Stream_Drink_Zone",
+    "name": "Grandfather's Farm Stream Drink Zone",
+    "coordinates": [0, 0]
+  }
+]

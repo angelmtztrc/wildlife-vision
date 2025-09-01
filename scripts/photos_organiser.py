@@ -4,7 +4,8 @@ from pathlib import Path
 
 from utils.files import allowed_image_exts
 from utils.exif import get_datetime_from_image, set_image_metadata
-from utils.prompt import prompt, prompt_path
+from utils.prompt import prompt_path, prompt_choices
+from utils.data import get_location_ids
 
 def organise_photos(input_path, camera_location, generate_subfolders, output_path): 
   input_path = Path(input_path).resolve()
@@ -39,7 +40,7 @@ if __name__ == "__main__":
   args = parser.parse_args()
   
   input_path = prompt_path("Enter the input folder path: ").strip()
-  camera_location = prompt("Enter the location of the camera: ").strip().replace(" ", "_")
+  camera_location = prompt_choices("Enter the location of the camera: ", get_location_ids())
   output_path = prompt_path("Enter the output folder path: ").strip()
   
   organise_photos(input_path, camera_location, args.generate_subfolders, output_path)
