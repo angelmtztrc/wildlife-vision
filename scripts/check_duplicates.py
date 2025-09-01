@@ -86,18 +86,25 @@ def copy_duplicates(dups: List[str], src_folder: str, dst_folder: str):
         src = os.path.join(src_folder, f)
         dst = os.path.join(dst_folder, f)
         shutil.copy2(src, dst)
+        
+def move_duplicates(dups: List[str], src_folder: str, dst_folder: str):
+    ensure_output_dir(dst_folder)
+    for f in dups:
+        src = os.path.join(src_folder, f)
+        dst = os.path.join(dst_folder, f)
+        shutil.move(src, dst)
 
 def main():
     input_path = prompt_path("Enter the input folder path: ").strip()
     output_path = prompt_path("Enter the output folder path (ignored if --dry-run): ").strip()
     parser = argparse.ArgumentParser(
-        description="Detect near-duplicate trailcam images per minute and copy or list them."
+        description="Detect near-duplicate trailcam images per minute and move or list them."
     )
 
     parser.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD,
                         help=f"Hamming distance threshold (<= is duplicate). Default: {DEFAULT_THRESHOLD}")
     parser.add_argument("--dry-run", action="store_true",
-                        help="List duplicates and print summary (no files copied)")
+                        help="List duplicates and print summary (no files moved)")
     args = parser.parse_args()
 
     in_dir = os.path.abspath(input_path)
@@ -134,8 +141,8 @@ def main():
         print("\n=== Summary ===")
     else:
         if all_dups:
-            print(f"Copying {len(all_dups)} duplicates to {out_dir} ...")
-            copy_duplicates(all_dups, in_dir, out_dir)
+            print(f"Moving {len(all_dups)} duplicates to {out_dir} ...")
+            move_duplicates(all_dups, in_dir, out_dir)
             print("Done.")
         else:
             print("No duplicates to copy.")
