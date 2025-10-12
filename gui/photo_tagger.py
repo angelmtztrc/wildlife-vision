@@ -69,15 +69,14 @@ class PhotoTagger:
     
     root.bind("1", lambda e: self.set_label("empty"))
     root.bind("2", lambda e: self.set_label("animal"))
-    root.bind("3", lambda e: self.set_label("object"))
-    root.bind("4", lambda e: self.set_label("irrelevant"))
+    root.bind("3", lambda e: self.set_label("irrelevant"))
     
     root.bind("<Right>", lambda e: self.next_image())
     root.bind("<Left>", lambda e: self.prev_image())
     
     root.bind("<Escape>", lambda e: self.root.destroy())
     
-    help_text = "Keys: [1]=empty  [2]=animal  [3]=object  [4]=irrelevant  ←/→ navigate   Esc exit"
+    help_text = "Keys: [1]=empty  [2]=animal  [3]=irrelevant  ←/→ navigate   Esc exit"
     self.root.title(f"Photo Tagger — {help_text}")
     
   def load_image(self):
