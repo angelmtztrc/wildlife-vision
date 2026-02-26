@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from wv.core.logging import get_logger
-from wv.core.files import allowed_image_exts
+from wv.core.files import is_allowed_image_file
 from wv.core.images import get_datetime_from_image
 
 
@@ -30,11 +30,11 @@ class PhotoOrganiserHandler:
             self.log.error(f"Input path does not exist: {self.input_path}")
             exit(1)
 
-        self.log.info(f"Analysing files in {self.input_path}...")
+        self.log.info(f"ANALYSING: {self.input_path}...")
 
         result = PhotoOrganiserResult()
         for file in self.input_path.iterdir():
-            if file.suffix in allowed_image_exts:
+            if is_allowed_image_file(file):
                 try:
                     captured_at = get_datetime_from_image(file)
                     date_str = captured_at.strftime("%Y%m%d")
@@ -47,7 +47,7 @@ class PhotoOrganiserHandler:
                         self.log.info(f"DRY RUN: would move {file} → {new_file_path}")
                     else:
                         shutil.move(str(file), new_file_path)
-                        self.log.info(f"File moved: {file.name} → {new_file_path}")
+                        self.log.info(f"MOVED: {file.name} → {new_file_path}")
                     result.processed_files += 1
                 except Exception as e:
                     result.failed_files += 1

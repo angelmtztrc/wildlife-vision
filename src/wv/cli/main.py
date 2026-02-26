@@ -1,6 +1,6 @@
 import typer
 
-from wv.cli.commands import organise
+from wv.cli.commands import detect, organise
 
 app = typer.Typer(
     name="wildlife-vision",
@@ -10,6 +10,7 @@ app = typer.Typer(
 )
 
 app.add_typer(organise.app, name="organise")
+app.add_typer(detect.app, name="detect")
 
 
 @app.command()

@@ -5,7 +5,7 @@ from wv import config
 from wv.core.prompt import prompt_path, prompt_choices
 from wv.core.logging import get_logger
 
-from wv.handlers.organiser import PhotoOrganiserHandler
+from wv.handlers.photo_organiser import PhotoOrganiserHandler
 
 app = typer.Typer(help="Photo organisation commands")
 
