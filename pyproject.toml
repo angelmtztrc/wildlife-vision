@@ -36,7 +36,7 @@ dependencies = [
     "imagehash>=4.3.0",
     "typer>=0.9.0",
     "loguru>=0.7.3",
-    "pyyaml"
+    "pyyaml",
 ]
 
 [project.optional-dependencies]
