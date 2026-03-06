@@ -21,7 +21,7 @@ def _is_valid_metadata_format(metadata: str) -> bool:
     if not metadata or not isinstance(metadata, str):
         return False
 
-    pattern = r"^([A-Za-z_][A-Za-z0-9_]*=[^;]+;)+$"
+    pattern = r"^([A-Za-z_][A-Za-z0-9_]*=[^;]+;)*[A-Za-z_][A-Za-z0-9_]*=[^;]+$"
 
     return bool(re.match(pattern, metadata))
 

@@ -10,12 +10,16 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 class DetectionTriageApp:
-    def __init__(self, input_path: Path):
+    def __init__(
+        self, input_path: Path, max_files_per_session: int, include_detected: bool
+    ):
         self.root = tk.Tk()
         self.root.title("Detection Triage")
         self.root.attributes("-fullscreen", True)
 
-        self.controller = DetectionTriageController(input_path)
+        self.controller = DetectionTriageController(
+            input_path, max_files_per_session, include_detected
+        )
         self.controller.on_change_side_effect = self._refresh
         self.controller.on_complete_side_effect = self._on_complete
 
@@ -88,7 +92,7 @@ class DetectionTriageApp:
 
     def _on_complete(self):
         messagebox.showinfo(
-            "Done!", f"{len(self.controller.state.total_images)} images processed."
+            "Done!", f"{self.controller.state.total_images} images processed."
         )
         self._quit()
 

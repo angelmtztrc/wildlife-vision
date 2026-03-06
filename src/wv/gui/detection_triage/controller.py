@@ -38,6 +38,7 @@ class DetectionTriageController:
             filtered_images = []
             for img in all_images:
                 metadata = read_metadata(img)
+                print(f"Metadata for {img.name}: {metadata}")
                 if "Detection" not in metadata:
                     filtered_images.append(img)
 
