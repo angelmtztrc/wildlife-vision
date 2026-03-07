@@ -38,12 +38,16 @@ class DetectionTriageController:
             filtered_images = []
             for img in all_images:
                 metadata = read_metadata(img)
-                print(f"Metadata for {img.name}: {metadata}")
+
                 if "Detection" not in metadata:
                     filtered_images.append(img)
+                    if 0 < max_files_per_session <= len(filtered_images):
+                        break
 
             self.state.images = filtered_images
         else:
+            if len(all_images) > max_files_per_session > 0:
+                all_images = all_images[:max_files_per_session]
             self.state.images = all_images
 
     def _rename_with_detection(self, image_path: Path, detection_value: str) -> None:
