@@ -31,9 +31,6 @@ class DetectionTriageController:
             reverse=True,
         )
 
-        if len(all_images) > max_files_per_session > 0:
-            all_images = all_images[:max_files_per_session]
-
         if not include_detected:
             filtered_images = []
             for img in all_images:
