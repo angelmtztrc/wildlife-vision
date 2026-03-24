@@ -1,8 +1,9 @@
 import re
-from typing import Literal
+from typing import Literal, get_args
 from pathlib import Path
 
 from wv.core.exif import read_exif, write_exif_image_description
+from wv.core.files import parse_filename
 
 AvailableMetadataTags = Literal["Detection", "Coordinates", "Species"]
 AvailableDetections = Literal["empty", "animal", "irrelevant"]
@@ -100,3 +101,23 @@ def remove_metadata(image_path: Path, tag_name: AvailableMetadataTags):
     mutated_metadata_str = ";".join(f"{key}={value}" for key, value in metadata.items())
 
     write_exif_image_description(image_path, mutated_metadata_str)
+
+
+def get_detection_from_filename(image_path: Path) -> AvailableDetections | None:
+    """
+    Extract the detection value from the filename of an image. The expected filename format is either:
+    1) YYYYMMDD_HHMMSS__CAMERA_LOCATION
+    2) YYYYMMDD_HHMMSS__CAMERA_LOCATION__DETECTION
+
+    Args:
+        image_path (Path): The path to the image file from which to extract the detection value.
+
+    Returns:
+        AvailableDetections | None: The extracted detection value if present and valid, or None if not present or invalid.
+    """
+
+    parsed = parse_filename(image_path)
+    if parsed.detection and parsed.detection.lower() in get_args(AvailableDetections):
+        return parsed.detection.lower()
+
+    return None
