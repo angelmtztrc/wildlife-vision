@@ -108,9 +108,9 @@ class BurstReducerHandler:
             return result
 
     def _get_keep_amount(self, cluster_size: int) -> int:
-        if cluster_size <= 2:
+        if cluster_size <= 5:
             return 1
-        elif cluster_size <= 5:
+        elif cluster_size <= 20:
             return 2
 
         return 3
