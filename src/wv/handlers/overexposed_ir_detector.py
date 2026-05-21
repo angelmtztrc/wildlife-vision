@@ -82,7 +82,7 @@ class OverexposedIRDetectorHandler:
         if not dry_run:
             self.output_path.mkdir(parents=True, exist_ok=True)
 
-        self.log.info(f"ANALYSING: {self.input_path} for overexposure...")
+        self.log.info(f"ANALYSING: {self.input_path}")
 
         result = OverexposedIRDetectorResult()
 

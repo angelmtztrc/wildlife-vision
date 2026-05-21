@@ -1,6 +1,6 @@
 import typer
 
-from wv.cli.commands import detect, export, organise, gui
+from wv.cli.commands import detect, export, organise, gui, reduce
 
 app = typer.Typer(
     name="wildlife-vision",
@@ -13,6 +13,7 @@ app.add_typer(organise.app, name="organise")
 app.add_typer(detect.app, name="detect")
 app.add_typer(export.app, name="export")
 app.add_typer(gui.app, name="gui")
+app.add_typer(reduce.app, name="reduce")
 
 
 @app.command()
