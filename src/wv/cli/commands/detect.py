@@ -59,13 +59,3 @@ def detect_overexposed_ir(
     log.info(
         f"Overexposed IR detection completed. Total: {result.total_files}, Overexposed: {result.overexposed_files}, Moved: {result.moved_files}, Skipped: {result.skipped_files}, Failed: {result.failed_files}"
     )
-
-
-@app.command("duplicates")
-def detect_duplicates(
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Perform a dry run without moving files")
-    ] = False,
-):
-
-    return None
