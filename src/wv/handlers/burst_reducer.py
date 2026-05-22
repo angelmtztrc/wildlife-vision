@@ -51,7 +51,7 @@ class BurstReducerHandler:
         self.output_path = Path(self.output_path).resolve()
 
         if not self.input_path.exists() or not self.input_path.is_dir():
-            self.log.error(f"Input path does not exists: {self.input_path}")
+            self.log.error(f"Input path does not exist: {self.input_path}")
             raise FileNotFoundError(self.input_path)
 
         if not dry_run:
@@ -70,6 +70,7 @@ class BurstReducerHandler:
         result.total_files = len(files)
 
         bursts = self._group_files_into_bursts(files)
+        result.total_bursts = len(bursts)
 
         for burst in bursts:
             burst_files = self._extract_burst_files(burst, result)
@@ -105,7 +106,7 @@ class BurstReducerHandler:
                         result.failed_files += 1
                         self.log.error(f"Failed to move file {bf.path}: {e}")
 
-            return result
+        return result
 
     def _get_keep_amount(self, cluster_size: int) -> int:
         if cluster_size <= 5:
