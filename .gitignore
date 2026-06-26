@@ -1,40 +1,12 @@
-# Ignore content from data
-dataset/*
-
-# But keep the folder and this placeholder file
-!dataset/.gitkeep
-
-# Virtual environment
 .venv/
-venv/
-ENV/
-env/
-
-# Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
+
+.pytest_cache/
+.mypy_cache/
+
 build/
 dist/
-eggs/
 *.egg-info/
-*.egg
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Testing/Coverage
-.pytest_cache/
-.coverage
-htmlcov/
-.mypy_cache/
-.ruff_cache/
-
-# OS
 .DS_Store
-Thumbs.db
