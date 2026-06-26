@@ -1,8 +1,8 @@
-from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, messagebox
+from pathlib import Path
+from tkinter import messagebox, ttk
 
-from PIL import Image, ImageTk, ImageFile
+from PIL import Image, ImageFile, ImageTk
 
 from wv.gui.detection_triage.controller import DetectionTriageController
 
@@ -10,9 +10,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 class DetectionTriageApp:
-    def __init__(
-        self, input_path: Path, max_files_per_session: int, include_detected: bool
-    ):
+    def __init__(self, input_path: Path, max_files_per_session: int, include_detected: bool):
         self.root = tk.Tk()
         self.root.title("Detection Triage")
         self.root.attributes("-fullscreen", True)
@@ -91,9 +89,7 @@ class DetectionTriageApp:
             pass
 
     def _on_complete(self):
-        messagebox.showinfo(
-            "Done!", f"{self.controller.state.total_images} images processed."
-        )
+        messagebox.showinfo("Done!", f"{self.controller.state.total_images} images processed.")
         self._quit()
 
     def _quit(self):
