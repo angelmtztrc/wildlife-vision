@@ -1,8 +1,0 @@
-pillow
-piexif
-torch 
-torchvision
-pandas
-tqdm
-prompt_toolkit
-imagehash
