@@ -10,10 +10,10 @@ app = typer.Typer(
 )
 
 
-app.add_typer(clean, name="clean")
-app.add_typer(detect, name="detect")
-app.add_typer(ingest, name="ingest")
-app.add_typer(pipeline, name="pipeline")
+app.add_typer(clean.app, name="clean")
+app.add_typer(detect.app, name="detect")
+app.add_typer(ingest.app, name="ingest")
+app.add_typer(pipeline.app, name="pipeline")
 
 
 def main():
