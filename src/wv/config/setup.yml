@@ -1,3 +1,6 @@
+paths:
+  root: ./.wv
+
 devices:
   - id: HNT001
 

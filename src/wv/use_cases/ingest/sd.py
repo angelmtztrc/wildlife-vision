@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
-from wv.core.files import ensure_directory, is_allowed_image_file
+from wv.config import get_root_path
+from wv.core.files import ensure_directory, get_file_id, is_allowed_image_file
 from wv.core.images import get_image_datetime
 
 
@@ -25,16 +27,37 @@ class IngestSdResult:
 
 
 def run(input_data: IngestSdInput) -> None:
-    ensure_directory(input_data.source)
-
     result = IngestSdResult(dry_run=input_data.dry_run)
 
+    ensure_directory(input_data.source)
+
+    root_path = get_root_path()
+    session_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_dir = root_path / "sessions" / f"{session_timestamp}__{input_data.device}"
+
     for file in input_data.source.iterdir():
+        result.files_discovered += 1
         if is_allowed_image_file(file):
             captured_at = get_image_datetime(file)
-            print(f"{captured_at}")
-            pass
+            captured_at_parsed = captured_at.strftime("%Y%m%d_%H%M%S")
+            file_id = get_file_id(file)
 
-        result.files_ignored += 1
+            filename = f"{captured_at_parsed}__{input_data.monitoring_site.upper()}__{file_id}{file.suffix.lower()}"
+
+            egestion_path = session_dir / "initial"
+
+            result.destination = egestion_path
+
+            if input_data.dry_run:
+                # TODO: WHAT WE SHOULD DO?
+                pass
+            else:
+                # TODO: MOVE FILES INTO EGESTION_PATH AND CLEAN SOURCE FOLDER IF DRAIN MODE
+                result.files_copied += 1
+                result.files_deleted += 1
+                pass
+
+        else:
+            result.files_ignored += 1
 
     return None
