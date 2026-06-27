@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 import typer
 
 from wv.config import get_device_ids, get_monitoring_sites_ids
+from wv.use_cases.ingest.sd import IngestSdInput, run as run_ingest_sd
 
 app = typer.Typer(help="Ingest photos from SD cards and other source locations.")
 
@@ -60,6 +61,30 @@ def ingest_sd(
         ),
     ] = False,
 ):
+    result = run_ingest_sd(
+        IngestSdInput(
+            source=source,
+            device=device,
+            monitoring_site=monitoring_site,
+            mode=mode,
+            dry_run=dry_run,
+        )
+    )
+
+    typer.echo(f"Source: {source}")
+    typer.echo(f"Destination: {result.destination}")
+    typer.echo(f"Mode: {mode}")
+    typer.echo(f"Dry run: {'yes' if result.dry_run else 'no'}")
+    typer.echo(f"Discovered: {result.files_discovered}")
+    typer.echo(f"Copied: {result.files_copied}")
+    typer.echo(f"Replaced: {result.files_replaced}")
+    typer.echo(f"Deleted: {result.files_deleted}")
+    typer.echo(f"Ignored: {result.files_ignored}")
+    typer.echo(f"Failed: {result.files_failed}")
+
+    if result.files_failed > 0:
+        raise typer.Exit(code=1)
+
     return None
 
 
