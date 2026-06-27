@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from wv.core.files import ensure_directory, is_allowed_image_file
+from wv.core.images import get_image_datetime
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,8 @@ def run(input_data: IngestSdInput) -> None:
 
     for file in input_data.source.iterdir():
         if is_allowed_image_file(file):
+            captured_at = get_image_datetime(file)
+            print(f"{captured_at}")
             pass
 
         result.files_ignored += 1
