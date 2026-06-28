@@ -3,6 +3,8 @@ from typing import Annotated
 
 import typer
 
+from wv.use_cases.clean.bursts import CleanBurstsInput
+from wv.use_cases.clean.bursts import run as run_clean_bursts
 from wv.use_cases.clean.corrupted import CleanCorruptedInput
 from wv.use_cases.clean.corrupted import run as run_clean_corrupted
 from wv.use_cases.clean.overexposed_ir import CleanOverexposedIrInput
@@ -130,8 +132,8 @@ def clean_bursts(
             readable=True,
         ),
     ],
-    burst_gap_threshold: Annotated[float, typer.Option("--burst-gap-threshold")] = 60,
-    similarity_threshold: Annotated[float, typer.Option("--similarity-threshold")] = 5,
+    burst_gap_threshold: Annotated[int, typer.Option("--burst-gap-threshold")] = 60,
+    similarity_threshold: Annotated[int, typer.Option("--similarity-threshold")] = 5,
     dry_run: Annotated[
         bool,
         typer.Option(
@@ -140,5 +142,27 @@ def clean_bursts(
         ),
     ] = False,
 ):
+    result = run_clean_bursts(
+        CleanBurstsInput(
+            source=source,
+            output=output,
+            burst_gap_threshold=burst_gap_threshold,
+            similarity_threshold=similarity_threshold,
+            dry_run=dry_run,
+        )
+    )
+
+    typer.echo(f"Source: {source}")
+    typer.echo(f"Destination: {result.destination}")
+    typer.echo(f"Dry run: {'yes' if result.dry_run else 'no'}")
+    typer.echo(f"Discovered: {result.files_discovered}")
+    typer.echo(f"Bursts: {result.files_bursts}")
+    typer.echo(f"Reduced: {result.files_reduced}")
+    typer.echo(f"Moved: {result.files_moved}")
+    typer.echo(f"Ignored: {result.files_ignored}")
+    typer.echo(f"Failed: {result.files_failed}")
+
+    if result.files_failed > 0:
+        raise typer.Exit(code=1)
 
     return None

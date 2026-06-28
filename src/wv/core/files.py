@@ -1,5 +1,7 @@
 import base64
 import hashlib
+from datetime import datetime
+import re
 import shutil
 from pathlib import Path
 
@@ -45,6 +47,33 @@ def get_file_id(file_path: Path) -> str:
             hasher.update(chunk)
 
     return base64.b32encode(hasher.digest()).decode("ascii")[:6]
+
+
+def parse_ingested_image_filename(file_path: Path) -> dict[str, str] | None:
+    """Parse filenames following ``YYYYMMDD_HHMMSS__SITE__ID``.
+
+    Args:
+        file_path: File path whose stem will be parsed.
+
+    Returns:
+        A dictionary with ``captured_at``, ``monitoring_site``, and ``file_id``
+        when the stem matches the ingest naming convention. Otherwise, ``None``.
+    """
+    match = re.fullmatch(
+        r"(?P<captured_at>\d{8}_\d{6})__(?P<monitoring_site>[^_][^_]*)__(?P<file_id>[^_][^_]*)",
+        file_path.stem,
+    )
+    if match is None:
+        return None
+
+    parts = match.groupdict()
+
+    try:
+        datetime.strptime(parts["captured_at"], "%Y%m%d_%H%M%S")
+    except ValueError:
+        return None
+
+    return parts
 
 
 def copy_file_preserving_metadata(source: Path, destination: Path) -> Path:
