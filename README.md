@@ -16,3 +16,29 @@ Manually curating large image batches requires a significant amount of time and 
 4. Reducing redundant images from bursts and near-duplicate sequences.
 5. Helping the user decide which animal photos should be published, kept, or rejected.
 6. Producing summaries and export-ready data for further review, research, or publication.
+
+## Testing
+
+Install project and development dependencies:
+
+```bash
+uv sync --group dev
+```
+
+Run the test suite:
+
+```bash
+uv run pytest
+```
+
+Run tests with coverage for currently implemented modules:
+
+```bash
+uv run pytest --cov=wv --cov-report=term-missing
+```
+
+Generate an HTML coverage report:
+
+```bash
+uv run pytest --cov=wv --cov-report=html
+```

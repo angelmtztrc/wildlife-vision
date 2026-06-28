@@ -60,7 +60,7 @@ def parse_ingested_image_filename(file_path: Path) -> dict[str, str] | None:
         when the stem matches the ingest naming convention. Otherwise, ``None``.
     """
     match = re.fullmatch(
-        r"(?P<captured_at>\d{8}_\d{6})__(?P<monitoring_site>[^_][^_]*)__(?P<file_id>[^_][^_]*)",
+        r"(?P<captured_at>\d{8}_\d{6})__(?P<monitoring_site>[A-Z0-9_]+)__(?P<file_id>[A-Z2-7]{6})",
         file_path.stem,
     )
     if match is None:

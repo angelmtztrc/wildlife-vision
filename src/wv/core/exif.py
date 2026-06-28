@@ -19,12 +19,31 @@ def read_exif(file_path: Path, metadata_tag: str) -> str | None:
         with Image.open(file_path) as image:
             exif_data = image.getexif()
             if not exif_data:
-                # TODO: LOGGING
+                exif_data = None
+
+            if exif_data:
+                for tag_id, value in exif_data.items():
+                    decoded_tag = ExifTags.TAGS.get(tag_id)
+                    if decoded_tag == metadata_tag:
+                        return value
+
+            exif_bytes = image.info.get("exif")
+            if not exif_bytes:
                 return None
 
-            for tag_id, value in exif_data.items():
-                decoded_tag = ExifTags.TAGS.get(tag_id)
-                if decoded_tag == metadata_tag:
+            exif_dict = piexif.load(exif_bytes)
+            for ifd_name, ifd_data in exif_dict.items():
+                if not isinstance(ifd_data, dict):
+                    continue
+
+                for tag_id, value in ifd_data.items():
+                    tag_info = piexif.TAGS.get(ifd_name, {}).get(tag_id, {})
+                    if tag_info.get("name") != metadata_tag:
+                        continue
+
+                    if isinstance(value, bytes):
+                        return value.decode("utf-8", errors="ignore")
+
                     return value
     except Exception:
         # TODO: LOGGING

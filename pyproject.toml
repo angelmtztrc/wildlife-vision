@@ -12,6 +12,12 @@ dependencies = [
     "imagehash>=4.3.2",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+]
+
 [project.scripts]
 wildlife-vision = "wv.cli.main:main"
 wv = "wv.cli.main:main"
@@ -25,3 +31,30 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["wv"]
+omit = [
+    "src/wv/__init__.py",
+    "src/wv/cli/__init__.py",
+    "src/wv/cli/commands/__init__.py",
+    "src/wv/core/__init__.py",
+    "src/wv/use_cases/__init__.py",
+    "src/wv/use_cases/clean/__init__.py",
+    "src/wv/use_cases/detect/__init__.py",
+    "src/wv/use_cases/ingest/__init__.py",
+    "src/wv/use_cases/pipeline/__init__.py",
+    "src/wv/use_cases/ingest/folder.py",
+    "src/wv/use_cases/detect/content.py",
+    "src/wv/use_cases/pipeline/preprocess.py",
+    "src/wv/cli/commands/detect.py",
+    "src/wv/cli/commands/pipeline.py",
+    "src/wv/cli/commands/export.py",
+]
+
+[tool.coverage.report]
+show_missing = true
