@@ -114,5 +114,31 @@ def clean_overexposed_ir(
 
 
 @app.command("bursts")
-def clean_bursts():
+def clean_bursts(
+    source: Annotated[
+        Path,
+        typer.Argument(
+            help="", exists=True, file_okay=False, dir_okay=True, readable=True
+        ),
+    ],
+    output: Annotated[
+        Path,
+        typer.Option(
+            help="",
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+        ),
+    ],
+    burst_gap_threshold: Annotated[float, typer.Option("--burst-gap-threshold")] = 60,
+    similarity_threshold: Annotated[float, typer.Option("--similarity-threshold")] = 5,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Preview the clean operation without moving any files.",
+        ),
+    ] = False,
+):
+
     return None
