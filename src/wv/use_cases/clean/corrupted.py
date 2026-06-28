@@ -44,8 +44,11 @@ def run(input_data: CleanCorruptedInput) -> CleanCorruptedResult:
 
     ensure_directory(input_data.source)
 
+    source_files = list(input_data.source.iterdir())
+
+    result.files_discovered = len(source_files)
+
     for file in input_data.source.iterdir():
-        result.files_discovered += 1
         if not file.is_file() or not is_allowed_image_file(file):
             result.files_ignored += 1
             continue
