@@ -1,41 +1,13 @@
 from pathlib import Path
 
 from wv.core.exif import read_exif
+from wv.ml.megadetector import MlDetection, MlImageResult
 from wv.use_cases.detect.content import DetectContentInput, run
 import wv.use_cases.detect.content as content
 
 
-def _result_for(file_path: Path, detections: list[dict[str, object]]) -> dict[str, object]:
-    return {
-        "file": str(file_path),
-        "failure": None,
-        "detections": detections,
-    }
-
-
-class FakeBatchDetector:
-    def __init__(
-        self,
-        batch_results: dict[str, dict[str, object]] | None = None,
-        per_image_results: dict[str, dict[str, object]] | None = None,
-        fail_batch: bool = False,
-    ):
-        self.batch_results = batch_results or {}
-        self.per_image_results = per_image_results or {}
-        self.fail_batch = fail_batch
-        self.batch_calls = 0
-        self.one_image_calls: list[str] = []
-
-    def generate_detections_one_batch(self, images, image_id, detection_threshold):
-        self.batch_calls += 1
-        if self.fail_batch:
-            raise RuntimeError("batch failed")
-
-        return [self.batch_results[file_path] for file_path in image_id]
-
-    def generate_detections_one_image(self, image, image_id, detection_threshold):
-        self.one_image_calls.append(image_id)
-        return self.per_image_results[image_id]
+def _result_for(file_path: Path, detections: list[MlDetection]) -> MlImageResult:
+    return MlImageResult(file_path=file_path, detections=detections, failure=None)
 
 
 def test_run_classifies_moves_and_writes_metadata(
@@ -57,22 +29,23 @@ def test_run_classifies_moves_and_writes_metadata(
     other = make_image(source / "other.jpg")
     (source / "notes.txt").write_text("ignore me")
 
-    detector = FakeBatchDetector(
-        batch_results={
-            str(animal): _result_for(animal, [{"category": "1", "conf": 0.91}]),
-            str(human): _result_for(human, [{"category": "2", "conf": 0.82}]),
-            str(vehicle): _result_for(vehicle, [{"category": "3", "conf": 0.73}]),
-            str(empty): _result_for(empty, [{"category": "1", "conf": 0.05}]),
-            str(other): _result_for(
+    monkeypatch.setattr(
+        content,
+        "evaluate_images",
+        lambda model, image_paths, confidence_threshold, batch_size: [
+            _result_for(animal, [MlDetection(label="animal", confidence=0.91)]),
+            _result_for(human, [MlDetection(label="human", confidence=0.82)]),
+            _result_for(vehicle, [MlDetection(label="vehicle", confidence=0.73)]),
+            _result_for(empty, []),
+            _result_for(
                 other,
                 [
-                    {"category": "1", "conf": 0.61},
-                    {"category": "2", "conf": 0.94},
+                    MlDetection(label="animal", confidence=0.61),
+                    MlDetection(label="human", confidence=0.94),
                 ],
             ),
-        }
+        ],
     )
-    monkeypatch.setattr(content, "load_detector", lambda model: detector)
 
     result = run(DetectContentInput(source=source, output=output, batch_size=8))
 
@@ -117,12 +90,13 @@ def test_run_does_not_move_or_write_in_dry_run(make_image, tmp_path: Path, monke
     source.mkdir()
     image_path = make_image(source / "animal.jpg")
 
-    detector = FakeBatchDetector(
-        batch_results={
-            str(image_path): _result_for(image_path, [{"category": "1", "conf": 0.91}])
-        }
+    monkeypatch.setattr(
+        content,
+        "evaluate_images",
+        lambda model, image_paths, confidence_threshold, batch_size: [
+            _result_for(image_path, [MlDetection(label="animal", confidence=0.91)])
+        ],
     )
-    monkeypatch.setattr(content, "load_detector", lambda model: detector)
 
     result = run(DetectContentInput(source=source, output=output, dry_run=True))
 
@@ -144,12 +118,13 @@ def test_run_counts_metadata_write_failures_and_leaves_file_in_place(
     source.mkdir()
     image_path = make_image(source / "animal.jpg")
 
-    detector = FakeBatchDetector(
-        batch_results={
-            str(image_path): _result_for(image_path, [{"category": "1", "conf": 0.91}])
-        }
+    monkeypatch.setattr(
+        content,
+        "evaluate_images",
+        lambda model, image_paths, confidence_threshold, batch_size: [
+            _result_for(image_path, [MlDetection(label="animal", confidence=0.91)])
+        ],
     )
-    monkeypatch.setattr(content, "load_detector", lambda model: detector)
     monkeypatch.setattr(
         content,
         "write_exif_image_description",
@@ -177,12 +152,13 @@ def test_run_counts_replacements_when_destination_file_exists(
     destination.parent.mkdir(parents=True)
     make_image(destination)
 
-    detector = FakeBatchDetector(
-        batch_results={
-            str(image_path): _result_for(image_path, [{"category": "1", "conf": 0.91}])
-        }
+    monkeypatch.setattr(
+        content,
+        "evaluate_images",
+        lambda model, image_paths, confidence_threshold, batch_size: [
+            _result_for(image_path, [MlDetection(label="animal", confidence=0.91)])
+        ],
     )
-    monkeypatch.setattr(content, "load_detector", lambda model: detector)
 
     result = run(DetectContentInput(source=source, output=output))
 
@@ -191,29 +167,3 @@ def test_run_counts_replacements_when_destination_file_exists(
     assert result.files_failed == 0
     assert destination.exists()
     assert not image_path.exists()
-
-
-def test_run_falls_back_to_per_image_inference_when_batch_call_fails(
-    make_image,
-    tmp_path: Path,
-    monkeypatch,
-):
-    source = tmp_path / "source"
-    output = tmp_path / "output"
-    source.mkdir()
-    image_path = make_image(source / "animal.jpg")
-
-    detector = FakeBatchDetector(
-        per_image_results={
-            str(image_path): _result_for(image_path, [{"category": "1", "conf": 0.91}])
-        },
-        fail_batch=True,
-    )
-    monkeypatch.setattr(content, "load_detector", lambda model: detector)
-
-    result = run(DetectContentInput(source=source, output=output, dry_run=True))
-
-    assert detector.batch_calls == 1
-    assert detector.one_image_calls == [str(image_path)]
-    assert result.files_evaluated == 1
-    assert result.files_failed == 0

@@ -3,15 +3,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
-from PIL import Image, ImageOps
-
 from wv.core.exif import read_exif, write_exif_image_description
 from wv.core.files import ensure_directory, is_allowed_image_file
-from wv.core.megadetector import load_detector
 from wv.core.metadata import upsert_image_description_properties
+from wv.ml.megadetector import DEFAULT_MODEL, MlDetection, evaluate_images
 
-DEFAULT_MODEL = "MDV5A"
-_CATEGORY_LABELS = {1: "animal", 2: "human", 3: "vehicle"}
 
 
 @dataclass(frozen=True)
@@ -47,119 +43,9 @@ class DetectionDecision:
     confidence: float
 
 
-def _chunk_paths(paths: list[Path], batch_size: int) -> list[list[Path]]:
-    return [paths[index : index + batch_size] for index in range(0, len(paths), batch_size)]
-
-
-def _failed_detection_result(file_path: Path, failure: str) -> dict[str, object]:
-    return {
-        "file": str(file_path),
-        "failure": failure,
-        "detections": [],
-    }
-
-
-def _load_image_for_detection(file_path: Path) -> Image.Image:
-    with Image.open(file_path) as image:
-        return ImageOps.exif_transpose(image).copy()
-
-
-def _run_detector_one_image(
-    detector, file_path: Path, confidence_threshold: float
-) -> dict[str, object]:
-    try:
-        image = _load_image_for_detection(file_path)
-        return detector.generate_detections_one_image(
-            image,
-            image_id=str(file_path),
-            detection_threshold=confidence_threshold,
-        )
-    except Exception as exc:
-        return _failed_detection_result(file_path, str(exc))
-
-
-def _run_detector_batch(
-    detector, batch: list[Path], confidence_threshold: float
-) -> list[dict[str, object]]:
-    loaded_images: list[Image.Image] = []
-    loaded_paths: list[Path] = []
-    detection_results: list[dict[str, object]] = []
-
-    for file_path in batch:
-        try:
-            loaded_images.append(_load_image_for_detection(file_path))
-            loaded_paths.append(file_path)
-        except Exception as exc:
-            detection_results.append(_failed_detection_result(file_path, str(exc)))
-
-    if not loaded_images:
-        return detection_results
-
-    batch_results = detector.generate_detections_one_batch(
-        loaded_images,
-        image_id=[str(file_path) for file_path in loaded_paths],
-        detection_threshold=confidence_threshold,
-    )
-
-    return detection_results + batch_results
-
-
-def _evaluate_images(
-    detector, image_paths: list[Path], confidence_threshold: float, batch_size: int
-) -> list[dict[str, object]]:
-    detection_results: list[dict[str, object]] = []
-    supports_batch_inference = hasattr(detector, "generate_detections_one_batch")
-
-    for batch in _chunk_paths(image_paths, batch_size):
-        if supports_batch_inference:
-            try:
-                detection_results.extend(
-                    _run_detector_batch(detector, batch, confidence_threshold)
-                )
-                continue
-            except Exception:
-                pass
-
-        for file_path in batch:
-            detection_results.append(
-                _run_detector_one_image(detector, file_path, confidence_threshold)
-            )
-
-    return detection_results
-
-
-def _get_detection_confidence(detection: dict[str, object]) -> float:
-    try:
-        return float(detection.get("conf", 0.0))
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _get_detection_label(detection: dict[str, object]) -> str | None:
-    category = detection.get("category")
-
-    try:
-        category_id = int(str(category))
-    except (TypeError, ValueError):
-        return None
-
-    return _CATEGORY_LABELS.get(category_id)
-
-
-def _classify_detections(
-    detections: list[dict[str, object]], confidence_threshold: float
-) -> DetectionDecision:
-    labels: set[str] = set()
-    max_confidence = 0.0
-
-    for detection in detections:
-        confidence = _get_detection_confidence(detection)
-        if confidence < confidence_threshold:
-            continue
-
-        label = _get_detection_label(detection)
-        labels.add(label or "other")
-        max_confidence = max(max_confidence, confidence)
+def _classify_detections(detections: list[MlDetection]) -> DetectionDecision:
+    labels = {detection.label for detection in detections}
+    max_confidence = max((detection.confidence for detection in detections), default=0.0)
 
     if not labels:
         return DetectionDecision(label="empty", confidence=0.0)
@@ -243,27 +129,20 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
 
         image_paths.append(file_path)
 
-    detector = load_detector(input_data.model)
-    detection_results = _evaluate_images(
-        detector=detector,
+    detection_results = evaluate_images(
+        model=input_data.model,
         image_paths=image_paths,
         confidence_threshold=input_data.confidence_threshold,
         batch_size=input_data.batch_size,
     )
 
     for detection_result in detection_results:
-        file_path = Path(str(detection_result.get("file", "")))
-        failure = detection_result.get("failure")
-        if failure:
+        if detection_result.failure:
             result.files_failed += 1
             continue
 
-        detections = detection_result.get("detections", [])
-        if not isinstance(detections, list):
-            result.files_failed += 1
-            continue
-
-        decision = _classify_detections(detections, input_data.confidence_threshold)
+        file_path = detection_result.file_path
+        decision = _classify_detections(detection_result.detections)
         result.files_evaluated += 1
         _increment_decision_counter(result, decision)
 

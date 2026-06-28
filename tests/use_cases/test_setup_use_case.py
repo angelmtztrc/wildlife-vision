@@ -1,22 +1,18 @@
 from pathlib import Path
 
 import wv.use_cases.setup as setup
-
-
-class FakeCudaDetector:
-    device = "cuda:0"
-
-
-class FakeCpuDetector:
-    device = "cpu"
+from wv.ml.megadetector import PreparedModel
 
 
 def test_run_reports_gpu_when_detector_device_uses_gpu(monkeypatch):
-    monkeypatch.setattr(setup, "load_detector", lambda model, force_download=False: FakeCudaDetector())
     monkeypatch.setattr(
         setup,
-        "resolve_model_file",
-        lambda model, force_download=False: Path("/tmp/md_v5a.0.1.pt"),
+        "prepare_model",
+        lambda model, force_download=False: PreparedModel(
+            model=model,
+            resolved_model=Path("/tmp/md_v5a.0.1.pt"),
+            inference_device="GPU",
+        ),
     )
 
     result = setup.run(setup.SetupInput())
@@ -27,13 +23,15 @@ def test_run_reports_gpu_when_detector_device_uses_gpu(monkeypatch):
 
 
 def test_run_falls_back_to_cpu_when_gpu_is_not_available(monkeypatch):
-    monkeypatch.setattr(setup, "load_detector", lambda model, force_download=False: FakeCpuDetector())
     monkeypatch.setattr(
         setup,
-        "resolve_model_file",
-        lambda model, force_download=False: Path("/tmp/md_v5a.0.1.pt"),
+        "prepare_model",
+        lambda model, force_download=False: PreparedModel(
+            model=model,
+            resolved_model=Path("/tmp/md_v5a.0.1.pt"),
+            inference_device="CPU",
+        ),
     )
-    monkeypatch.setattr(setup, "is_gpu_available", lambda model_file: False)
 
     result = setup.run(setup.SetupInput())
 
