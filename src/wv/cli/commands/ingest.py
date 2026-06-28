@@ -3,6 +3,8 @@ from typing import Annotated, Literal
 
 import typer
 
+from wv.cli.presentation import render_command_summary
+from wv.cli.runtime import get_logger, get_runtime
 from wv.config import get_device_ids, get_monitoring_sites_ids
 from wv.use_cases.ingest.sd import IngestSdInput, run as run_ingest_sd
 
@@ -61,6 +63,17 @@ def ingest_sd(
         ),
     ] = False,
 ):
+    runtime = get_runtime()
+    logger = get_logger(__name__)
+    logger.info(
+        "Starting ingest.sd. Source: %s. Device: %s. Monitoring site: %s. Mode: %s. Dry run: %s.",
+        source,
+        device,
+        monitoring_site,
+        mode,
+        "yes" if dry_run else "no",
+    )
+
     result = run_ingest_sd(
         IngestSdInput(
             source=source,
@@ -71,16 +84,28 @@ def ingest_sd(
         )
     )
 
-    typer.echo(f"Source: {source}")
-    typer.echo(f"Destination: {result.destination}")
-    typer.echo(f"Mode: {mode}")
-    typer.echo(f"Dry run: {'yes' if result.dry_run else 'no'}")
-    typer.echo(f"Discovered: {result.files_discovered}")
-    typer.echo(f"Copied: {result.files_copied}")
-    typer.echo(f"Replaced: {result.files_replaced}")
-    typer.echo(f"Deleted: {result.files_deleted}")
-    typer.echo(f"Ignored: {result.files_ignored}")
-    typer.echo(f"Failed: {result.files_failed}")
+    render_command_summary(
+        runtime,
+        title="Ingest SD Summary",
+        message=(
+            "Ingest finished."
+            if result.files_failed == 0
+            else "Ingest finished with failures."
+        ),
+        rows=[
+            ("Source", source),
+            ("Destination", result.destination),
+            ("Mode", mode),
+            ("Dry run", "yes" if result.dry_run else "no"),
+            ("Discovered", result.files_discovered),
+            ("Copied", result.files_copied),
+            ("Replaced", result.files_replaced),
+            ("Deleted", result.files_deleted),
+            ("Ignored", result.files_ignored),
+            ("Failed", result.files_failed),
+        ],
+        level_name="OK" if result.files_failed == 0 else "ERROR",
+    )
 
     if result.files_failed > 0:
         raise typer.Exit(code=1)

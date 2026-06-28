@@ -42,6 +42,7 @@ def test_clean_corrupted_prints_summary_for_success(
     assert "Corrupted: 1" in result.output
     assert "Moved: 1" in result.output
     assert "Dry run: yes" in result.output
+    assert "[OK]" in result.output
 
 
 def test_clean_overexposed_ir_prints_summary_for_success(
@@ -76,6 +77,7 @@ def test_clean_overexposed_ir_prints_summary_for_success(
     assert "Overexposed: 1" in result.output
     assert "Moved: 1" in result.output
     assert "Dry run: no" in result.output
+    assert "[OK]" in result.output
 
 
 def test_clean_bursts_prints_summary_for_success(
@@ -111,6 +113,7 @@ def test_clean_bursts_prints_summary_for_success(
     assert "Bursts: 1" in result.output
     assert "Reduced: 2" in result.output
     assert "Moved: 2" in result.output
+    assert "[OK]" in result.output
 
 
 @pytest.mark.parametrize(
@@ -168,3 +171,4 @@ def test_clean_commands_exit_with_code_one_on_failures(
 
     assert result.exit_code == 1
     assert "Failed: 1" in result.output
+    assert "[ERROR]" in result.output

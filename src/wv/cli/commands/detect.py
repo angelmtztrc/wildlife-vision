@@ -3,6 +3,8 @@ from typing import Annotated
 
 import typer
 
+from wv.cli.presentation import render_command_summary
+from wv.cli.runtime import get_logger, get_runtime
 from wv.use_cases.detect.content import (
     DEFAULT_CONFIDENCE_THRESHOLD,
     DEFAULT_MODEL,
@@ -58,6 +60,18 @@ def detect_content(
         ),
     ] = False,
 ):
+    runtime = get_runtime()
+    logger = get_logger(__name__)
+    logger.info(
+        "Starting detect.content. Source: %s. Output: %s. Model: %s. Confidence threshold: %s. Batch size: %s. Dry run: %s.",
+        source,
+        output,
+        model,
+        confidence_threshold,
+        batch_size,
+        "yes" if dry_run else "no",
+    )
+
     result = run_detect_content(
         DetectContentInput(
             source=source,
@@ -69,23 +83,35 @@ def detect_content(
         )
     )
 
-    typer.echo(f"Source: {source}")
-    typer.echo(f"Destination: {result.destination}")
-    typer.echo(f"Model: {model}")
-    typer.echo(f"Confidence threshold: {confidence_threshold}")
-    typer.echo(f"Batch size: {batch_size}")
-    typer.echo(f"Dry run: {'yes' if result.dry_run else 'no'}")
-    typer.echo(f"Discovered: {result.files_discovered}")
-    typer.echo(f"Evaluated: {result.files_evaluated}")
-    typer.echo(f"Animal: {result.files_animal}")
-    typer.echo(f"Human: {result.files_human}")
-    typer.echo(f"Vehicle: {result.files_vehicle}")
-    typer.echo(f"Empty: {result.files_empty}")
-    typer.echo(f"Other: {result.files_other}")
-    typer.echo(f"Moved: {result.files_moved}")
-    typer.echo(f"Replaced: {result.files_replaced}")
-    typer.echo(f"Ignored: {result.files_ignored}")
-    typer.echo(f"Failed: {result.files_failed}")
+    render_command_summary(
+        runtime,
+        title="Detect Content Summary",
+        message=(
+            "Content detection finished."
+            if result.files_failed == 0
+            else "Content detection finished with failures."
+        ),
+        rows=[
+            ("Source", source),
+            ("Destination", result.destination),
+            ("Model", model),
+            ("Confidence threshold", confidence_threshold),
+            ("Batch size", batch_size),
+            ("Dry run", "yes" if result.dry_run else "no"),
+            ("Discovered", result.files_discovered),
+            ("Evaluated", result.files_evaluated),
+            ("Animal", result.files_animal),
+            ("Human", result.files_human),
+            ("Vehicle", result.files_vehicle),
+            ("Empty", result.files_empty),
+            ("Other", result.files_other),
+            ("Moved", result.files_moved),
+            ("Replaced", result.files_replaced),
+            ("Ignored", result.files_ignored),
+            ("Failed", result.files_failed),
+        ],
+        level_name="OK" if result.files_failed == 0 else "ERROR",
+    )
 
     if result.files_failed > 0:
         raise typer.Exit(code=1)

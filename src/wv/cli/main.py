@@ -1,6 +1,7 @@
 import typer
 
 from wv.cli.commands import clean, detect, ingest, pipeline, setup
+from wv.cli.runtime import configure_runtime
 
 app = typer.Typer(
     name="wildlife-vision",
@@ -8,6 +9,19 @@ app = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
+
+
+@app.callback()
+def main_callback(
+    ctx: typer.Context,
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        help="Enable DEBUG logs and render verbose boxed command summaries.",
+    ),
+):
+    ctx.obj = {"runtime": configure_runtime(verbose=verbose)}
+    return None
 
 
 app.add_typer(clean.app, name="clean")

@@ -53,6 +53,7 @@ def test_detect_content_prints_summary_for_success(
     assert "Moved: 5" in result.output
     assert "Replaced: 1" in result.output
     assert "Dry run: yes" in result.output
+    assert "[OK]" in result.output
 
 
 def test_detect_content_exits_with_code_one_when_use_case_reports_failures(
@@ -80,3 +81,4 @@ def test_detect_content_exits_with_code_one_when_use_case_reports_failures(
 
     assert result.exit_code == 1
     assert "Failed: 1" in result.output
+    assert "[ERROR]" in result.output

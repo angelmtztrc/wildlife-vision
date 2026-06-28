@@ -3,6 +3,8 @@ from typing import Annotated
 
 import typer
 
+from wv.cli.presentation import render_command_summary
+from wv.cli.runtime import get_logger, get_runtime
 from wv.use_cases.clean.bursts import CleanBurstsInput
 from wv.use_cases.clean.bursts import run as run_clean_bursts
 from wv.use_cases.clean.corrupted import CleanCorruptedInput
@@ -40,18 +42,39 @@ def clean_corrupted(
         ),
     ] = False,
 ):
+    runtime = get_runtime()
+    logger = get_logger(__name__)
+    logger.info(
+        "Starting clean.corrupted. Source: %s. Output: %s. Dry run: %s.",
+        source,
+        output,
+        "yes" if dry_run else "no",
+    )
+
     result = run_clean_corrupted(
         CleanCorruptedInput(source=source, output=output, dry_run=dry_run)
     )
 
-    typer.echo(f"Source: {source}")
-    typer.echo(f"Destination: {result.destination}")
-    typer.echo(f"Dry run: {'yes' if result.dry_run else 'no'}")
-    typer.echo(f"Discovered: {result.files_discovered}")
-    typer.echo(f"Corrupted: {result.files_corrupted}")
-    typer.echo(f"Moved: {result.files_moved}")
-    typer.echo(f"Ignored: {result.files_ignored}")
-    typer.echo(f"Failed: {result.files_failed}")
+    render_command_summary(
+        runtime,
+        title="Clean Corrupted Summary",
+        message=(
+            "Corrupted image cleanup finished."
+            if result.files_failed == 0
+            else "Corrupted image cleanup finished with failures."
+        ),
+        rows=[
+            ("Source", source),
+            ("Destination", result.destination),
+            ("Dry run", "yes" if result.dry_run else "no"),
+            ("Discovered", result.files_discovered),
+            ("Corrupted", result.files_corrupted),
+            ("Moved", result.files_moved),
+            ("Ignored", result.files_ignored),
+            ("Failed", result.files_failed),
+        ],
+        level_name="OK" if result.files_failed == 0 else "ERROR",
+    )
 
     if result.files_failed > 0:
         raise typer.Exit(code=1)
@@ -88,6 +111,15 @@ def clean_overexposed_ir(
         ),
     ] = False,
 ):
+    runtime = get_runtime()
+    logger = get_logger(__name__)
+    logger.info(
+        "Starting clean.overexposed-ir. Source: %s. Output: %s. Dry run: %s.",
+        source,
+        output,
+        "yes" if dry_run else "no",
+    )
+
     result = run_clean_overexposed_ir(
         CleanOverexposedIrInput(
             source=source,
@@ -100,14 +132,26 @@ def clean_overexposed_ir(
         )
     )
 
-    typer.echo(f"Source: {source}")
-    typer.echo(f"Destination: {result.destination}")
-    typer.echo(f"Dry run: {'yes' if result.dry_run else 'no'}")
-    typer.echo(f"Discovered: {result.files_discovered}")
-    typer.echo(f"Overexposed: {result.files_overexposed}")
-    typer.echo(f"Moved: {result.files_moved}")
-    typer.echo(f"Ignored: {result.files_ignored}")
-    typer.echo(f"Failed: {result.files_failed}")
+    render_command_summary(
+        runtime,
+        title="Clean Overexposed IR Summary",
+        message=(
+            "Overexposed IR cleanup finished."
+            if result.files_failed == 0
+            else "Overexposed IR cleanup finished with failures."
+        ),
+        rows=[
+            ("Source", source),
+            ("Destination", result.destination),
+            ("Dry run", "yes" if result.dry_run else "no"),
+            ("Discovered", result.files_discovered),
+            ("Overexposed", result.files_overexposed),
+            ("Moved", result.files_moved),
+            ("Ignored", result.files_ignored),
+            ("Failed", result.files_failed),
+        ],
+        level_name="OK" if result.files_failed == 0 else "ERROR",
+    )
 
     if result.files_failed > 0:
         raise typer.Exit(code=1)
@@ -142,6 +186,15 @@ def clean_bursts(
         ),
     ] = False,
 ):
+    runtime = get_runtime()
+    logger = get_logger(__name__)
+    logger.info(
+        "Starting clean.bursts. Source: %s. Output: %s. Dry run: %s.",
+        source,
+        output,
+        "yes" if dry_run else "no",
+    )
+
     result = run_clean_bursts(
         CleanBurstsInput(
             source=source,
@@ -152,15 +205,27 @@ def clean_bursts(
         )
     )
 
-    typer.echo(f"Source: {source}")
-    typer.echo(f"Destination: {result.destination}")
-    typer.echo(f"Dry run: {'yes' if result.dry_run else 'no'}")
-    typer.echo(f"Discovered: {result.files_discovered}")
-    typer.echo(f"Bursts: {result.files_bursts}")
-    typer.echo(f"Reduced: {result.files_reduced}")
-    typer.echo(f"Moved: {result.files_moved}")
-    typer.echo(f"Ignored: {result.files_ignored}")
-    typer.echo(f"Failed: {result.files_failed}")
+    render_command_summary(
+        runtime,
+        title="Clean Bursts Summary",
+        message=(
+            "Burst cleanup finished."
+            if result.files_failed == 0
+            else "Burst cleanup finished with failures."
+        ),
+        rows=[
+            ("Source", source),
+            ("Destination", result.destination),
+            ("Dry run", "yes" if result.dry_run else "no"),
+            ("Discovered", result.files_discovered),
+            ("Bursts", result.files_bursts),
+            ("Reduced", result.files_reduced),
+            ("Moved", result.files_moved),
+            ("Ignored", result.files_ignored),
+            ("Failed", result.files_failed),
+        ],
+        level_name="OK" if result.files_failed == 0 else "ERROR",
+    )
 
     if result.files_failed > 0:
         raise typer.Exit(code=1)
