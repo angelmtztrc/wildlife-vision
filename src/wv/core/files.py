@@ -1,62 +1,114 @@
-import os
+import base64
+import hashlib
+from datetime import datetime
+import re
 import shutil
 from pathlib import Path
-from dataclasses import dataclass
-
 
 allowed_image_exts = {".jpg", ".jpeg", ".png", ".heic"}
 
 
-@dataclass
-class ParsedFilename:
-    datetime: str
-    location: str
-    detection: str | None
-
-
-def copy_file(source_path: Path, destination_path: Path):
-    """
-    Copy a file from source_path to destination_path, preserving metadata.
+def is_allowed_image_file(file_path: Path) -> bool:
+    """Return whether ``path`` has an allowed image file extension.
 
     Args:
-        source_path (Path): The path to the source file to be copied.
-        destination_path (Path): The path to the destination where the file should be copied.
-    """
-    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
-    tmp = destination_path.parent / (destination_path.name + ".tmpcopy")
-    shutil.copy2(source_path, tmp)
-    os.replace(tmp, destination_path)
-
-
-def is_allowed_image_file(file: Path) -> bool:
-    return file.suffix.lower() in allowed_image_exts
-
-
-def parse_filename(file_path: Path):
-    """
-    Parse a filename into its components. The expected filename format is either:
-    1) YYYYMMDD_HHMMSS__CAMERA_LOCATION
-    2) YYYYMMDD_HHMMSS__CAMERA_LOCATION__DETECTION
-
-    Args:
-        file_path (Path): The path to the file whose name is to be parsed.
-
-    Raises:
-        ValueError: If the filename does not match the expected format.
+        file_path: File path to validate.
 
     Returns:
-        ParsedFilename: An object containing the parsed components of the filename.
+        ``True`` if ``path`` has an extension listed in
+        ``allowed_image_exts``. Otherwise, ``False``.
     """
-    file_path = Path(file_path)
+    return file_path.suffix.lower() in allowed_image_exts
 
-    split = file_path.stem.split("__", maxsplit=2)
 
-    if len(split) < 2:
-        raise ValueError(
-            f"Filename '{file_path.name}' does not match expected format 'YYYYMMDD_HHMMSS__CAMERA_LOCATION' or 'YYYYMMDD_HHMMSS__CAMERA_LOCATION__DETECTION'"
-        )
+def ensure_directory(path: Path) -> None:
+    """Ensure that ``path`` exists and is a directory.
 
-    if len(split) == 2:
-        return ParsedFilename(datetime=split[0], location=split[1], detection=None)
+    Args:
+        path: Path to validate.
 
-    return ParsedFilename(datetime=split[0], location=split[1], detection=split[2])
+    Raises:
+        FileNotFoundError: If ``path`` does not exist.
+        NotADirectoryError: If ``path`` exists but is not a directory.
+    """
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    if not path.is_dir():
+        raise NotADirectoryError(path)
+
+
+def get_file_id(file_path: Path) -> str:
+    """Return a stable 6-character file ID derived from file content."""
+    hasher = hashlib.blake2b(digest_size=20)
+
+    with file_path.open("rb") as file_handle:
+        while chunk := file_handle.read(8192):
+            hasher.update(chunk)
+
+    return base64.b32encode(hasher.digest()).decode("ascii")[:6]
+
+
+def parse_ingested_image_filename(file_path: Path) -> dict[str, str] | None:
+    """Parse filenames following ``YYYYMMDD_HHMMSS__SITE__ID``.
+
+    Args:
+        file_path: File path whose stem will be parsed.
+
+    Returns:
+        A dictionary with ``captured_at``, ``monitoring_site``, and ``file_id``
+        when the stem matches the ingest naming convention. Otherwise, ``None``.
+    """
+    match = re.fullmatch(
+        r"(?P<captured_at>\d{8}_\d{6})__(?P<monitoring_site>[A-Z0-9_]+)__(?P<file_id>[A-Z2-7]{6})",
+        file_path.stem,
+    )
+    if match is None:
+        return None
+
+    parts = match.groupdict()
+
+    try:
+        datetime.strptime(parts["captured_at"], "%Y%m%d_%H%M%S")
+    except ValueError:
+        return None
+
+    return parts
+
+
+def copy_file_preserving_metadata(source: Path, destination: Path) -> Path:
+    """Copy a file while preserving its contents and metadata when supported.
+
+    This helper copies the file bytes unchanged, so embedded image metadata such
+    as EXIF ``ImageDescription`` is preserved. Filesystem metadata is preserved
+    on a best-effort basis via ``shutil.copy2()``, but creation time support is
+    platform and filesystem dependent.
+
+    Args:
+        source: Existing file to copy.
+        destination: Full destination file path.
+
+    Returns:
+        The destination path.
+
+    Raises:
+        FileNotFoundError: If ``source`` does not exist.
+        IsADirectoryError: If ``source`` is not a file or ``destination`` is a directory.
+        FileNotFoundError: If ``destination.parent`` does not exist.
+        NotADirectoryError: If ``destination.parent`` exists but is not a directory.
+        OSError: If the underlying copy operation fails.
+    """
+    if not source.exists():
+        raise FileNotFoundError(source)
+
+    if not source.is_file():
+        raise IsADirectoryError(source)
+
+    ensure_directory(destination.parent)
+
+    if destination.exists() and destination.is_dir():
+        raise IsADirectoryError(destination)
+
+    shutil.copy2(source, destination)
+
+    return destination

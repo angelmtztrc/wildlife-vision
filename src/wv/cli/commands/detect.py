@@ -1,61 +1,89 @@
-import typer
+from pathlib import Path
 from typing import Annotated
 
-from wv.core.logging import get_logger
-from wv.core.prompt import prompt_path
-from wv.handlers.overexposed_ir_detector import OverexposedIRDetectorHandler
+import typer
 
-app = typer.Typer(help="Photo detection commands")
+from wv.use_cases.detect.content import DEFAULT_MODEL, DetectContentInput
+from wv.use_cases.detect.content import run as run_detect_content
 
-log = get_logger("DetectCommand")
+app = typer.Typer(help="Run content detection on photos.")
 
 
-@app.command("overexposed-ir")
-def detect_overexposed_ir(
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Perform a dry run without moving files")
-    ] = False,
-    mean_threshold: Annotated[
-        float,
-        typer.Option("--mean-threshold", help="Grayscale mean threshold (0..255)"),
-    ] = 200.0,
-    std_threshold: Annotated[
+@app.command("content")
+def detect_content(
+    source: Annotated[
+        Path,
+        typer.Argument(
+            help="", exists=True, file_okay=False, dir_okay=True, readable=True
+        ),
+    ],
+    output: Annotated[
+        Path,
+        typer.Option(
+            help="",
+            file_okay=False,
+            dir_okay=True,
+        ),
+    ],
+    model: Annotated[
+        str,
+        typer.Option(help="MegaDetector model name or path."),
+    ] = DEFAULT_MODEL,
+    confidence_threshold: Annotated[
         float,
         typer.Option(
-            "--std-threshold", help="Grayscale standard deviation threshold (0..255)"
+            "--confidence-threshold",
+            min=0.0,
+            max=1.0,
+            help="Only detections at or above this confidence are considered.",
         ),
-    ] = 25.0,
-    high_level: Annotated[
+    ] = 0.2,
+    batch_size: Annotated[
         int,
         typer.Option(
-            "--high-level", help="Gray level considered 'near white' (0..255)"
+            "--batch-size",
+            min=1,
+            help="Number of images to send to the detector per inference batch.",
         ),
-    ] = 220,
-    pct_high_threshold: Annotated[
-        float,
+    ] = 32,
+    dry_run: Annotated[
+        bool,
         typer.Option(
-            "--pct-high-threshold",
-            help="Fraction of near white pixels threshold (0..1)",
+            "--dry-run",
+            help="Preview the detection operation without moving files or writing metadata.",
         ),
-    ] = 0.60,
+    ] = False,
 ):
-    input_path = prompt_path("Enter the input folder path: ").strip()
-
-    output_path = prompt_path(
-        "Enter the output folder path (ignored if --dry-run): "
-    ).strip()
-
-    handler = OverexposedIRDetectorHandler(
-        input_path=input_path,
-        output_path=output_path,
-        mean_threshold=mean_threshold,
-        std_threshold=std_threshold,
-        high_level=high_level,
-        pct_high_threshold=pct_high_threshold,
+    result = run_detect_content(
+        DetectContentInput(
+            source=source,
+            output=output,
+            model=model,
+            confidence_threshold=confidence_threshold,
+            batch_size=batch_size,
+            dry_run=dry_run,
+        )
     )
 
-    result = handler.run(dry_run=dry_run)
+    typer.echo(f"Source: {source}")
+    typer.echo(f"Destination: {result.destination}")
+    typer.echo(f"Model: {model}")
+    typer.echo(f"Confidence threshold: {confidence_threshold}")
+    typer.echo(f"Batch size: {batch_size}")
+    typer.echo(f"Dry run: {'yes' if result.dry_run else 'no'}")
+    typer.echo(f"Discovered: {result.files_discovered}")
+    typer.echo(f"Evaluated: {result.files_evaluated}")
+    typer.echo(f"Animal: {result.files_animal}")
+    typer.echo(f"Human: {result.files_human}")
+    typer.echo(f"Vehicle: {result.files_vehicle}")
+    typer.echo(f"Empty: {result.files_empty}")
+    typer.echo(f"Other: {result.files_other}")
+    typer.echo(f"Moved: {result.files_moved}")
+    typer.echo(f"Replaced: {result.files_replaced}")
+    typer.echo(f"Ignored: {result.files_ignored}")
+    typer.echo(f"Failed: {result.files_failed}")
 
-    log.info(
-        f"Overexposed IR detection completed. Total: {result.total_files}, Overexposed: {result.overexposed_files}, Moved: {result.moved_files}, Skipped: {result.skipped_files}, Failed: {result.failed_files}"
-    )
+    if result.files_failed > 0:
+        raise typer.Exit(code=1)
+
+    return None
