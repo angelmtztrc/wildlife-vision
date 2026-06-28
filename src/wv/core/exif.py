@@ -59,21 +59,12 @@ def write_exif_image_description(file_path: Path, data: str) -> None:
         file_path (Path): Path to the image file.
         data (str): Description to write to the image's EXIF metadata.
     """
-    try:
-        img = Image.open(file_path)
-
-        exif_bytes = img.info.get("exif")
+    with Image.open(file_path) as image:
+        exif_bytes = image.info.get("exif")
         if exif_bytes:
             exif_dict = piexif.load(exif_bytes)
         else:
             exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
 
         exif_dict["0th"][piexif.ImageIFD.ImageDescription] = data.encode("utf-8")
-
-        exif_bytes = piexif.dump(exif_dict)
-        img.save(file_path, exif=exif_bytes)
-
-        # TODO: LOGGING
-    except Exception:
-        # TODO: LOGGING
-        pass
+        image.save(file_path, exif=piexif.dump(exif_dict))

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from wv.core.exif import read_exif, write_exif_image_description
 
 
@@ -36,3 +38,12 @@ def test_write_exif_image_description_updates_image(make_image, tmp_path: Path):
         assert value.decode("utf-8") == "scout camera"
     else:
         assert value == "scout camera"
+
+
+def test_write_exif_image_description_raises_for_unreadable_file(
+    make_corrupted_image, tmp_path: Path
+):
+    image_path = make_corrupted_image(tmp_path / "broken.jpg")
+
+    with pytest.raises(Exception):
+        write_exif_image_description(image_path, "scout camera")

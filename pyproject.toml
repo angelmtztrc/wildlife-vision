@@ -10,6 +10,7 @@ dependencies = [
     "typer>=0.26.8",
     "pyyaml>=6.0.3",
     "imagehash>=4.3.2",
+    "megadetector>=10.0.23",
 ]
 
 [dependency-groups]
@@ -49,9 +50,7 @@ omit = [
     "src/wv/use_cases/ingest/__init__.py",
     "src/wv/use_cases/pipeline/__init__.py",
     "src/wv/use_cases/ingest/folder.py",
-    "src/wv/use_cases/detect/content.py",
     "src/wv/use_cases/pipeline/preprocess.py",
-    "src/wv/cli/commands/detect.py",
     "src/wv/cli/commands/pipeline.py",
     "src/wv/cli/commands/export.py",
 ]

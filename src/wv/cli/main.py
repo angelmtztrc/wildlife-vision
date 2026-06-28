@@ -1,6 +1,6 @@
 import typer
 
-from wv.cli.commands import clean, detect, ingest, pipeline
+from wv.cli.commands import clean, detect, ingest, pipeline, setup
 
 app = typer.Typer(
     name="wildlife-vision",
@@ -14,6 +14,7 @@ app.add_typer(clean.app, name="clean")
 app.add_typer(detect.app, name="detect")
 app.add_typer(ingest.app, name="ingest")
 app.add_typer(pipeline.app, name="pipeline")
+app.command("setup")(setup.setup)
 
 
 def main():
