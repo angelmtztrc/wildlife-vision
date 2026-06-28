@@ -22,10 +22,13 @@ class FakeBatchDetector:
         self.per_image_results = per_image_results or {}
         self.fail_batch = fail_batch
         self.batch_calls = 0
+        self.batch_thresholds: list[float] = []
         self.one_image_calls: list[str] = []
+        self.one_image_thresholds: list[float] = []
 
     def generate_detections_one_batch(self, images, image_id, detection_threshold):
         self.batch_calls += 1
+        self.batch_thresholds.append(detection_threshold)
         if self.fail_batch:
             raise RuntimeError("batch failed")
 
@@ -33,6 +36,7 @@ class FakeBatchDetector:
 
     def generate_detections_one_image(self, image, image_id, detection_threshold):
         self.one_image_calls.append(image_id)
+        self.one_image_thresholds.append(detection_threshold)
         return self.per_image_results[image_id]
 
 
@@ -81,7 +85,7 @@ def test_prepare_model_falls_back_to_cpu_when_gpu_is_not_available(monkeypatch):
     assert prepared.inference_device == "CPU"
 
 
-def test_evaluate_images_normalizes_and_filters_detections(
+def test_evaluate_images_normalizes_and_preserves_detections_for_routing(
     make_image,
     tmp_path: Path,
     monkeypatch,
@@ -108,13 +112,15 @@ def test_evaluate_images_normalizes_and_filters_detections(
     results = megadetector.evaluate_images(
         model="MDV5A",
         image_paths=[animal, other],
-        confidence_threshold=0.2,
+        confidence_threshold=0.8,
         batch_size=8,
     )
 
+    assert detector.batch_thresholds == [0.01]
     assert results[0].failure is None
     assert results[0].detections == [
-        megadetector.MlDetection(label="animal", confidence=0.91)
+        megadetector.MlDetection(label="animal", confidence=0.91),
+        megadetector.MlDetection(label="animal", confidence=0.05),
     ]
     assert results[1].failure is None
     assert results[1].detections == [
@@ -142,12 +148,14 @@ def test_evaluate_images_falls_back_to_per_image_inference_when_batch_fails(
     results = megadetector.evaluate_images(
         model="MDV5A",
         image_paths=[image_path],
-        confidence_threshold=0.2,
+        confidence_threshold=0.8,
         batch_size=8,
     )
 
     assert detector.batch_calls == 1
+    assert detector.batch_thresholds == [0.01]
     assert detector.one_image_calls == [str(image_path)]
+    assert detector.one_image_thresholds == [0.01]
     assert results == [
         megadetector.MlImageResult(
             file_path=image_path,
@@ -180,7 +188,7 @@ def test_evaluate_images_marks_invalid_detection_payload_as_failure(
     results = megadetector.evaluate_images(
         model="MDV5A",
         image_paths=[image_path],
-        confidence_threshold=0.2,
+        confidence_threshold=0.8,
         batch_size=8,
     )
 

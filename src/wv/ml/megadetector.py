@@ -5,6 +5,7 @@ from PIL import Image, ImageOps
 
 DEFAULT_MODEL = "MDV5A"
 _CATEGORY_LABELS = {1: "animal", 2: "human", 3: "vehicle"}
+_MIN_DETECTION_THRESHOLD = 0.01
 
 
 @dataclass(frozen=True)
@@ -107,7 +108,6 @@ def _normalize_raw_result(
     raw_result: object,
     *,
     default_file_path: Path | None = None,
-    confidence_threshold: float,
 ) -> MlImageResult:
     if not isinstance(raw_result, dict):
         return _failed_image_result(
@@ -128,9 +128,7 @@ def _normalize_raw_result(
 
     try:
         detections = [
-            detection
-            for detection in (_normalize_detection(raw_detection) for raw_detection in raw_detections)
-            if detection.confidence >= confidence_threshold
+            _normalize_detection(raw_detection) for raw_detection in raw_detections
         ]
     except Exception as exc:
         return _failed_image_result(file_path, str(exc))
@@ -139,26 +137,25 @@ def _normalize_raw_result(
 
 
 def _run_detector_one_image(
-    detector, file_path: Path, confidence_threshold: float
+    detector, file_path: Path
 ) -> MlImageResult:
     try:
         image = _load_image_for_detection(file_path)
         raw_result = detector.generate_detections_one_image(
             image,
             image_id=str(file_path),
-            detection_threshold=confidence_threshold,
+            detection_threshold=_MIN_DETECTION_THRESHOLD,
         )
         return _normalize_raw_result(
             raw_result,
             default_file_path=file_path,
-            confidence_threshold=confidence_threshold,
         )
     except Exception as exc:
         return _failed_image_result(file_path, str(exc))
 
 
 def _run_detector_batch(
-    detector, batch: list[Path], confidence_threshold: float
+    detector, batch: list[Path]
 ) -> list[MlImageResult]:
     loaded_images: list[Image.Image] = []
     loaded_paths: list[Path] = []
@@ -177,7 +174,7 @@ def _run_detector_batch(
     raw_results = detector.generate_detections_one_batch(
         loaded_images,
         image_id=[str(file_path) for file_path in loaded_paths],
-        detection_threshold=confidence_threshold,
+        detection_threshold=_MIN_DETECTION_THRESHOLD,
     )
 
     for file_path, raw_result in zip(loaded_paths, raw_results, strict=True):
@@ -185,7 +182,6 @@ def _run_detector_batch(
             _normalize_raw_result(
                 raw_result,
                 default_file_path=file_path,
-                confidence_threshold=confidence_threshold,
             )
         )
 
@@ -205,16 +201,12 @@ def evaluate_images(
     for batch in _chunk_paths(image_paths, batch_size):
         if supports_batch_inference:
             try:
-                image_results.extend(
-                    _run_detector_batch(detector, batch, confidence_threshold)
-                )
+                image_results.extend(_run_detector_batch(detector, batch))
                 continue
             except Exception:
                 pass
 
         for file_path in batch:
-            image_results.append(
-                _run_detector_one_image(detector, file_path, confidence_threshold)
-            )
+            image_results.append(_run_detector_one_image(detector, file_path))
 
     return image_results

@@ -8,6 +8,9 @@ from wv.core.files import ensure_directory, is_allowed_image_file
 from wv.core.metadata import upsert_image_description_properties
 from wv.ml.megadetector import DEFAULT_MODEL, MlDetection, evaluate_images
 
+DEFAULT_CONFIDENCE_THRESHOLD = 0.8
+DEFAULT_AMBIGUITY_GAP = 0.3
+
 
 
 @dataclass(frozen=True)
@@ -15,7 +18,7 @@ class DetectContentInput:
     source: Path
     output: Path
     model: str = DEFAULT_MODEL
-    confidence_threshold: float = 0.2
+    confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
     batch_size: int = 32
     dry_run: bool = False
 
@@ -43,17 +46,33 @@ class DetectionDecision:
     confidence: float
 
 
-def _classify_detections(detections: list[MlDetection]) -> DetectionDecision:
-    labels = {detection.label for detection in detections}
-    max_confidence = max((detection.confidence for detection in detections), default=0.0)
-
-    if not labels:
+def _classify_detections(
+    detections: list[MlDetection], confidence_threshold: float
+) -> DetectionDecision:
+    if not detections:
         return DetectionDecision(label="empty", confidence=0.0)
 
-    if len(labels) == 1:
-        return DetectionDecision(label=next(iter(labels)), confidence=max_confidence)
+    confidence_by_label: dict[str, float] = {}
+    for detection in detections:
+        confidence_by_label[detection.label] = max(
+            confidence_by_label.get(detection.label, 0.0), detection.confidence
+        )
 
-    return DetectionDecision(label="other", confidence=max_confidence)
+    ranked_labels = sorted(
+        confidence_by_label.items(), key=lambda item: item[1], reverse=True
+    )
+    best_label, best_confidence = ranked_labels[0]
+
+    if best_confidence < confidence_threshold:
+        return DetectionDecision(label="other", confidence=best_confidence)
+
+    if (
+        len(ranked_labels) > 1
+        and best_confidence - ranked_labels[1][1] < DEFAULT_AMBIGUITY_GAP
+    ):
+        return DetectionDecision(label="other", confidence=best_confidence)
+
+    return DetectionDecision(label=best_label, confidence=best_confidence)
 
 
 def _increment_decision_counter(
@@ -142,7 +161,9 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
             continue
 
         file_path = detection_result.file_path
-        decision = _classify_detections(detection_result.detections)
+        decision = _classify_detections(
+            detection_result.detections, input_data.confidence_threshold
+        )
         result.files_evaluated += 1
         _increment_decision_counter(result, decision)
 

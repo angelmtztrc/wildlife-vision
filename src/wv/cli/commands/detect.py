@@ -3,7 +3,11 @@ from typing import Annotated
 
 import typer
 
-from wv.use_cases.detect.content import DEFAULT_MODEL, DetectContentInput
+from wv.use_cases.detect.content import (
+    DEFAULT_CONFIDENCE_THRESHOLD,
+    DEFAULT_MODEL,
+    DetectContentInput,
+)
 from wv.use_cases.detect.content import run as run_detect_content
 
 app = typer.Typer(help="Run content detection on photos.")
@@ -35,9 +39,9 @@ def detect_content(
             "--confidence-threshold",
             min=0.0,
             max=1.0,
-            help="Only detections at or above this confidence are considered.",
+            help="Minimum confidence required to route an image to animal, human, or vehicle; weaker or ambiguous detections go to other.",
         ),
-    ] = 0.2,
+    ] = DEFAULT_CONFIDENCE_THRESHOLD,
     batch_size: Annotated[
         int,
         typer.Option(

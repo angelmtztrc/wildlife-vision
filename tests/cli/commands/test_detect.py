@@ -43,6 +43,7 @@ def test_detect_content_prints_summary_for_success(
     assert result.exit_code == 0
     assert f"Source: {source}" in result.output
     assert f"Destination: {output / 'detection'}" in result.output
+    assert "Confidence threshold: 0.8" in result.output
     assert "Evaluated: 5" in result.output
     assert "Animal: 1" in result.output
     assert "Human: 1" in result.output
