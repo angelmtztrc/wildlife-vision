@@ -28,7 +28,10 @@ app.add_typer(clean.app, name="clean")
 app.add_typer(detect.app, name="detect")
 app.add_typer(ingest.app, name="ingest")
 app.add_typer(pipeline.app, name="pipeline")
-app.command("setup")(setup.setup)
+app.command(
+    "setup",
+    help="Prepare MegaDetector for local inference by resolving or downloading the configured model.",
+)(setup.setup)
 
 
 def main():

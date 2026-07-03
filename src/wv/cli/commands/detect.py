@@ -20,13 +20,17 @@ def detect_content(
     source: Annotated[
         Path,
         typer.Argument(
-            help="", exists=True, file_okay=False, dir_okay=True, readable=True
+            help="Directory containing images to evaluate with MegaDetector.",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
         ),
     ],
     output: Annotated[
         Path,
         typer.Option(
-            help="",
+            help="Base output directory where detected images are moved into output/detection/<label>.",
             file_okay=False,
             dir_okay=True,
         ),
@@ -60,6 +64,7 @@ def detect_content(
         ),
     ] = False,
 ):
+    """Classify images into animal, human, vehicle, empty, or other using MegaDetector."""
     runtime = get_runtime()
     logger = get_logger(__name__)
     logger.info(

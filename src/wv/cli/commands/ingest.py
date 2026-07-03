@@ -35,16 +35,26 @@ def _validate_monitoring_site(value: str) -> str:
 def ingest_sd(
     source: Annotated[
         Path,
-        typer.Argument(help="", exists=True, file_okay=False, dir_okay=True, readable=True),
+        typer.Argument(
+            help="Directory representing the mounted SD card or source folder to ingest from.",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+        ),
     ],
     device: Annotated[
         str,
-        typer.Option(help="", autocompletion=_complete_device, callback=_validate_device),
+        typer.Option(
+            help="Configured device ID for the camera that produced these images.",
+            autocompletion=_complete_device,
+            callback=_validate_device,
+        ),
     ],
     monitoring_site: Annotated[
         str,
         typer.Option(
-            help="",
+            help="Configured monitoring site ID to encode into ingested filenames.",
             autocompletion=_complete_monitoring_site,
             callback=_validate_monitoring_site,
         ),
@@ -63,6 +73,7 @@ def ingest_sd(
         ),
     ] = False,
 ):
+    """Copy or drain images from an SD card into a timestamped ingest session under .wv/sessions."""
     runtime = get_runtime()
     logger = get_logger(__name__)
     logger.info(

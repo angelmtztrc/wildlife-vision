@@ -22,13 +22,17 @@ def clean_corrupted(
     source: Annotated[
         Path,
         typer.Argument(
-            help="", exists=True, file_okay=False, dir_okay=True, readable=True
+            help="Directory to scan for image files and move corrupted photos from.",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
         ),
     ],
     output: Annotated[
         Path,
         typer.Option(
-            help="",
+            help="Base output directory where corrupted photos are moved under ignored/corrupted.",
             file_okay=False,
             dir_okay=True,
             readable=True,
@@ -42,6 +46,7 @@ def clean_corrupted(
         ),
     ] = False,
 ):
+    """Detect unreadable image files and move them into an ignored/corrupted folder."""
     runtime = get_runtime()
     logger = get_logger(__name__)
     logger.info(
@@ -87,22 +92,50 @@ def clean_overexposed_ir(
     source: Annotated[
         Path,
         typer.Argument(
-            help="", exists=True, file_okay=False, dir_okay=True, readable=True
-        ),
-    ],
-    output: Annotated[
-        Path,
-        typer.Option(
-            help="",
+            help="Directory to scan for image files and move overexposed IR photos from.",
+            exists=True,
             file_okay=False,
             dir_okay=True,
             readable=True,
         ),
     ],
-    mean_threshold: Annotated[float, typer.Option("--mean-threshold")] = 200.0,
-    std_threshold: Annotated[float, typer.Option("--std-threshold")] = 25.0,
-    high_level: Annotated[int, typer.Option("--high-level")] = 220,
-    ptc_high_threshold: Annotated[float, typer.Option("--ptc-high-threshold")] = 0.60,
+    output: Annotated[
+        Path,
+        typer.Option(
+            help="Base output directory where overexposed IR photos are moved under ignored/overexposed.",
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+        ),
+    ],
+    mean_threshold: Annotated[
+        float,
+        typer.Option(
+            "--mean-threshold",
+            help="Minimum average grayscale brightness required to flag an image as overexposed.",
+        ),
+    ] = 200.0,
+    std_threshold: Annotated[
+        float,
+        typer.Option(
+            "--std-threshold",
+            help="Maximum grayscale standard deviation allowed when treating a bright image as uniformly overexposed.",
+        ),
+    ] = 25.0,
+    high_level: Annotated[
+        int,
+        typer.Option(
+            "--high-level",
+            help="Grayscale value used as the cutoff for counting near-white pixels in the image histogram.",
+        ),
+    ] = 220,
+    ptc_high_threshold: Annotated[
+        float,
+        typer.Option(
+            "--ptc-high-threshold",
+            help="Minimum fraction of pixels at or above --high-level required to flag an image as overexposed.",
+        ),
+    ] = 0.60,
     dry_run: Annotated[
         bool,
         typer.Option(
@@ -111,6 +144,7 @@ def clean_overexposed_ir(
         ),
     ] = False,
 ):
+    """Move likely washed-out infrared images into an ignored/overexposed folder."""
     runtime = get_runtime()
     logger = get_logger(__name__)
     logger.info(
@@ -164,20 +198,36 @@ def clean_bursts(
     source: Annotated[
         Path,
         typer.Argument(
-            help="", exists=True, file_okay=False, dir_okay=True, readable=True
-        ),
-    ],
-    output: Annotated[
-        Path,
-        typer.Option(
-            help="",
+            help="Directory to scan for images and reduce burst sequences from.",
+            exists=True,
             file_okay=False,
             dir_okay=True,
             readable=True,
         ),
     ],
-    burst_gap_threshold: Annotated[int, typer.Option("--burst-gap-threshold")] = 60,
-    similarity_threshold: Annotated[int, typer.Option("--similarity-threshold")] = 5,
+    output: Annotated[
+        Path,
+        typer.Option(
+            help="Base output directory where reduced burst images are moved under ignored/bursts.",
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+        ),
+    ],
+    burst_gap_threshold: Annotated[
+        int,
+        typer.Option(
+            "--burst-gap-threshold",
+            help="Maximum time gap in seconds between consecutive images for grouping them into the same burst.",
+        ),
+    ] = 60,
+    similarity_threshold: Annotated[
+        int,
+        typer.Option(
+            "--similarity-threshold",
+            help="Maximum perceptual hash distance for treating images inside a burst as visually similar.",
+        ),
+    ] = 5,
     dry_run: Annotated[
         bool,
         typer.Option(
@@ -186,6 +236,7 @@ def clean_bursts(
         ),
     ] = False,
 ):
+    """Keep the best images from near-duplicate bursts and move the rest into ignored/bursts."""
     runtime = get_runtime()
     logger = get_logger(__name__)
     logger.info(

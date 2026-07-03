@@ -18,6 +18,7 @@ def setup(
         ),
     ] = False,
 ):
+    """Prepare the MegaDetector model for local CLI commands that require inference."""
     runtime = get_runtime()
     logger = get_logger(__name__)
     logger.info(
