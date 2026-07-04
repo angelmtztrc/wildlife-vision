@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,9 @@ from wv.core.files import (
     is_allowed_image_file,
 )
 from wv.core.images import get_image_datetime
+from wv.core.logger import get_logger, get_progress
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -66,50 +70,104 @@ def run(input_data: IngestSdInput) -> IngestSdResult:
     session_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_dir = root_path / "sessions" / f"{session_timestamp}__{input_data.device}"
     egestion_path = session_dir / "initial"
-    result.destination = egestion_path
+
+    logger.info(
+        "Starting SD ingest from %s (device=%s, monitoring_site=%s, mode=%s, dry_run=%s)",
+        input_data.source,
+        input_data.device,
+        input_data.monitoring_site,
+        input_data.mode,
+        input_data.dry_run,
+    )
+
     source_files = list(input_data.source.iterdir())
 
-    for file in source_files:
-        result.files_discovered += 1
-        if not file.is_file() or not is_allowed_image_file(file):
-            result.files_ignored += 1
+    result.destination = egestion_path
+    result.files_discovered = len(source_files)
 
-            continue
+    logger.info(
+        "Discovered %s entries; destination session path is %s",
+        result.files_discovered,
+        egestion_path,
+    )
 
-        try:
-            captured_at = get_image_datetime(file)
-            captured_at_parsed = captured_at.strftime("%Y%m%d_%H%M%S")
-            file_id = get_file_id(file)
-            filename = (
-                f"{captured_at_parsed}__{input_data.monitoring_site.upper()}__{file_id}"
-                f"{file.suffix.lower()}"
-            )
-            destination = egestion_path / filename
+    with get_progress() as progress:
+        process = progress.add_task(
+            "Processing SD card files", total=result.files_discovered
+        )
 
-            if input_data.dry_run:
-                result.files_copied += 1
-                if destination.exists():
-                    result.files_replaced += 1
-                if input_data.mode == "drain":
-                    result.files_deleted += 1
+        for file in source_files:
+            time.sleep(1)
+            if not file.is_file() or not is_allowed_image_file(file):
+                result.files_ignored += 1
+                logger.debug("Skipping %s: not a supported image file", file)
+
+                progress.update(process, advance=1)
                 continue
 
-            egestion_path.mkdir(parents=True, exist_ok=True)
+            try:
+                captured_at = get_image_datetime(file)
+                captured_at_parsed = captured_at.strftime("%Y%m%d_%H%M%S")
+                file_id = get_file_id(file)
+                filename = (
+                    f"{captured_at_parsed}__{input_data.monitoring_site.upper()}__{file_id}"
+                    f"{file.suffix.lower()}"
+                )
+                destination = egestion_path / filename
 
-            copied, replaced_existing = _replace_destination_with_verified_copy(
-                source=file,
-                destination=destination,
-                source_file_id=file_id,
-            )
-            if copied:
-                result.files_copied += 1
-            if replaced_existing:
-                result.files_replaced += 1
+                logger.debug(
+                    "Prepared ingest for %s: captured_at=%s, file_id=%s, destination=%s",
+                    file,
+                    captured_at_parsed,
+                    file_id,
+                    destination,
+                )
 
-            if input_data.mode == "drain":
-                file.unlink()
-                result.files_deleted += 1
-        except Exception:
-            result.files_failed += 1
+                if input_data.dry_run:
+                    result.files_copied += 1
+                    if destination.exists():
+                        result.files_replaced += 1
+                    if input_data.mode == "drain":
+                        result.files_deleted += 1
+
+                    logger.debug(
+                        "Dry run: would copy %s to %s%s%s",
+                        file,
+                        destination,
+                        " and replace existing file" if destination.exists() else "",
+                        " and delete source" if input_data.mode == "drain" else "",
+                    )
+
+                    progress.update(process, advance=1)
+                    continue
+
+                egestion_path.mkdir(parents=True, exist_ok=True)
+
+                copied, replaced_existing = _replace_destination_with_verified_copy(
+                    source=file,
+                    destination=destination,
+                    source_file_id=file_id,
+                )
+
+                if copied:
+                    result.files_copied += 1
+                    logger.debug("Copied %s to %s", file, destination)
+                if replaced_existing:
+                    result.files_replaced += 1
+                    logger.debug(
+                        "Replaced existing destination file at %s", destination
+                    )
+
+                if input_data.mode == "drain":
+                    file.unlink()
+                    result.files_deleted += 1
+                    logger.debug("Deleted source file after ingest: %s", file)
+
+                progress.update(process, advance=1)
+            except Exception:
+                result.files_failed += 1
+                logger.exception("Failed to ingest %s", file)
+
+                progress.update(process, advance=1)
 
     return result
