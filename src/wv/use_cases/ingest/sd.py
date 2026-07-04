@@ -1,10 +1,10 @@
-import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
 from wv.config import get_root_path
+from wv.core.display import display_file, display_path
 from wv.core.files import (
     copy_file_preserving_metadata,
     ensure_directory,
@@ -71,15 +71,6 @@ def run(input_data: IngestSdInput) -> IngestSdResult:
     session_dir = root_path / "sessions" / f"{session_timestamp}__{input_data.device}"
     egestion_path = session_dir / "initial"
 
-    logger.info(
-        "Starting SD ingest from %s (device=%s, monitoring_site=%s, mode=%s, dry_run=%s)",
-        input_data.source,
-        input_data.device,
-        input_data.monitoring_site,
-        input_data.mode,
-        input_data.dry_run,
-    )
-
     source_files = list(input_data.source.iterdir())
 
     result.destination = egestion_path
@@ -88,7 +79,7 @@ def run(input_data: IngestSdInput) -> IngestSdResult:
     logger.info(
         "Discovered %s entries; destination session path is %s",
         result.files_discovered,
-        egestion_path,
+        display_path(egestion_path),
     )
 
     with get_progress() as progress:
@@ -97,10 +88,11 @@ def run(input_data: IngestSdInput) -> IngestSdResult:
         )
 
         for file in source_files:
-            time.sleep(1)
             if not file.is_file() or not is_allowed_image_file(file):
                 result.files_ignored += 1
-                logger.debug("Skipping %s: not a supported image file", file)
+                logger.debug(
+                    "Skipping %s: not a supported image file", display_file(file)
+                )
 
                 progress.update(process, advance=1)
                 continue
@@ -117,10 +109,10 @@ def run(input_data: IngestSdInput) -> IngestSdResult:
 
                 logger.debug(
                     "Prepared ingest for %s: captured_at=%s, file_id=%s, destination=%s",
-                    file,
+                    display_file(file),
                     captured_at_parsed,
                     file_id,
-                    destination,
+                    display_file(destination),
                 )
 
                 if input_data.dry_run:
@@ -132,8 +124,8 @@ def run(input_data: IngestSdInput) -> IngestSdResult:
 
                     logger.debug(
                         "Dry run: would copy %s to %s%s%s",
-                        file,
-                        destination,
+                        display_file(file),
+                        display_file(destination),
                         " and replace existing file" if destination.exists() else "",
                         " and delete source" if input_data.mode == "drain" else "",
                     )
@@ -151,17 +143,24 @@ def run(input_data: IngestSdInput) -> IngestSdResult:
 
                 if copied:
                     result.files_copied += 1
-                    logger.debug("Copied %s to %s", file, destination)
+                    logger.debug(
+                        "Copied %s to %s",
+                        display_file(file),
+                        display_file(destination),
+                    )
                 if replaced_existing:
                     result.files_replaced += 1
                     logger.debug(
-                        "Replaced existing destination file at %s", destination
+                        "Replaced existing destination file at %s",
+                        display_file(destination),
                     )
 
                 if input_data.mode == "drain":
                     file.unlink()
                     result.files_deleted += 1
-                    logger.debug("Deleted source file after ingest: %s", file)
+                    logger.debug(
+                        "Deleted source file after ingest: %s", display_file(file)
+                    )
 
                 progress.update(process, advance=1)
             except Exception:

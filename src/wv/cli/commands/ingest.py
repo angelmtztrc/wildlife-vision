@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 import typer
 
 from wv.config import get_device_ids, get_monitoring_sites_ids
+from wv.core.display import display_path
 from wv.core.logger import get_logger
 from wv.use_cases.ingest.sd import IngestSdInput
 from wv.use_cases.ingest.sd import run as run_ingest_sd
@@ -81,6 +82,14 @@ def ingest_sd(
         ),
     ] = False,
 ):
+    logger.info(
+        "Starting SD ingest from %s (device=%s, monitoring_site=%s, mode=%s, dry_run=%s)",
+        display_path(source),
+        device,
+        monitoring_site,
+        mode,
+        dry_run,
+    )
 
     result = run_ingest_sd(
         IngestSdInput(
@@ -92,7 +101,17 @@ def ingest_sd(
         )
     )
 
-    logger.done("Ingestion finished.")
+    logger.done(
+        "Finished SD ingest to %s: discovered=%s copied=%s replaced=%s ignored=%s deleted=%s failed=%s%s",
+        display_path(result.destination),
+        result.files_discovered,
+        result.files_copied,
+        result.files_replaced,
+        result.files_ignored,
+        result.files_deleted,
+        result.files_failed,
+        " (dry run)" if result.dry_run else "",
+    )
 
     if result.files_failed > 0:
         raise typer.Exit(code=1)
