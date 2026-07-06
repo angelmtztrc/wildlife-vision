@@ -16,7 +16,7 @@ def main_callback(
     verbose: bool = typer.Option(
         False,
         "--verbose",
-        help="Enable DEBUG logs and render verbose boxed command summaries.",
+        help="Enable DEBUG logging output.",
     ),
 ):
     set_verbose(verbose)

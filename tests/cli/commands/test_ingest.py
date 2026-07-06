@@ -85,13 +85,15 @@ def test_ingest_sd_prints_summary_for_success(
     )
 
     assert result.exit_code == 0
-    assert f"Source: {source}" in result.output
-    assert f"Destination: {destination}" in result.output
-    assert "Copied: 3" in result.output
-    assert "Replaced: 2" in result.output
-    assert "Deleted: 1" in result.output
-    assert "Dry run: yes" in result.output
-    assert "[OK]" in result.output
+    assert "[INFO]" in result.output
+    assert "Starting SD ingest" in result.output
+    assert "[DONE]" in result.output
+    assert "Finished SD ingest" in result.output
+    assert "copied=3" in result.output
+    assert "replaced=2" in result.output
+    assert "deleted=1" in result.output
+    assert "failed=0" in result.output
+    assert "(dry run)" in result.output
 
 
 def test_ingest_sd_exits_with_code_one_when_use_case_reports_failures(
@@ -125,5 +127,5 @@ def test_ingest_sd_exits_with_code_one_when_use_case_reports_failures(
     )
 
     assert result.exit_code == 1
-    assert "Failed: 1" in result.output
-    assert "[ERROR]" in result.output
+    assert "[DONE]" in result.output
+    assert "failed=1" in result.output

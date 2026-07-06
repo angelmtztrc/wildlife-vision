@@ -9,16 +9,16 @@ from PIL import Image
 from typer.testing import CliRunner
 
 import wv.config as config
-from wv.cli.runtime import reset_runtime
+from wv.core.logger import reset_logging
 
 
 @pytest.fixture(autouse=True)
 def clear_config_caches():
-    reset_runtime()
+    reset_logging()
     config.load.cache_clear()
     config.get_repo_root.cache_clear()
     yield
-    reset_runtime()
+    reset_logging()
     config.load.cache_clear()
     config.get_repo_root.cache_clear()
 

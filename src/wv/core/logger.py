@@ -112,6 +112,17 @@ def set_verbose(verbose: bool) -> None:
         logger.setLevel(level)
 
 
+def reset_logging() -> None:
+    """Reset logger state managed by this module back to its startup defaults."""
+    global _verbose
+
+    _verbose = False
+
+    for logger in _loggers:
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+
+
 class CustomFormatter(logging.Formatter):
     """Formats log records as: HH:MM:SS.sss [LEVEL] Scope: Message"""
 
