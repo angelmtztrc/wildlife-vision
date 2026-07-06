@@ -37,12 +37,14 @@ def test_clean_corrupted_prints_summary_for_success(
     )
 
     assert result.exit_code == 0
-    assert f"Source: {source}" in result.output
-    assert f"Destination: {output / 'ignored' / 'corrupted'}" in result.output
-    assert "Corrupted: 1" in result.output
-    assert "Moved: 1" in result.output
-    assert "Dry run: yes" in result.output
-    assert "[OK]" in result.output
+    assert "[INFO]" in result.output
+    assert "Starting corrupted cleanup" in result.output
+    assert "[DONE]" in result.output
+    assert "Finished corrupted cleanup" in result.output
+    assert "corrupted=1" in result.output
+    assert "moved=1" in result.output
+    assert "failed=0" in result.output
+    assert "(dry run)" in result.output
 
 
 def test_clean_overexposed_ir_prints_summary_for_success(
@@ -74,10 +76,13 @@ def test_clean_overexposed_ir_prints_summary_for_success(
     )
 
     assert result.exit_code == 0
-    assert "Overexposed: 1" in result.output
-    assert "Moved: 1" in result.output
-    assert "Dry run: no" in result.output
-    assert "[OK]" in result.output
+    assert "[INFO]" in result.output
+    assert "Starting overexposed IR cleanup" in result.output
+    assert "[DONE]" in result.output
+    assert "Finished overexposed IR cleanup" in result.output
+    assert "overexposed=1" in result.output
+    assert "moved=1" in result.output
+    assert "failed=0" in result.output
 
 
 def test_clean_bursts_prints_summary_for_success(
@@ -110,10 +115,14 @@ def test_clean_bursts_prints_summary_for_success(
     )
 
     assert result.exit_code == 0
-    assert "Bursts: 1" in result.output
-    assert "Reduced: 2" in result.output
-    assert "Moved: 2" in result.output
-    assert "[OK]" in result.output
+    assert "[INFO]" in result.output
+    assert "Starting burst cleanup" in result.output
+    assert "[DONE]" in result.output
+    assert "Finished burst cleanup" in result.output
+    assert "bursts=1" in result.output
+    assert "reduced=2" in result.output
+    assert "moved=2" in result.output
+    assert "failed=0" in result.output
 
 
 @pytest.mark.parametrize(
@@ -170,5 +179,5 @@ def test_clean_commands_exit_with_code_one_on_failures(
     )
 
     assert result.exit_code == 1
-    assert "Failed: 1" in result.output
-    assert "[ERROR]" in result.output
+    assert "[DONE]" in result.output
+    assert "failed=1" in result.output

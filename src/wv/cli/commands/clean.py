@@ -3,8 +3,8 @@ from typing import Annotated
 
 import typer
 
-from wv.cli.presentation import render_command_summary
-from wv.cli.runtime import get_logger, get_runtime
+from wv.core.display import display_path
+from wv.core.logger import get_logger
 from wv.use_cases.clean.bursts import CleanBurstsInput
 from wv.use_cases.clean.bursts import run as run_clean_bursts
 from wv.use_cases.clean.corrupted import CleanCorruptedInput
@@ -15,6 +15,8 @@ from wv.use_cases.clean.overexposed_ir import run as run_clean_overexposed_ir
 app = typer.Typer(
     help="Identify and clean corrupted, overexposed IR, and burst photos."
 )
+
+logger = get_logger(__name__)
 
 
 @app.command("corrupted")
@@ -47,38 +49,26 @@ def clean_corrupted(
     ] = False,
 ):
     """Detect unreadable image files and move them into an ignored/corrupted folder."""
-    runtime = get_runtime()
-    logger = get_logger(__name__)
     logger.info(
-        "Starting clean.corrupted. Source: %s. Output: %s. Dry run: %s.",
-        source,
-        output,
-        "yes" if dry_run else "no",
+        "Starting corrupted cleanup from %s to %s (dry_run=%s)",
+        display_path(source),
+        display_path(output),
+        dry_run,
     )
 
     result = run_clean_corrupted(
         CleanCorruptedInput(source=source, output=output, dry_run=dry_run)
     )
 
-    render_command_summary(
-        runtime,
-        title="Clean Corrupted Summary",
-        message=(
-            "Corrupted image cleanup finished."
-            if result.files_failed == 0
-            else "Corrupted image cleanup finished with failures."
-        ),
-        rows=[
-            ("Source", source),
-            ("Destination", result.destination),
-            ("Dry run", "yes" if result.dry_run else "no"),
-            ("Discovered", result.files_discovered),
-            ("Corrupted", result.files_corrupted),
-            ("Moved", result.files_moved),
-            ("Ignored", result.files_ignored),
-            ("Failed", result.files_failed),
-        ],
-        level_name="OK" if result.files_failed == 0 else "ERROR",
+    logger.done(
+        "Finished corrupted cleanup to %s: discovered=%s corrupted=%s moved=%s ignored=%s failed=%s%s",
+        display_path(result.destination),
+        result.files_discovered,
+        result.files_corrupted,
+        result.files_moved,
+        result.files_ignored,
+        result.files_failed,
+        " (dry run)" if result.dry_run else "",
     )
 
     if result.files_failed > 0:
@@ -145,13 +135,15 @@ def clean_overexposed_ir(
     ] = False,
 ):
     """Move likely washed-out infrared images into an ignored/overexposed folder."""
-    runtime = get_runtime()
-    logger = get_logger(__name__)
     logger.info(
-        "Starting clean.overexposed-ir. Source: %s. Output: %s. Dry run: %s.",
-        source,
-        output,
-        "yes" if dry_run else "no",
+        "Starting overexposed IR cleanup from %s to %s (mean_threshold=%s, std_threshold=%s, high_level=%s, ptc_high_threshold=%s, dry_run=%s)",
+        display_path(source),
+        display_path(output),
+        mean_threshold,
+        std_threshold,
+        high_level,
+        ptc_high_threshold,
+        dry_run,
     )
 
     result = run_clean_overexposed_ir(
@@ -166,25 +158,15 @@ def clean_overexposed_ir(
         )
     )
 
-    render_command_summary(
-        runtime,
-        title="Clean Overexposed IR Summary",
-        message=(
-            "Overexposed IR cleanup finished."
-            if result.files_failed == 0
-            else "Overexposed IR cleanup finished with failures."
-        ),
-        rows=[
-            ("Source", source),
-            ("Destination", result.destination),
-            ("Dry run", "yes" if result.dry_run else "no"),
-            ("Discovered", result.files_discovered),
-            ("Overexposed", result.files_overexposed),
-            ("Moved", result.files_moved),
-            ("Ignored", result.files_ignored),
-            ("Failed", result.files_failed),
-        ],
-        level_name="OK" if result.files_failed == 0 else "ERROR",
+    logger.done(
+        "Finished overexposed IR cleanup to %s: discovered=%s overexposed=%s moved=%s ignored=%s failed=%s%s",
+        display_path(result.destination),
+        result.files_discovered,
+        result.files_overexposed,
+        result.files_moved,
+        result.files_ignored,
+        result.files_failed,
+        " (dry run)" if result.dry_run else "",
     )
 
     if result.files_failed > 0:
@@ -237,13 +219,13 @@ def clean_bursts(
     ] = False,
 ):
     """Keep the best images from near-duplicate bursts and move the rest into ignored/bursts."""
-    runtime = get_runtime()
-    logger = get_logger(__name__)
     logger.info(
-        "Starting clean.bursts. Source: %s. Output: %s. Dry run: %s.",
-        source,
-        output,
-        "yes" if dry_run else "no",
+        "Starting burst cleanup from %s to %s (burst_gap_threshold=%s, similarity_threshold=%s, dry_run=%s)",
+        display_path(source),
+        display_path(output),
+        burst_gap_threshold,
+        similarity_threshold,
+        dry_run,
     )
 
     result = run_clean_bursts(
@@ -256,26 +238,16 @@ def clean_bursts(
         )
     )
 
-    render_command_summary(
-        runtime,
-        title="Clean Bursts Summary",
-        message=(
-            "Burst cleanup finished."
-            if result.files_failed == 0
-            else "Burst cleanup finished with failures."
-        ),
-        rows=[
-            ("Source", source),
-            ("Destination", result.destination),
-            ("Dry run", "yes" if result.dry_run else "no"),
-            ("Discovered", result.files_discovered),
-            ("Bursts", result.files_bursts),
-            ("Reduced", result.files_reduced),
-            ("Moved", result.files_moved),
-            ("Ignored", result.files_ignored),
-            ("Failed", result.files_failed),
-        ],
-        level_name="OK" if result.files_failed == 0 else "ERROR",
+    logger.done(
+        "Finished burst cleanup to %s: discovered=%s bursts=%s reduced=%s moved=%s ignored=%s failed=%s%s",
+        display_path(result.destination),
+        result.files_discovered,
+        result.files_bursts,
+        result.files_reduced,
+        result.files_moved,
+        result.files_ignored,
+        result.files_failed,
+        " (dry run)" if result.dry_run else "",
     )
 
     if result.files_failed > 0:
