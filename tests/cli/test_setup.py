@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 import wv.cli.commands.setup as setup_command
-from wv.cli.runtime import configure_runtime
 from wv.cli.main import app
 from wv.use_cases.setup import SetupResult
 
@@ -23,11 +22,14 @@ def test_setup_prints_summary_for_success(cli_runner, monkeypatch: pytest.Monkey
     result = cli_runner.invoke(app, ["setup"])
 
     assert result.exit_code == 0
-    assert "Model: MDV5A" in result.output
-    assert "Resolved model: /tmp/md_v5a.0.1.pt" in result.output
-    assert "Ready: yes" in result.output
-    assert "Inference device: GPU" in result.output
-    assert "[OK]" in result.output
+    assert "[INFO]" in result.output
+    assert "Starting setup" in result.output
+    assert "[DONE]" in result.output
+    assert "Finished setup" in result.output
+    assert "model=MDV5A" in result.output
+    assert "resolved_model=/tmp/md_v5a.0.1.pt" in result.output
+    assert "ready=True" in result.output
+    assert "inference_device=GPU" in result.output
 
 
 def test_setup_exits_with_code_one_when_bootstrap_fails(
@@ -42,13 +44,12 @@ def test_setup_exits_with_code_one_when_bootstrap_fails(
     result = cli_runner.invoke(app, ["setup"])
 
     assert result.exit_code == 1
-    assert "Ready: no" in result.output
-    assert "download failed" in result.output
     assert "[ERROR]" in result.output
+    assert "download failed" in result.output
+    assert "Setup failed" in result.output
 
 
-def test_setup_renders_verbose_summary_table(cli_runner, monkeypatch: pytest.MonkeyPatch):
-    configure_runtime(verbose=False)
+def test_setup_verbose_uses_line_based_logs(cli_runner, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         setup_command,
         "run_setup",
@@ -63,6 +64,6 @@ def test_setup_renders_verbose_summary_table(cli_runner, monkeypatch: pytest.Mon
     result = cli_runner.invoke(app, ["--verbose", "setup"])
 
     assert result.exit_code == 0
-    assert "Setup Summary" in result.output
-    assert "Resolved model" in result.output
-    assert "Inference device" in result.output
+    assert "[INFO]" in result.output
+    assert "[DONE]" in result.output
+    assert "Finished setup" in result.output

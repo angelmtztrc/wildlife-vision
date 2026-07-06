@@ -3,8 +3,8 @@ from typing import Annotated
 
 import typer
 
-from wv.cli.presentation import render_command_summary
-from wv.cli.runtime import get_logger, get_runtime
+from wv.core.display import display_path
+from wv.core.logger import get_logger
 from wv.use_cases.detect.content import (
     DEFAULT_CONFIDENCE_THRESHOLD,
     DEFAULT_MODEL,
@@ -13,6 +13,8 @@ from wv.use_cases.detect.content import (
 from wv.use_cases.detect.content import run as run_detect_content
 
 app = typer.Typer(help="Run content detection on photos.")
+
+logger = get_logger(__name__)
 
 
 @app.command("content")
@@ -63,18 +65,16 @@ def detect_content(
             help="Preview the detection operation without moving files or writing metadata.",
         ),
     ] = False,
-):
+): 
     """Classify images into animal, human, vehicle, empty, or other using MegaDetector."""
-    runtime = get_runtime()
-    logger = get_logger(__name__)
     logger.info(
-        "Starting detect.content. Source: %s. Output: %s. Model: %s. Confidence threshold: %s. Batch size: %s. Dry run: %s.",
-        source,
-        output,
+        "Starting content detection from %s to %s (model=%s, confidence_threshold=%s, batch_size=%s, dry_run=%s)",
+        display_path(source),
+        display_path(output),
         model,
         confidence_threshold,
         batch_size,
-        "yes" if dry_run else "no",
+        dry_run,
     )
 
     result = run_detect_content(
@@ -88,34 +88,21 @@ def detect_content(
         )
     )
 
-    render_command_summary(
-        runtime,
-        title="Detect Content Summary",
-        message=(
-            "Content detection finished."
-            if result.files_failed == 0
-            else "Content detection finished with failures."
-        ),
-        rows=[
-            ("Source", source),
-            ("Destination", result.destination),
-            ("Model", model),
-            ("Confidence threshold", confidence_threshold),
-            ("Batch size", batch_size),
-            ("Dry run", "yes" if result.dry_run else "no"),
-            ("Discovered", result.files_discovered),
-            ("Evaluated", result.files_evaluated),
-            ("Animal", result.files_animal),
-            ("Human", result.files_human),
-            ("Vehicle", result.files_vehicle),
-            ("Empty", result.files_empty),
-            ("Other", result.files_other),
-            ("Moved", result.files_moved),
-            ("Replaced", result.files_replaced),
-            ("Ignored", result.files_ignored),
-            ("Failed", result.files_failed),
-        ],
-        level_name="OK" if result.files_failed == 0 else "ERROR",
+    logger.done(
+        "Finished content detection to %s: discovered=%s evaluated=%s animal=%s human=%s vehicle=%s empty=%s other=%s moved=%s replaced=%s ignored=%s failed=%s%s",
+        display_path(result.destination),
+        result.files_discovered,
+        result.files_evaluated,
+        result.files_animal,
+        result.files_human,
+        result.files_vehicle,
+        result.files_empty,
+        result.files_other,
+        result.files_moved,
+        result.files_replaced,
+        result.files_ignored,
+        result.files_failed,
+        " (dry run)" if result.dry_run else "",
     )
 
     if result.files_failed > 0:

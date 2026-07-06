@@ -2,10 +2,12 @@ from typing import Annotated
 
 import typer
 
-from wv.cli.presentation import render_command_summary
-from wv.cli.runtime import get_logger, get_runtime
+from wv.core.display import display_path
+from wv.core.logger import get_logger
 from wv.use_cases.setup import DEFAULT_MODEL, SetupInput
 from wv.use_cases.setup import run as run_setup
+
+logger = get_logger(__name__)
 
 
 def setup(
@@ -19,12 +21,10 @@ def setup(
     ] = False,
 ):
     """Prepare the MegaDetector model for local CLI commands that require inference."""
-    runtime = get_runtime()
-    logger = get_logger(__name__)
     logger.info(
-        "Starting setup. Model: %s. Force download: %s.",
+        "Starting setup (model=%s, force_download=%s)",
         model,
-        "yes" if force_download else "no",
+        force_download,
     )
 
     try:
@@ -36,29 +36,14 @@ def setup(
         )
     except Exception as exc:
         logger.error("Setup failed: %s", exc)
-        render_command_summary(
-            runtime,
-            title="Setup Summary",
-            message="Setup failed.",
-            rows=[
-                ("Model", model),
-                ("Ready", "no"),
-                ("Error", exc),
-            ],
-            level_name="ERROR",
-        )
         raise typer.Exit(code=1) from exc
 
-    render_command_summary(
-        runtime,
-        title="Setup Summary",
-        message="Setup finished.",
-        rows=[
-            ("Model", result.model),
-            ("Resolved model", result.resolved_model),
-            ("Ready", "yes" if result.ready else "no"),
-            ("Inference device", result.inference_device),
-        ],
+    logger.done(
+        "Finished setup: model=%s resolved_model=%s ready=%s inference_device=%s",
+        result.model,
+        display_path(result.resolved_model),
+        result.ready,
+        result.inference_device,
     )
 
     return None
