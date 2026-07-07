@@ -3,13 +3,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
+from wv.core.display import display_file, display_path
 from wv.core.exif import read_exif, write_exif_image_description
 from wv.core.files import ensure_directory, is_allowed_image_file
+from wv.core.logger import get_logger, get_progress
 from wv.core.metadata import upsert_image_description_properties
 from wv.ml.megadetector import DEFAULT_MODEL, MlDetection, evaluate_images
 
 DEFAULT_CONFIDENCE_THRESHOLD = 0.8
 DEFAULT_AMBIGUITY_GAP = 0.3
+
+logger = get_logger(__name__)
 
 
 
@@ -137,16 +141,46 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
 
     image_paths: list[Path] = []
 
-    for file_path in source_files:
-        if not file_path.is_file() or not is_allowed_image_file(file_path):
-            result.files_ignored += 1
-            continue
+    logger.info(
+        "Discovered %s entries for content detection; destination is %s (model=%s, confidence_threshold=%s, batch_size=%s, dry_run=%s)",
+        result.files_discovered,
+        display_path(destination_root),
+        input_data.model,
+        input_data.confidence_threshold,
+        input_data.batch_size,
+        input_data.dry_run,
+    )
 
-        if file_path.is_relative_to(destination_root):
-            result.files_ignored += 1
-            continue
+    with get_progress() as progress:
+        process = progress.add_task(
+            "Scanning detection candidates", total=result.files_discovered
+        )
 
-        image_paths.append(file_path)
+        for file_path in source_files:
+            if not file_path.is_file() or not is_allowed_image_file(file_path):
+                result.files_ignored += 1
+                logger.debug(
+                    "Skipping %s: not a supported image file", display_file(file_path)
+                )
+                progress.update(process, advance=1)
+                continue
+
+            if file_path.is_relative_to(destination_root):
+                result.files_ignored += 1
+                logger.debug(
+                    "Skipping %s: already under detection output root",
+                    display_file(file_path),
+                )
+                progress.update(process, advance=1)
+                continue
+
+            image_paths.append(file_path)
+            progress.update(process, advance=1)
+
+    logger.info(
+        "Prepared %s image candidates for MegaDetector evaluation",
+        len(image_paths),
+    )
 
     detection_results = evaluate_images(
         model=input_data.model,
@@ -155,42 +189,86 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
         batch_size=input_data.batch_size,
     )
 
-    for detection_result in detection_results:
-        if detection_result.failure:
-            result.files_failed += 1
-            continue
+    logger.info(
+        "MegaDetector returned %s detection results; starting post-processing",
+        len(detection_results),
+    )
 
-        file_path = detection_result.file_path
-        decision = _classify_detections(
-            detection_result.detections, input_data.confidence_threshold
+    with get_progress() as progress:
+        process = progress.add_task(
+            "Applying detection decisions", total=len(detection_results)
         )
-        result.files_evaluated += 1
-        _increment_decision_counter(result, decision)
 
-        if input_data.dry_run:
-            continue
+        for detection_result in detection_results:
+            if detection_result.failure:
+                result.files_failed += 1
+                logger.error(
+                    "Detection failed for %s: %s",
+                    display_file(detection_result.file_path),
+                    detection_result.failure,
+                )
+                progress.update(process, advance=1)
+                continue
 
-        try:
-            updated_description = upsert_image_description_properties(
-                _read_existing_image_description(file_path),
-                {
-                    "Detection": decision.label,
-                    "Detection_Confidence": _format_detection_confidence(
-                        decision.confidence
-                    ),
-                },
+            file_path = detection_result.file_path
+            decision = _classify_detections(
+                detection_result.detections, input_data.confidence_threshold
             )
-            write_exif_image_description(file_path, updated_description)
+            result.files_evaluated += 1
+            _increment_decision_counter(result, decision)
 
-            moved, replaced_existing = _move_source_to_destination(
-                source=file_path,
-                destination=destination_root / decision.label / file_path.name,
+            logger.debug(
+                "Classified %s as %s (confidence=%s)",
+                display_file(file_path),
+                decision.label,
+                _format_detection_confidence(decision.confidence),
             )
-            if moved:
-                result.files_moved += 1
-            if replaced_existing:
-                result.files_replaced += 1
-        except Exception:
-            result.files_failed += 1
+
+            if input_data.dry_run:
+                logger.debug(
+                    "Dry run: would move %s to %s",
+                    display_file(file_path),
+                    display_file(destination_root / decision.label / file_path.name),
+                )
+                progress.update(process, advance=1)
+                continue
+
+            try:
+                updated_description = upsert_image_description_properties(
+                    _read_existing_image_description(file_path),
+                    {
+                        "Detection": decision.label,
+                        "Detection_Confidence": _format_detection_confidence(
+                            decision.confidence
+                        ),
+                    },
+                )
+                write_exif_image_description(file_path, updated_description)
+
+                moved, replaced_existing = _move_source_to_destination(
+                    source=file_path,
+                    destination=destination_root / decision.label / file_path.name,
+                )
+                if moved:
+                    result.files_moved += 1
+                    logger.debug(
+                        "Moved %s to %s",
+                        display_file(file_path),
+                        display_file(destination_root / decision.label / file_path.name),
+                    )
+                if replaced_existing:
+                    result.files_replaced += 1
+                    logger.debug(
+                        "Replaced existing detection destination at %s",
+                        display_file(destination_root / decision.label / file_path.name),
+                    )
+            except Exception:
+                result.files_failed += 1
+                logger.exception(
+                    "Failed to apply detection decision for %s",
+                    display_file(file_path),
+                )
+
+            progress.update(process, advance=1)
 
     return result

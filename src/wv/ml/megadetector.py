@@ -3,9 +3,13 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from wv.core.logger import get_logger, get_progress
+
 DEFAULT_MODEL = "MDV5A"
 _CATEGORY_LABELS = {1: "animal", 2: "human", 3: "vehicle"}
 _MIN_DETECTION_THRESHOLD = 0.01
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -198,15 +202,33 @@ def evaluate_images(
     image_results: list[MlImageResult] = []
     supports_batch_inference = hasattr(detector, "generate_detections_one_batch")
 
-    for batch in _chunk_paths(image_paths, batch_size):
-        if supports_batch_inference:
-            try:
-                image_results.extend(_run_detector_batch(detector, batch))
-                continue
-            except Exception:
-                pass
+    logger.info(
+        "Starting MegaDetector evaluation for %s images (model=%s, batch_size=%s)",
+        len(image_paths),
+        model,
+        batch_size,
+    )
 
-        for file_path in batch:
-            image_results.append(_run_detector_one_image(detector, file_path))
+    with get_progress() as progress:
+        process = progress.add_task(
+            "Evaluating images with MegaDetector", total=len(image_paths)
+        )
+
+        for batch in _chunk_paths(image_paths, batch_size):
+            if supports_batch_inference:
+                try:
+                    batch_results = _run_detector_batch(detector, batch)
+                    image_results.extend(batch_results)
+                    progress.update(process, advance=len(batch_results))
+                    continue
+                except Exception:
+                    logger.debug(
+                        "Batch inference failed for %s images; falling back to per-image inference",
+                        len(batch),
+                    )
+
+            for file_path in batch:
+                image_results.append(_run_detector_one_image(detector, file_path))
+                progress.update(process, advance=1)
 
     return image_results
