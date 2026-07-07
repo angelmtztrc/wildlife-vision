@@ -6,12 +6,16 @@ from pathlib import Path
 import imagehash
 from PIL import Image, ImageFilter, ImageStat
 
+from wv.core.display import display_file, display_path
 from wv.core.files import (
     ensure_directory,
     is_allowed_image_file,
     parse_ingested_image_filename,
 )
 from wv.core.images import get_image_datetime
+from wv.core.logger import get_logger, get_progress
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -130,6 +134,10 @@ def _build_burst_images(
                 )
         except Exception:
             result.files_failed += 1
+            logger.exception(
+                "Failed to analyze burst image %s",
+                display_file(scanned_image.path),
+            )
             burst_images.append(
                 BurstImage(path=scanned_image.path, phash=None, quality=0.0)
             )
@@ -208,15 +216,39 @@ def run(input_data: CleanBurstsInput) -> CleanBurstsResult:
 
     scanned_images: list[ScannedImage] = []
 
-    for file_path in source_files:
-        if not file_path.is_file() or not is_allowed_image_file(file_path):
-            result.files_ignored += 1
-            continue
+    logger.info(
+        "Discovered %s entries for burst cleanup; destination is %s (burst_gap_threshold=%s, similarity_threshold=%s, dry_run=%s)",
+        result.files_discovered,
+        display_path(destination),
+        input_data.burst_gap_threshold,
+        input_data.similarity_threshold,
+        input_data.dry_run,
+    )
 
-        try:
-            scanned_images.append(_scan_image(file_path))
-        except Exception:
-            result.files_failed += 1
+    with get_progress() as progress:
+        scan_process = progress.add_task(
+            "Scanning burst cleanup candidates", total=result.files_discovered
+        )
+
+        for file_path in source_files:
+            if not file_path.is_file() or not is_allowed_image_file(file_path):
+                result.files_ignored += 1
+                logger.debug(
+                    "Skipping %s: not a supported image file", display_file(file_path)
+                )
+                progress.update(scan_process, advance=1)
+                continue
+
+            try:
+                scanned_images.append(_scan_image(file_path))
+            except Exception:
+                result.files_failed += 1
+                logger.exception(
+                    "Failed to scan burst candidate %s",
+                    display_file(file_path),
+                )
+
+            progress.update(scan_process, advance=1)
 
     scanned_images.sort(
         key=lambda scanned_image: (
@@ -232,32 +264,76 @@ def run(input_data: CleanBurstsInput) -> CleanBurstsResult:
     )
     result.files_bursts = sum(1 for burst in bursts if len(burst) > 1)
 
-    for burst in bursts:
-        burst_images = _build_burst_images(burst=burst, result=result)
-        clusters = _build_similarity_clusters(
-            burst_images=burst_images,
-            similarity_threshold=input_data.similarity_threshold,
+    logger.info(
+        "Grouped %s scanned images into %s bursts",
+        len(scanned_images),
+        result.files_bursts,
+    )
+
+    with get_progress() as progress:
+        reduction_process = progress.add_task(
+            "Reducing burst sequences", total=len(bursts)
         )
 
-        for cluster in clusters:
-            ranked_cluster = sorted(cluster, key=lambda burst_image: burst_image.quality, reverse=True)
-            keep_amount = _get_keep_amount(len(ranked_cluster))
+        for burst in bursts:
+            burst_images = _build_burst_images(burst=burst, result=result)
+            clusters = _build_similarity_clusters(
+                burst_images=burst_images,
+                similarity_threshold=input_data.similarity_threshold,
+            )
 
-            for index, burst_image in enumerate(ranked_cluster):
-                if index < keep_amount:
-                    result.files_ignored += 1
-                    continue
+            logger.debug(
+                "Analyzed burst of %s images into %s similarity clusters",
+                len(burst_images),
+                len(clusters),
+            )
 
-                result.files_reduced += 1
+            for cluster in clusters:
+                ranked_cluster = sorted(
+                    cluster, key=lambda burst_image: burst_image.quality, reverse=True
+                )
+                keep_amount = _get_keep_amount(len(ranked_cluster))
 
-                if input_data.dry_run:
-                    continue
+                logger.debug(
+                    "Cluster of %s images keeps top %s and reduces %s",
+                    len(ranked_cluster),
+                    keep_amount,
+                    max(0, len(ranked_cluster) - keep_amount),
+                )
 
-                try:
-                    destination.mkdir(parents=True, exist_ok=True)
-                    shutil.move(str(burst_image.path), destination / burst_image.path.name)
-                    result.files_moved += 1
-                except Exception:
-                    result.files_failed += 1
+                for index, burst_image in enumerate(ranked_cluster):
+                    if index < keep_amount:
+                        result.files_ignored += 1
+                        continue
+
+                    result.files_reduced += 1
+
+                    if input_data.dry_run:
+                        logger.debug(
+                            "Dry run: would move %s to %s",
+                            display_file(burst_image.path),
+                            display_file(destination / burst_image.path.name),
+                        )
+                        continue
+
+                    try:
+                        destination.mkdir(parents=True, exist_ok=True)
+                        shutil.move(
+                            str(burst_image.path), destination / burst_image.path.name
+                        )
+                        result.files_moved += 1
+                        logger.debug(
+                            "Moved %s to %s",
+                            display_file(burst_image.path),
+                            display_file(destination / burst_image.path.name),
+                        )
+                    except Exception:
+                        result.files_failed += 1
+                        logger.exception(
+                            "Failed to move reduced burst image %s",
+                            display_file(burst_image.path),
+                        )
+
+            progress.update(reduction_process, advance=1)
 
     return result
