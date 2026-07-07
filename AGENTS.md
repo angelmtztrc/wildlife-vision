@@ -13,8 +13,7 @@
 ## Repo Shape
 - `src/wv/cli/commands/` defines the CLI surface only.
 - `src/wv/use_cases/` is the intended home for command logic.
-- `src/wv/cli/runtime.py` and `src/wv/cli/presentation.py` own terminal logging, Rich summaries, and future progress plumbing.
-- `src/wv/core/` holds shared filesystem / image / EXIF / metadata helpers.
+- `src/wv/core/` holds shared filesystem / image / EXIF / metadata helpers plus the Rich-backed logger in `src/wv/core/logger.py`.
 - `src/wv/config/__init__.py` loads package-local config from `src/wv/config/setup.yml`.
 
 ## Current State
@@ -27,6 +26,15 @@
 - `paths.root` defaults to `./.wv`; `ingest sd` writes sessions under `.wv/sessions/<timestamp>__<device>/initial`.
 - Device IDs and monitoring-site IDs come from `src/wv/config/setup.yml`; the CLI rejects unknown values.
 
+## Logging
+- CLI commands now log through `wv.core.logger`, not a CLI-specific runtime layer.
+- `logging.Logger.done(...)` is added dynamically in `src/wv/core/logger.py`; runtime is fine, but type checkers will treat `get_logger()` as returning a plain `logging.Logger` unless you add typing support.
+- `tests/conftest.py` uses `wv.core.logger.reset_logging()` plus config cache clears to isolate CLI tests; keep that fixture in sync if you add more logger globals.
+- Use `INFO` for user-facing milestones, `DEBUG` for per-item/process detail, `WARN` for non-blocking anomalies, `ERROR` for failures that make a file or step fail, and `DONE` for command completion only.
+- Long-running use cases should prefer `wv.core.logger.get_progress()` instead of extra `INFO` chatter.
+- Use `wv.core.display.display_file()` / `display_path()` in logs so paths stay readable.
+- Avoid high-volume `INFO` logs for expected per-file work; if a message only helps diagnose behavior, keep it at `DEBUG`.
+
 ## Verification
 - There is a real `tests/` tree and `uv run pytest` currently passes.
 - There is no repo-configured lint, formatter, typechecker, pre-commit, or CI workflow to run.
@@ -36,4 +44,3 @@
   - `uv run pytest tests/use_cases/ingest/test_sd.py`
   - `uv run wv --help`
   - `uv run wv ingest sd --help`
-- `tests/conftest.py` resets config caches and the CLI runtime singleton between tests; keep that fixture in sync if you add more global CLI state.

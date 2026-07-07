@@ -4,7 +4,11 @@ from pathlib import Path
 
 from PIL import Image, ImageStat
 
+from wv.core.display import display_file, display_path
 from wv.core.files import ensure_directory, is_allowed_image_file
+from wv.core.logger import get_logger, get_progress
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -79,35 +83,89 @@ def run(input_data: CleanOverexposedIrInput) -> CleanOverexposedIrResult:
 
     result.files_discovered = len(source_files)
 
-    for file in source_files:
-        if not file.is_file() or not is_allowed_image_file(file):
-            result.files_ignored += 1
-            continue
+    logger.info(
+        "Discovered %s entries for overexposed IR cleanup; destination is %s (mean_threshold=%s, std_threshold=%s, high_level=%s, ptc_high_threshold=%s, dry_run=%s)",
+        result.files_discovered,
+        display_path(destination),
+        input_data.mean_threshold,
+        input_data.std_threshold,
+        input_data.high_level,
+        input_data.ptc_high_threshold,
+        input_data.dry_run,
+    )
 
-        try:
-            image_metrics = _compute_metrics(
-                file=file, high_level=input_data.high_level
-            )
+    if not 0 <= input_data.high_level <= 255:
+        logger.warning(
+            "High level %s is outside the grayscale range 0..255; near-white pixel percentage will be treated as 0.0",
+            input_data.high_level,
+        )
 
-            is_overexposed = _is_overexposed(
-                image_metrics=image_metrics,
-                mean_threshold=input_data.mean_threshold,
-                std_threshold=input_data.std_threshold,
-                ptc_high_threshold=input_data.ptc_high_threshold,
-            )
+    with get_progress() as progress:
+        process = progress.add_task(
+            "Processing overexposed IR candidates", total=result.files_discovered
+        )
 
-            if is_overexposed:
-                result.files_overexposed += 1
-
-                if input_data.dry_run:
-                    continue
-
-                destination.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(file), destination / file.name)
-                result.files_moved += 1
-            else:
+        for file in source_files:
+            if not file.is_file() or not is_allowed_image_file(file):
                 result.files_ignored += 1
-        except Exception:
-            result.files_failed += 1
+
+                logger.debug(
+                    "Skipping %s: not a supported image file", display_file(file)
+                )
+                progress.update(process, advance=1)
+                continue
+
+            try:
+                image_metrics = _compute_metrics(
+                    file=file, high_level=input_data.high_level
+                )
+
+                is_overexposed = _is_overexposed(
+                    image_metrics=image_metrics,
+                    mean_threshold=input_data.mean_threshold,
+                    std_threshold=input_data.std_threshold,
+                    ptc_high_threshold=input_data.ptc_high_threshold,
+                )
+
+                logger.debug(
+                    "Classified %s: mean=%.2f std=%.2f ptc_high=%.3f overexposed=%s",
+                    display_file(file),
+                    image_metrics.mean,
+                    image_metrics.std,
+                    image_metrics.ptc_high,
+                    is_overexposed,
+                )
+
+                if is_overexposed:
+                    result.files_overexposed += 1
+
+                    if input_data.dry_run:
+                        logger.debug(
+                            "Dry run: would move %s to %s",
+                            display_file(file),
+                            display_file(destination / file.name),
+                        )
+                        progress.update(process, advance=1)
+                        continue
+
+                    destination.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(file), destination / file.name)
+                    result.files_moved += 1
+
+                    logger.debug(
+                        "Moved %s to %s",
+                        display_file(file),
+                        display_file(destination / file.name),
+                    )
+                else:
+                    result.files_ignored += 1
+            except Exception:
+                result.files_failed += 1
+                logger.exception(
+                    "Failed to process overexposed IR candidate %s",
+                    display_file(file),
+                )
+
+            progress.update(process, advance=1)
 
     return result
