@@ -102,6 +102,8 @@ def clean_overexposed_ir(
         float,
         typer.Option(
             "--mean-threshold",
+            min=0.0,
+            max=255.0,
             help="Minimum average grayscale brightness required to flag an image as overexposed.",
         ),
     ] = 200.0,
@@ -109,6 +111,7 @@ def clean_overexposed_ir(
         float,
         typer.Option(
             "--std-threshold",
+            min=0.0,
             help="Maximum grayscale standard deviation allowed when treating a bright image as uniformly overexposed.",
         ),
     ] = 25.0,
@@ -116,6 +119,8 @@ def clean_overexposed_ir(
         int,
         typer.Option(
             "--high-level",
+            min=0,
+            max=255,
             help="Grayscale value used as the cutoff for counting near-white pixels in the image histogram.",
         ),
     ] = 220,
@@ -123,6 +128,8 @@ def clean_overexposed_ir(
         float,
         typer.Option(
             "--ptc-high-threshold",
+            min=0.0,
+            max=1.0,
             help="Minimum fraction of pixels at or above --high-level required to flag an image as overexposed.",
         ),
     ] = 0.60,

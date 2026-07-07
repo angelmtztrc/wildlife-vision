@@ -40,6 +40,17 @@ class ImageMetrics:
     ptc_high: float
 
 
+def _validate_input(input_data: CleanOverexposedIrInput) -> None:
+    if not 0.0 <= input_data.mean_threshold <= 255.0:
+        raise ValueError("mean_threshold must be between 0.0 and 255.0")
+    if input_data.std_threshold < 0.0:
+        raise ValueError("std_threshold must be greater than or equal to 0.0")
+    if not 0 <= input_data.high_level <= 255:
+        raise ValueError("high_level must be between 0 and 255")
+    if not 0.0 <= input_data.ptc_high_threshold <= 1.0:
+        raise ValueError("ptc_high_threshold must be between 0.0 and 1.0")
+
+
 def _compute_metrics(file: Path, high_level: int):
     with Image.open(file) as image:
         grayscale = image.convert("L")
@@ -49,7 +60,7 @@ def _compute_metrics(file: Path, high_level: int):
 
         gs_hist = grayscale.histogram()
         pixels_amount = sum(gs_hist)
-        high_pixels = sum(gs_hist[high_level:]) if 0 <= high_level <= 255 else 0
+        high_pixels = sum(gs_hist[high_level:])
 
         ptc_high = (high_pixels / pixels_amount) if pixels_amount > 0 else 0.0
 
@@ -77,6 +88,8 @@ def run(input_data: CleanOverexposedIrInput) -> CleanOverexposedIrResult:
         destination=destination, dry_run=input_data.dry_run
     )
 
+    _validate_input(input_data)
+
     ensure_directory(input_data.source)
 
     source_files = list(input_data.source.iterdir())
@@ -93,12 +106,6 @@ def run(input_data: CleanOverexposedIrInput) -> CleanOverexposedIrResult:
         input_data.ptc_high_threshold,
         input_data.dry_run,
     )
-
-    if not 0 <= input_data.high_level <= 255:
-        logger.warning(
-            "High level %s is outside the grayscale range 0..255; near-white pixel percentage will be treated as 0.0",
-            input_data.high_level,
-        )
 
     with get_progress() as progress:
         process = progress.add_task(

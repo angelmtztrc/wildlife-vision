@@ -85,6 +85,44 @@ def test_clean_overexposed_ir_prints_summary_for_success(
     assert "failed=0" in result.output
 
 
+@pytest.mark.parametrize(
+    ("option_name", "option_value"),
+    [
+        ("--mean-threshold", "-1"),
+        ("--mean-threshold", "256"),
+        ("--std-threshold", "-1"),
+        ("--high-level", "-1"),
+        ("--high-level", "256"),
+        ("--ptc-high-threshold", "-0.1"),
+        ("--ptc-high-threshold", "1.1"),
+    ],
+)
+def test_clean_overexposed_ir_rejects_invalid_threshold_options(
+    cli_runner,
+    tmp_path: Path,
+    option_name: str,
+    option_value: str,
+):
+    source = tmp_path / "source"
+    output = tmp_path / "output"
+    source.mkdir()
+
+    result = cli_runner.invoke(
+        clean.app,
+        [
+            "overexposed-ir",
+            str(source),
+            "--output",
+            str(output),
+            option_name,
+            option_value,
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert option_name in result.output
+
+
 def test_clean_bursts_prints_summary_for_success(
     cli_runner,
     tmp_path: Path,
