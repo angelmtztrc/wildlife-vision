@@ -1,6 +1,6 @@
 import typer
 
-from wv.cli.commands import clean, detect, ingest, pipeline, setup
+from wv.cli.commands import clean, detect, gui, ingest, pipeline, setup
 from wv.core.logger import configure_external_output, set_verbose
 
 app = typer.Typer(
@@ -26,6 +26,7 @@ def main_callback(
 
 app.add_typer(clean.app, name="clean")
 app.add_typer(detect.app, name="detect")
+app.add_typer(gui.app, name="gui")
 app.add_typer(ingest.app, name="ingest")
 app.add_typer(pipeline.app, name="pipeline")
 app.command(

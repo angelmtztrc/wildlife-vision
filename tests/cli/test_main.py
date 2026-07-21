@@ -8,6 +8,7 @@ def test_main_help_lists_top_level_commands(cli_runner):
     assert "--verbose" in result.output
     assert "clean" in result.output
     assert "detect" in result.output
+    assert "gui" in result.output
     assert "ingest" in result.output
     assert "pipeline" in result.output
     assert "setup" in result.output
