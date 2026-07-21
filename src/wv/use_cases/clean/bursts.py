@@ -276,6 +276,11 @@ def run(input_data: CleanBurstsInput) -> CleanBurstsResult:
         )
 
         for burst in bursts:
+            if len(burst) < 2:
+                result.files_ignored += len(burst)
+                progress.update(reduction_process, advance=1)
+                continue
+
             burst_images = _build_burst_images(burst=burst, result=result)
             clusters = _build_similarity_clusters(
                 burst_images=burst_images,

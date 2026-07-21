@@ -114,3 +114,64 @@ def test_run_moves_lower_ranked_images_from_a_burst(
     assert not file_paths[2].exists()
     assert (destination / file_paths[1].name).exists()
     assert (destination / file_paths[2].name).exists()
+
+
+def test_run_skips_analysis_for_singleton_burst(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = tmp_path / "source"
+    output = tmp_path / "output"
+    source.mkdir()
+
+    file_path = source / "20240628_101530__GF_STREAM_FEEDER__ABC234.jpg"
+    file_path.write_bytes(b"placeholder")
+
+    def fail_build_burst_images(*args, **kwargs):
+        raise AssertionError("singleton burst should not be analyzed")
+
+    monkeypatch.setattr(bursts, "_build_burst_images", fail_build_burst_images)
+
+    result = bursts.run(
+        bursts.CleanBurstsInput(
+            source=source,
+            output=output,
+            burst_gap_threshold=60,
+            similarity_threshold=0,
+        )
+    )
+
+    assert result.files_discovered == 1
+    assert result.files_bursts == 0
+    assert result.files_reduced == 0
+    assert result.files_moved == 0
+    assert result.files_ignored == 1
+    assert result.files_failed == 0
+    assert file_path.exists()
+
+
+def test_run_keeps_singleton_burst_during_dry_run(tmp_path: Path):
+    source = tmp_path / "source"
+    output = tmp_path / "output"
+    source.mkdir()
+
+    file_path = source / "20240628_101530__GF_STREAM_FEEDER__ABC234.jpg"
+    file_path.write_bytes(b"placeholder")
+
+    result = bursts.run(
+        bursts.CleanBurstsInput(
+            source=source,
+            output=output,
+            burst_gap_threshold=60,
+            similarity_threshold=0,
+            dry_run=True,
+        )
+    )
+
+    assert result.files_discovered == 1
+    assert result.files_bursts == 0
+    assert result.files_reduced == 0
+    assert result.files_moved == 0
+    assert result.files_ignored == 1
+    assert result.files_failed == 0
+    assert file_path.exists()
