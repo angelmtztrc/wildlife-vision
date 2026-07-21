@@ -1,11 +1,16 @@
+import io
 import logging
+import warnings
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime
 
 from rich.console import Console
 from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
+    MofNCompleteColumn,
     Progress,
+    SpinnerColumn,
     Task,
     TextColumn,
     TimeElapsedColumn,
@@ -44,6 +49,7 @@ LEVEL_COLORS = {
 _verbose = False
 _loggers: list[logging.Logger] = []
 _console = Console()
+_quiet_library_loggers = ("PIL", "megadetector")
 
 
 class FullBlockProgressBar(ProgressBar):
@@ -122,6 +128,11 @@ def reset_logging() -> None:
         logger.setLevel(logging.INFO)
         logger.propagate = False
 
+    for logger_name in _quiet_library_loggers:
+        logging.getLogger(logger_name).setLevel(logging.NOTSET)
+
+    warnings.resetwarnings()
+
 
 class CustomFormatter(logging.Formatter):
     """Formats log records as: HH:MM:SS.sss [LEVEL] Scope: Message"""
@@ -190,6 +201,38 @@ def get_logger(name: str) -> logging.Logger:
     return logger
 
 
+def configure_external_output(verbose: bool) -> None:
+    library_log_level = logging.DEBUG if verbose else logging.WARNING
+
+    for logger_name in _quiet_library_loggers:
+        logging.getLogger(logger_name).setLevel(library_log_level)
+
+    warnings.resetwarnings()
+    if not verbose:
+        warnings.filterwarnings("ignore", module=r"^(PIL|megadetector)(\.|$)")
+
+
+@contextmanager
+def capture_external_output(logger: logging.Logger, scope: str):
+    stdout_buffer = io.StringIO()
+    stderr_buffer = io.StringIO()
+
+    with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+        yield
+
+    if not _verbose:
+        return
+
+    captured_stdout = stdout_buffer.getvalue().strip()
+    captured_stderr = stderr_buffer.getvalue().strip()
+
+    if captured_stdout:
+        logger.debug("Captured stdout from %s:\n%s", scope, captured_stdout)
+
+    if captured_stderr:
+        logger.debug("Captured stderr from %s:\n%s", scope, captured_stderr)
+
+
 def get_progress() -> Progress:
     """Create a Rich Progress bar for long-running processes.
 
@@ -201,9 +244,10 @@ def get_progress() -> Progress:
                 progress.update(task, advance=1)
     """
     return Progress(
-        TextColumn("[progress.description]{task.description}"),
+        SpinnerColumn(),
         FullBlockBarColumn(bar_width=None),
         TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        MofNCompleteColumn(),
         TimeElapsedColumn(),
         console=_console,
         expand=True,

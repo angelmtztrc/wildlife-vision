@@ -81,6 +81,7 @@ def run(input_data: IngestSdInput) -> IngestSdResult:
         result.files_discovered,
         display_path(egestion_path),
     )
+    logger.info("Processing SD card files")
 
     with get_progress() as progress:
         process = progress.add_task(

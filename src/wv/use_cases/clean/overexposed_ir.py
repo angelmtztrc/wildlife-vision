@@ -106,6 +106,7 @@ def run(input_data: CleanOverexposedIrInput) -> CleanOverexposedIrResult:
         input_data.ptc_high_threshold,
         input_data.dry_run,
     )
+    logger.info("Processing overexposed IR candidates")
 
     with get_progress() as progress:
         process = progress.add_task(

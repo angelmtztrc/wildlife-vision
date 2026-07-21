@@ -224,6 +224,7 @@ def run(input_data: CleanBurstsInput) -> CleanBurstsResult:
         input_data.similarity_threshold,
         input_data.dry_run,
     )
+    logger.info("Scanning burst cleanup candidates")
 
     with get_progress() as progress:
         scan_process = progress.add_task(
@@ -269,6 +270,7 @@ def run(input_data: CleanBurstsInput) -> CleanBurstsResult:
         len(scanned_images),
         result.files_bursts,
     )
+    logger.info("Reducing burst sequences")
 
     with get_progress() as progress:
         reduction_process = progress.add_task(

@@ -1,7 +1,7 @@
 import typer
 
 from wv.cli.commands import clean, detect, ingest, pipeline, setup
-from wv.core.logger import set_verbose
+from wv.core.logger import configure_external_output, set_verbose
 
 app = typer.Typer(
     name="wildlife-vision",
@@ -20,6 +20,7 @@ def main_callback(
     ),
 ):
     set_verbose(verbose)
+    configure_external_output(verbose)
     return None
 
 

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-from wv.core.logger import get_logger, get_progress
+from wv.core.logger import capture_external_output, get_logger, get_progress
 
 DEFAULT_MODEL = "MDV5A"
 _CATEGORY_LABELS = {1: "animal", 2: "human", 3: "vehicle"}
@@ -35,7 +35,8 @@ class MlImageResult:
 def _load_detector(model: str, *, force_download: bool = False):
     from megadetector.detection.run_detector import load_detector as md_load_detector
 
-    return md_load_detector(model, force_model_download=force_download)
+    with capture_external_output(logger, "MegaDetector load_detector"):
+        return md_load_detector(model, force_model_download=force_download)
 
 
 def _resolve_model_file(model: str, *, force_download: bool = False) -> Path:
@@ -43,13 +44,17 @@ def _resolve_model_file(model: str, *, force_download: bool = False) -> Path:
         try_download_known_detector as md_try_download_known_detector,
     )
 
-    return Path(md_try_download_known_detector(model, force_download=force_download))
+    with capture_external_output(logger, "MegaDetector try_download_known_detector"):
+        return Path(
+            md_try_download_known_detector(model, force_download=force_download)
+        )
 
 
 def _is_gpu_available(model_file: str) -> bool:
     from megadetector.detection.run_detector import is_gpu_available as md_is_gpu_available
 
-    return bool(md_is_gpu_available(model_file))
+    with capture_external_output(logger, "MegaDetector is_gpu_available"):
+        return bool(md_is_gpu_available(model_file))
 
 
 def _get_inference_device(detector, resolved_model: Path) -> str:
@@ -145,11 +150,12 @@ def _run_detector_one_image(
 ) -> MlImageResult:
     try:
         image = _load_image_for_detection(file_path)
-        raw_result = detector.generate_detections_one_image(
-            image,
-            image_id=str(file_path),
-            detection_threshold=_MIN_DETECTION_THRESHOLD,
-        )
+        with capture_external_output(logger, "MegaDetector generate_detections_one_image"):
+            raw_result = detector.generate_detections_one_image(
+                image,
+                image_id=str(file_path),
+                detection_threshold=_MIN_DETECTION_THRESHOLD,
+            )
         return _normalize_raw_result(
             raw_result,
             default_file_path=file_path,
@@ -175,11 +181,12 @@ def _run_detector_batch(
     if not loaded_images:
         return image_results
 
-    raw_results = detector.generate_detections_one_batch(
-        loaded_images,
-        image_id=[str(file_path) for file_path in loaded_paths],
-        detection_threshold=_MIN_DETECTION_THRESHOLD,
-    )
+    with capture_external_output(logger, "MegaDetector generate_detections_one_batch"):
+        raw_results = detector.generate_detections_one_batch(
+            loaded_images,
+            image_id=[str(file_path) for file_path in loaded_paths],
+            detection_threshold=_MIN_DETECTION_THRESHOLD,
+        )
 
     for file_path, raw_result in zip(loaded_paths, raw_results, strict=True):
         image_results.append(
@@ -208,6 +215,7 @@ def evaluate_images(
         model,
         batch_size,
     )
+    logger.info("Evaluating images with MegaDetector")
 
     with get_progress() as progress:
         process = progress.add_task(

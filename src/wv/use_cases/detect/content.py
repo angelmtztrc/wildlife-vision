@@ -150,6 +150,7 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
         input_data.batch_size,
         input_data.dry_run,
     )
+    logger.info("Scanning detection candidates")
 
     with get_progress() as progress:
         process = progress.add_task(
@@ -193,6 +194,7 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
         "MegaDetector returned %s detection results; starting post-processing",
         len(detection_results),
     )
+    logger.info("Applying detection decisions")
 
     with get_progress() as progress:
         process = progress.add_task(

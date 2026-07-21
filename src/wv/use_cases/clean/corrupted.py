@@ -58,6 +58,7 @@ def run(input_data: CleanCorruptedInput) -> CleanCorruptedResult:
         display_path(destination),
         input_data.dry_run,
     )
+    logger.info("Processing corrupted image candidates")
 
     with get_progress() as progress:
         process = progress.add_task(
