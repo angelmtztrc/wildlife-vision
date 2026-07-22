@@ -88,6 +88,7 @@ def test_update_device_changes_only_provided_fields(tmp_path: Path):
         manufacturer="Browning",
         serial_number="SN-001",
         notes="Updated notes",
+        monitoring_site_id=None,
     )
 
 
@@ -101,3 +102,23 @@ def test_update_device_rejects_missing_id(tmp_path: Path):
         pass
     else:
         raise AssertionError("Expected RecordNotFoundError")
+
+
+def test_update_device_can_set_monitoring_site_id(tmp_path: Path):
+    database_path = tmp_path / ".wv" / "database.sqlite"
+    initialize_database(database_path)
+    create_device(
+        database_path,
+        DeviceRecord(
+            id="HNT001",
+            name="North Camera",
+        ),
+    )
+
+    result = update_device(
+        database_path,
+        "HNT001",
+        {"monitoring_site_id": "SITE001"},
+    )
+
+    assert result.monitoring_site_id == "SITE001"

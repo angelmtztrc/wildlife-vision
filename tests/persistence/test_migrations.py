@@ -24,6 +24,7 @@ def test_initialize_database_applies_initial_schema(tmp_path: Path):
         "schema_migrations",
         "monitoring_sites",
         "devices",
+        "deployments",
     }
 
 
@@ -36,7 +37,10 @@ def test_initialize_database_records_applied_migration(tmp_path: Path):
             "SELECT version, name FROM schema_migrations ORDER BY version"
         ).fetchall()
 
-    assert rows == [(1, "create_monitoring_sites_and_devices")]
+    assert rows == [
+        (1, "create_monitoring_sites_and_devices"),
+        (2, "add_device_monitoring_site_and_deployments"),
+    ]
 
 
 def test_initialize_database_is_idempotent(tmp_path: Path):
@@ -48,4 +52,4 @@ def test_initialize_database_is_idempotent(tmp_path: Path):
     with sqlite3.connect(database_path) as connection:
         count = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
 
-    assert count == 1
+    assert count == 2

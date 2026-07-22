@@ -34,6 +34,22 @@ MIGRATIONS = (
         );
         """,
     ),
+    Migration(
+        version=2,
+        name="add_device_monitoring_site_and_deployments",
+        sql="""
+        ALTER TABLE devices ADD COLUMN monitoring_site_id TEXT;
+
+        CREATE TABLE deployments (
+            id TEXT PRIMARY KEY,
+            device_id TEXT NOT NULL,
+            monitoring_site_id TEXT NOT NULL,
+            sd_card_path TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        """,
+    ),
 )
 
 

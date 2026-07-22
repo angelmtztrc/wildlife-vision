@@ -15,5 +15,6 @@ def test_main_help_lists_top_level_commands(cli_runner):
     assert "ingest" in result.output
     assert "monitoring-site" in result.output
     assert "pipeline" in result.output
+    assert "sd" in result.output
     assert "setup" in result.output
     assert "workspace" in result.output

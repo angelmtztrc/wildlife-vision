@@ -145,9 +145,9 @@ wv device delete <ID> # soft-deletes a device
 
 ### SD
 
-The SD feature allows you to prepare an SD card with the proper metadata information for its use. The primary command is the `init` which initializes a configuration file in the SD card containing information about the devices that would be using the SD card and the monitoring site in which it is deployed. The created file would be stored inside `.wv/config.json`
+The SD feature allows you to prepare an SD card with the proper metadata information for its use. The primary command is the `init` which initializes a configuration file in the SD card containing information about the devices that would be using the SD card and the monitoring site in which it is deployed. The created file would be stored inside `.wv/config.yml`
 
-The purpose of this command is to pair it with the `wv ingest sd` command, which would automatically read the information under the `config.json` to recover the information of the device and monitoring site, saving time by not having to write those values manually.
+The purpose of this command is to pair it with the `wv ingest sd` command, which would automatically read the information under the `config.yml` to recover the information of the device and monitoring site, saving time by not having to write those values manually.
 
 To initialize an SD card, you must run:
 
@@ -185,7 +185,7 @@ Once the image file has been prepared, the following will happen:
 Available commands for this feature are:
 
 ```bash
-wv ingest sd <PATH> --mode <drain | copy> # automatically reads the .wv/config.json of an SD card
+wv ingest sd <PATH> --mode <drain | copy> # automatically reads the .wv/config.yml of an SD card
 wv ingest folder <PATH> --device <DEVICE> --monitoring-site <MONITORING_SITE> --mode <drain | copy>
 ```
 
