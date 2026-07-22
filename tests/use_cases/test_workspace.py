@@ -1,10 +1,20 @@
 import stat
+import sqlite3
 from pathlib import Path
 
 import platformdirs
 import pytest
 
 from wv.use_cases.workspace import WorkspaceError, WorkspaceInitInput, get_status, run_init, validate
+
+
+def _get_table_names(database_path: Path) -> set[str]:
+    with sqlite3.connect(database_path) as connection:
+        rows = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+
+    return {row[0] for row in rows}
 
 
 def test_run_init_creates_workspace_structure(tmp_path: Path, monkeypatch):
@@ -22,6 +32,11 @@ def test_run_init_creates_workspace_structure(tmp_path: Path, monkeypatch):
     assert (workspace_path / ".wv").is_dir()
     assert (workspace_path / ".wv" / "database.sqlite").is_file()
     assert (workspace_path / ".wv" / "config.yml").is_file()
+    assert _get_table_names(workspace_path / ".wv" / "database.sqlite") >= {
+        "schema_migrations",
+        "monitoring_sites",
+        "devices",
+    }
     assert result.global_config_file == config_dir / "config.yml"
     assert "workspace:" in result.global_config_file.read_text()
 

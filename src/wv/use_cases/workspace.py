@@ -1,8 +1,8 @@
 import os
-import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from wv.persistence import initialize_database
 from wv.workspace.config import get_global_config_file, get_workspace_path, write_global_config
 from wv.workspace.common import WORKSPACE_CONFIG_NAME, WORKSPACE_DATABASE_NAME, WORKSPACE_DIRECTORIES, WORKSPACE_METADATA_DIRNAME, WorkspaceError
 from wv.workspace.workspace_config import initialize_workspace_config
@@ -75,8 +75,7 @@ def run_init(input_data: WorkspaceInitInput) -> WorkspaceInitResult:
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
     database_file = paths["database_file"]
-    with sqlite3.connect(database_file):
-        pass
+    initialize_database(database_file)
 
     workspace_config_file = paths["workspace_config_file"]
     initialize_workspace_config(workspace_path, config_file=workspace_config_file)
