@@ -1,6 +1,6 @@
 import typer
 
-from wv.cli.commands import clean, detect, export, gui, ingest, pipeline, setup, workspace
+from wv.cli.commands import clean, config, detect, export, gui, ingest, pipeline, setup, workspace
 from wv.core.logger import configure_external_output, set_verbose
 
 app = typer.Typer(
@@ -25,6 +25,7 @@ def main_callback(
 
 
 app.add_typer(clean.app, name="clean")
+app.add_typer(config.app, name="config")
 app.add_typer(detect.app, name="detect")
 app.add_typer(export.app, name="export")
 app.add_typer(gui.app, name="gui")

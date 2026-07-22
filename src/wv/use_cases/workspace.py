@@ -3,18 +3,9 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
-
 from wv.workspace.config import get_global_config_file, get_workspace_path, write_global_config
-
-WORKSPACE_METADATA_DIRNAME = ".wv"
-WORKSPACE_DATABASE_NAME = "database.sqlite"
-WORKSPACE_CONFIG_NAME = "config.yml"
-WORKSPACE_DIRECTORIES = ("sessions", "models", "exports")
-
-
-class WorkspaceError(ValueError):
-    pass
+from wv.workspace.common import WORKSPACE_CONFIG_NAME, WORKSPACE_DATABASE_NAME, WORKSPACE_DIRECTORIES, WORKSPACE_METADATA_DIRNAME, WorkspaceError
+from wv.workspace.workspace_config import initialize_workspace_config
 
 
 @dataclass(frozen=True)
@@ -73,20 +64,6 @@ def _validate_workspace_parent(path: Path) -> Path:
         raise WorkspaceError(f"Workspace already exists at: {workspace_path}")
 
     return workspace_path
-
-
-def _write_workspace_config(workspace_path: Path, workspace_config_file: Path) -> None:
-    payload = {
-        "version": 1,
-        "workspace": {
-            "path": str(workspace_path),
-        },
-    }
-
-    with workspace_config_file.open("w", encoding="utf-8") as file_handle:
-        yaml.safe_dump(payload, file_handle, sort_keys=False)
-
-
 def run_init(input_data: WorkspaceInitInput) -> WorkspaceInitResult:
     workspace_path = _validate_workspace_parent(input_data.path)
     paths = _resolve_workspace_paths(workspace_path)
@@ -102,7 +79,7 @@ def run_init(input_data: WorkspaceInitInput) -> WorkspaceInitResult:
         pass
 
     workspace_config_file = paths["workspace_config_file"]
-    _write_workspace_config(workspace_path, workspace_config_file)
+    initialize_workspace_config(workspace_path, config_file=workspace_config_file)
 
     global_config_file = write_global_config(
         {

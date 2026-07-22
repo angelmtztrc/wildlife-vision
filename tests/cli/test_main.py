@@ -7,6 +7,7 @@ def test_main_help_lists_top_level_commands(cli_runner):
     assert result.exit_code == 0
     assert "--verbose" in result.output
     assert "clean" in result.output
+    assert "config" in result.output
     assert "detect" in result.output
     assert "export" in result.output
     assert "gui" in result.output
