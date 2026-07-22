@@ -1,6 +1,6 @@
 import typer
 
-from wv.cli.commands import clean, detect, export, gui, ingest, pipeline, setup
+from wv.cli.commands import clean, config, detect, export, gui, ingest, pipeline, setup, workspace
 from wv.core.logger import configure_external_output, set_verbose
 
 app = typer.Typer(
@@ -25,11 +25,13 @@ def main_callback(
 
 
 app.add_typer(clean.app, name="clean")
+app.add_typer(config.app, name="config")
 app.add_typer(detect.app, name="detect")
 app.add_typer(export.app, name="export")
 app.add_typer(gui.app, name="gui")
 app.add_typer(ingest.app, name="ingest")
 app.add_typer(pipeline.app, name="pipeline")
+app.add_typer(workspace.app, name="workspace")
 app.command(
     "setup",
     help="Prepare MegaDetector for local inference by resolving or downloading the configured model.",
