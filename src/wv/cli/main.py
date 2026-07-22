@@ -1,27 +1,44 @@
 import typer
 
-from wv.cli.commands import detect, export, organise, gui, reduce
+from wv.cli.commands import clean, detect, export, gui, ingest, pipeline, setup
+from wv.core.logger import configure_external_output, set_verbose
 
 app = typer.Typer(
     name="wildlife-vision",
-    help="Offline-first automated image pipelines for wildlife trail camera photos.",
+    help="An offline-first set of automated image pipelines for managing, organizing, reviewing, and curating images captured by trail and hunting cameras.",
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
 
-app.add_typer(organise.app, name="organise")
+
+@app.callback()
+def main_callback(
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        help="Enable DEBUG logging output.",
+    ),
+):
+    set_verbose(verbose)
+    configure_external_output(verbose)
+    return None
+
+
+app.add_typer(clean.app, name="clean")
 app.add_typer(detect.app, name="detect")
 app.add_typer(export.app, name="export")
 app.add_typer(gui.app, name="gui")
-app.add_typer(reduce.app, name="reduce")
+app.add_typer(ingest.app, name="ingest")
+app.add_typer(pipeline.app, name="pipeline")
+app.command(
+    "setup",
+    help="Prepare MegaDetector for local inference by resolving or downloading the configured model.",
+)(setup.setup)
 
 
-@app.command()
-def version():
-    from wv import __version__
-
-    typer.echo(f"wildlife-vision {__version__}")
+def main():
+    app()
 
 
 if __name__ == "__main__":
-    app()
+    main()

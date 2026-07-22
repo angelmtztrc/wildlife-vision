@@ -1,18 +1,24 @@
-camera_locations:
-  - id: HOMELAND_FALLEN_TREE
-    name: Homeland - Fallen tree
-    coordinates: [0, 0]
+paths:
+  root: ./.wv
 
-  - id: HOMELAND_MAIN_WOODS
-    name: Homeland - Main woods
-    coordinates: [0, 0]
+devices:
+  - id: HNT001
 
+  - id: HNT002
+
+  - id: HNT003
+
+monitoring_sites:
   - id: GF_STREAM_FEEDER
     name: Grandfather's - Stream feeder
     coordinates: [0, 0]
 
   - id: GF_STREAM_DRINK_ZONE
     name: Grandfather's - Stream drink zone
+    coordinates: [0, 0]
+
+  - id: GF_RIVER_OAKS_FOREST
+    name: Grandfather's - River oaks forest
     coordinates: [0, 0]
 
   - id: CASCABEL_RIVERSIDE

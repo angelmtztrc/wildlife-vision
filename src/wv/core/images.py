@@ -1,35 +1,25 @@
-import os
+from datetime import datetime
 from pathlib import Path
-from datetime import date, datetime
 
 from wv.core.exif import read_exif
-from wv.core.logging import get_logger
 
 
-log = get_logger("Images")
-
-
-def get_datetime_from_image(path: Path) -> datetime:
-    """
-    Get the date and time when the image was taken from its EXIF metadata. If the EXIF data is not available, fallback to the file's last modified time.
+def get_image_datetime(file_path: Path) -> datetime:
+    """Return the image datetime from EXIF metadata or file modification time.
 
     Args:
-        path (Path): Path to the image file.
+        path: Path to the image file.
 
     Returns:
-        datetime: The date and time when the image was taken.
+        The datetime read from the image EXIF metadata. If no supported EXIF
+        datetime is available, returns the file's last modified datetime.
     """
-    try:
-        exif_datetime = read_exif(path, "DateTimeOriginal")
-        if not exif_datetime:
-            log.warning(f"No DateTimeOriginal EXIF data found in {path}")
-            pass
+    for metadata_tag in ("DateTimeOriginal", "DateTime"):
+        value = read_exif(file_path, metadata_tag)
+        if value:
+            try:
+                return datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
+            except ValueError:
+                pass
 
-        return datetime.strptime(exif_datetime, "%Y:%m:%d %H:%M:%S")
-
-    except Exception as e:
-        log.error(f"Error reading EXIF data from {path}: {e}")
-        pass
-
-    image_tm = os.path.getmtime(path)
-    return date.fromtimestamp(image_tm)
+    return datetime.fromtimestamp(file_path.stat().st_mtime)
