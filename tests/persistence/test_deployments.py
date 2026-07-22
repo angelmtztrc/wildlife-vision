@@ -1,69 +1,68 @@
 from pathlib import Path
 
+from wv.models import Deployment
 from wv.persistence.database import initialize_database
-from wv.persistence.deployments import (
-    DeploymentRecord,
-    create_deployment,
-    list_deployments_for_device,
-    list_deployments_for_sd_card,
-)
+from wv.persistence.repositories import DeploymentRepository
+from wv.persistence.session import session_scope
 
 
 def test_create_and_list_deployments_for_device(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
 
-    first = create_deployment(
-        database_path,
-        DeploymentRecord(
-            id="dep-1",
-            device_id="HNT001",
-            monitoring_site_id="SITE001",
-            sd_card_path="/Volumes/SD1",
-            created_at="2026-07-21T10:00:00+00:00",
-            updated_at="2026-07-21T10:00:00+00:00",
-        ),
-    )
-    second = create_deployment(
-        database_path,
-        DeploymentRecord(
-            id="dep-2",
-            device_id="HNT001",
-            monitoring_site_id="SITE002",
-            sd_card_path="/Volumes/SD1",
-            created_at="2026-07-21T11:00:00+00:00",
-            updated_at="2026-07-21T11:00:00+00:00",
-        ),
-    )
+    with session_scope(database_path) as session:
+        repository = DeploymentRepository(session)
+        first = repository.create(
+            Deployment(
+                id="dep-1",
+                device_id="HNT001",
+                monitoring_site_id="SITE001",
+                sd_card_path="/Volumes/SD1",
+                created_at="2026-07-21T10:00:00+00:00",
+                updated_at="2026-07-21T10:00:00+00:00",
+            )
+        )
+        second = repository.create(
+            Deployment(
+                id="dep-2",
+                device_id="HNT001",
+                monitoring_site_id="SITE002",
+                sd_card_path="/Volumes/SD1",
+                created_at="2026-07-21T11:00:00+00:00",
+                updated_at="2026-07-21T11:00:00+00:00",
+            )
+        )
 
-    assert list_deployments_for_device(database_path, "HNT001") == [first, second]
+    with session_scope(database_path) as session:
+        assert DeploymentRepository(session).list_for_device("HNT001") == [first, second]
 
 
 def test_list_deployments_for_sd_card_filters_by_path(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
 
-    create_deployment(
-        database_path,
-        DeploymentRecord(
-            id="dep-1",
-            device_id="HNT001",
-            monitoring_site_id="SITE001",
-            sd_card_path="/Volumes/SD1",
-            created_at="2026-07-21T10:00:00+00:00",
-            updated_at="2026-07-21T10:00:00+00:00",
-        ),
-    )
-    matching = create_deployment(
-        database_path,
-        DeploymentRecord(
-            id="dep-2",
-            device_id="HNT002",
-            monitoring_site_id="SITE002",
-            sd_card_path="/Volumes/SD2",
-            created_at="2026-07-21T11:00:00+00:00",
-            updated_at="2026-07-21T11:00:00+00:00",
-        ),
-    )
+    with session_scope(database_path) as session:
+        repository = DeploymentRepository(session)
+        repository.create(
+            Deployment(
+                id="dep-1",
+                device_id="HNT001",
+                monitoring_site_id="SITE001",
+                sd_card_path="/Volumes/SD1",
+                created_at="2026-07-21T10:00:00+00:00",
+                updated_at="2026-07-21T10:00:00+00:00",
+            )
+        )
+        matching = repository.create(
+            Deployment(
+                id="dep-2",
+                device_id="HNT002",
+                monitoring_site_id="SITE002",
+                sd_card_path="/Volumes/SD2",
+                created_at="2026-07-21T11:00:00+00:00",
+                updated_at="2026-07-21T11:00:00+00:00",
+            )
+        )
 
-    assert list_deployments_for_sd_card(database_path, "/Volumes/SD2") == [matching]
+    with session_scope(database_path) as session:
+        assert DeploymentRepository(session).list_for_sd_card("/Volumes/SD2") == [matching]

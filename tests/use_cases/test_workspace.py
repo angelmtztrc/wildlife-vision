@@ -33,9 +33,10 @@ def test_run_init_creates_workspace_structure(tmp_path: Path, monkeypatch):
     assert (workspace_path / ".wv" / "database.sqlite").is_file()
     assert (workspace_path / ".wv" / "config.yml").is_file()
     assert _get_table_names(workspace_path / ".wv" / "database.sqlite") >= {
-        "schema_migrations",
+        "alembic_version",
         "monitoring_sites",
         "devices",
+        "deployments",
     }
     assert result.global_config_file == config_dir / "config.yml"
     assert "workspace:" in result.global_config_file.read_text()

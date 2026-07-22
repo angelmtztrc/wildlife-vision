@@ -1,14 +1,10 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from wv.models import Device
 from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
-from wv.persistence.devices import DeviceRecord
-from wv.persistence.devices import (
-    create_device,
-    get_device,
-    list_devices,
-    update_device,
-)
+from wv.persistence.repositories import DeviceRepository
+from wv.persistence.session import session_scope
 from wv.workspace.common import WorkspaceError
 from wv.workspace.config import get_workspace_path
 from wv.workspace.workspace_config import get_workspace_database_path
@@ -44,28 +40,30 @@ def _get_database_path() -> Path:
     return database_path
 
 
-def run_create(input_data: DeviceInput) -> DeviceRecord:
-    return create_device(
-        _get_database_path(),
-        DeviceRecord(
-            id=input_data.id,
-            name=input_data.name,
-            manufacturer=input_data.manufacturer,
-            serial_number=input_data.serial_number,
-            notes=input_data.notes,
-        ),
-    )
+def run_create(input_data: DeviceInput) -> Device:
+    with session_scope(_get_database_path()) as session:
+        return DeviceRepository(session).create(
+            Device(
+                id=input_data.id,
+                name=input_data.name,
+                manufacturer=input_data.manufacturer,
+                serial_number=input_data.serial_number,
+                notes=input_data.notes,
+            )
+        )
 
 
-def run_list() -> list[DeviceRecord]:
-    return list_devices(_get_database_path())
+def run_list() -> list[Device]:
+    with session_scope(_get_database_path()) as session:
+        return DeviceRepository(session).list()
 
 
-def run_show(device_id: str) -> DeviceRecord:
-    return get_device(_get_database_path(), device_id)
+def run_show(device_id: str) -> Device:
+    with session_scope(_get_database_path()) as session:
+        return DeviceRepository(session).get(device_id)
 
 
-def run_update(input_data: DeviceUpdateInput) -> DeviceRecord:
+def run_update(input_data: DeviceUpdateInput) -> Device:
     updates = {
         key: value
         for key, value in {
@@ -80,12 +78,13 @@ def run_update(input_data: DeviceUpdateInput) -> DeviceRecord:
     if not updates:
         raise WorkspaceError("At least one field must be provided for update.")
 
-    return update_device(_get_database_path(), input_data.id, updates)
+    with session_scope(_get_database_path()) as session:
+        return DeviceRepository(session).update(input_data.id, updates)
 
 
 __all__ = [
     "DeviceInput",
-    "DeviceRecord",
+    "Device",
     "DeviceUpdateInput",
     "RecordAlreadyExistsError",
     "RecordNotFoundError",

@@ -27,6 +27,39 @@ When you're giving the order to define a plan, always ask for whatever informati
 - `src/wv/core/` holds shared filesystem / image / EXIF / metadata helpers plus the Rich-backed logger in `src/wv/core/logger.py`.
 - `src/wv/config/__init__.py` loads package-local config from `src/wv/config/setup.yml`.
 
+## Persistence Architecture
+
+- Use `SQLAlchemy` ORM models only for database persistence concerns.
+- Keep ORM entities inside `src/wv/persistence/models/`; they must not leak into CLI or use-case layers.
+- Use class-based repositories in `src/wv/persistence/repositories/` for database access.
+- Repositories must accept a `SQLAlchemy Session` and return application dataclasses, not ORM entities.
+- Use `SQLAlchemy Session` as the transaction and unit-of-work boundary.
+- Top-level use cases should own the session lifecycle for their work; repositories should never create their own sessions.
+- Do not use raw `sqlite3` for application persistence. Prefer the shared SQLAlchemy persistence stack.
+
+## Data Boundaries
+
+- Use dataclasses for use-case inputs, outputs, domain values, and internal events.
+- Do not define application-facing result types inside persistence modules.
+- Prefer boundary-correct names like `Device`, `MonitoringSite`, and `Deployment` instead of persistence-oriented `*Record` names.
+- Keep Pydantic models for FastAPI request/response schemas only; do not use them as persistence or domain models.
+
+## Migrations
+
+- Use `Alembic` as the source of truth for schema migrations.
+- Do not add new hand-rolled SQL migration runners.
+- Keep `initialize_database(...)` as the application bootstrap entrypoint, but have it apply Alembic migrations programmatically.
+- Use standard Alembic version tracking.
+
+## Implementation Notes
+
+- Preserve clear separation:
+  - CLI -> use cases
+  - use cases -> repositories
+  - repositories -> SQLAlchemy models/session
+- Avoid leaking ORM behavior into business logic.
+- When adding persistence-backed features, first check whether an existing repository or domain dataclass should be extended instead of creating parallel patterns.
+
 ## Current State
 
 - Implemented command paths worth verifying are `setup`, `ingest sd`, `detect content`, and `clean {corrupted,overexposed-ir,bursts}`.

@@ -1,14 +1,10 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from wv.models import MonitoringSite
 from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
-from wv.persistence.monitoring_sites import MonitoringSiteRecord
-from wv.persistence.monitoring_sites import (
-    create_monitoring_site,
-    get_monitoring_site,
-    list_monitoring_sites,
-    update_monitoring_site,
-)
+from wv.persistence.repositories import MonitoringSiteRepository
+from wv.persistence.session import session_scope
 from wv.workspace.common import WorkspaceError
 from wv.workspace.config import get_workspace_path
 from wv.workspace.workspace_config import get_workspace_database_path
@@ -48,30 +44,32 @@ def _get_database_path() -> Path:
     return database_path
 
 
-def run_create(input_data: MonitoringSiteInput) -> MonitoringSiteRecord:
-    return create_monitoring_site(
-        _get_database_path(),
-        MonitoringSiteRecord(
-            id=input_data.id,
-            name=input_data.name,
-            description=input_data.description,
-            latitude=input_data.latitude,
-            longitude=input_data.longitude,
-            elevation=input_data.elevation,
-            notes=input_data.notes,
-        ),
-    )
+def run_create(input_data: MonitoringSiteInput) -> MonitoringSite:
+    with session_scope(_get_database_path()) as session:
+        return MonitoringSiteRepository(session).create(
+            MonitoringSite(
+                id=input_data.id,
+                name=input_data.name,
+                description=input_data.description,
+                latitude=input_data.latitude,
+                longitude=input_data.longitude,
+                elevation=input_data.elevation,
+                notes=input_data.notes,
+            )
+        )
 
 
-def run_list() -> list[MonitoringSiteRecord]:
-    return list_monitoring_sites(_get_database_path())
+def run_list() -> list[MonitoringSite]:
+    with session_scope(_get_database_path()) as session:
+        return MonitoringSiteRepository(session).list()
 
 
-def run_show(site_id: str) -> MonitoringSiteRecord:
-    return get_monitoring_site(_get_database_path(), site_id)
+def run_show(site_id: str) -> MonitoringSite:
+    with session_scope(_get_database_path()) as session:
+        return MonitoringSiteRepository(session).get(site_id)
 
 
-def run_update(input_data: MonitoringSiteUpdateInput) -> MonitoringSiteRecord:
+def run_update(input_data: MonitoringSiteUpdateInput) -> MonitoringSite:
     updates = {
         key: value
         for key, value in {
@@ -88,12 +86,13 @@ def run_update(input_data: MonitoringSiteUpdateInput) -> MonitoringSiteRecord:
     if not updates:
         raise WorkspaceError("At least one field must be provided for update.")
 
-    return update_monitoring_site(_get_database_path(), input_data.id, updates)
+    with session_scope(_get_database_path()) as session:
+        return MonitoringSiteRepository(session).update(input_data.id, updates)
 
 
 __all__ = [
     "MonitoringSiteInput",
-    "MonitoringSiteRecord",
+    "MonitoringSite",
     "MonitoringSiteUpdateInput",
     "RecordAlreadyExistsError",
     "RecordNotFoundError",

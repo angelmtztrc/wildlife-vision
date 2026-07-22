@@ -21,7 +21,7 @@ def test_initialize_database_applies_initial_schema(tmp_path: Path):
     assert result == database_path
     assert database_path.is_file()
     assert _get_table_names(database_path) >= {
-        "schema_migrations",
+        "alembic_version",
         "monitoring_sites",
         "devices",
         "deployments",
@@ -33,14 +33,9 @@ def test_initialize_database_records_applied_migration(tmp_path: Path):
     initialize_database(database_path)
 
     with sqlite3.connect(database_path) as connection:
-        rows = connection.execute(
-            "SELECT version, name FROM schema_migrations ORDER BY version"
-        ).fetchall()
+        version = connection.execute("SELECT version_num FROM alembic_version").fetchone()
 
-    assert rows == [
-        (1, "create_monitoring_sites_and_devices"),
-        (2, "add_device_monitoring_site_and_deployments"),
-    ]
+    assert version == ("0001_initial_schema",)
 
 
 def test_initialize_database_is_idempotent(tmp_path: Path):
@@ -50,6 +45,6 @@ def test_initialize_database_is_idempotent(tmp_path: Path):
     initialize_database(database_path)
 
     with sqlite3.connect(database_path) as connection:
-        count = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
+        count = connection.execute("SELECT COUNT(*) FROM alembic_version").fetchone()[0]
 
-    assert count == 2
+    assert count == 1

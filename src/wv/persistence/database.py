@@ -1,13 +1,18 @@
-import sqlite3
 from pathlib import Path
 
-from wv.persistence.migrations import apply_migrations
+from alembic import command
+from alembic.config import Config
+
+from wv.persistence.alembic import get_alembic_directory
+from wv.persistence.session import build_database_url
 
 
 def initialize_database(database_path: Path) -> Path:
     database_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with sqlite3.connect(database_path) as connection:
-        apply_migrations(connection)
+    config = Config()
+    config.set_main_option("script_location", str(get_alembic_directory()))
+    config.set_main_option("sqlalchemy.url", build_database_url(database_path))
+    command.upgrade(config, "head")
 
     return database_path

@@ -3,7 +3,8 @@ from pathlib import Path
 import platformdirs
 import pytest
 
-from wv.persistence.deployments import list_deployments_for_device
+from wv.persistence.repositories import DeploymentRepository
+from wv.persistence.session import session_scope
 from wv.use_cases.device import DeviceInput, run_create as run_create_device, run_show as run_show_device
 from wv.use_cases.monitoring_site import MonitoringSiteInput, run_create as run_create_monitoring_site
 from wv.use_cases.sd import (
@@ -20,6 +21,11 @@ from wv.use_cases.sd import (
 from wv.use_cases.workspace import WorkspaceInitInput, run_init as run_workspace_init
 from wv.workspace.common import WorkspaceError
 from wv.workspace.workspace_config import get_workspace_database_path
+
+
+def _list_deployments_for_device(database_path: Path, device_id: str):
+    with session_scope(database_path) as session:
+        return DeploymentRepository(session).list_for_device(device_id)
 
 
 @pytest.fixture
@@ -64,7 +70,7 @@ def test_run_init_writes_config_updates_device_and_records_deployment(
     assert run_show_device("HNT001").monitoring_site_id == "SITE001"
 
     database_path = get_workspace_database_path(configured_workspace)
-    deployments = list_deployments_for_device(database_path, "HNT001")
+    deployments = _list_deployments_for_device(database_path, "HNT001")
     assert len(deployments) == 1
     assert deployments[0].sd_card_path == str(sd_path.resolve())
 
@@ -132,7 +138,7 @@ def test_run_update_changes_monitoring_site_and_records_deployment(
     assert run_show_device("HNT001").monitoring_site_id == "SITE002"
 
     database_path = get_workspace_database_path(configured_workspace)
-    deployments = list_deployments_for_device(database_path, "HNT001")
+    deployments = _list_deployments_for_device(database_path, "HNT001")
     assert len(deployments) == 2
 
 

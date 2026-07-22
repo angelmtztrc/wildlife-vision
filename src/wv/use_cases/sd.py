@@ -5,10 +5,14 @@ from uuid import uuid4
 
 import yaml
 
+from wv.models import Deployment, Device
 from wv.persistence.common import RecordNotFoundError
-from wv.persistence.deployments import DeploymentRecord, create_deployment
-from wv.persistence.devices import DeviceRecord, get_device, update_device
-from wv.persistence.monitoring_sites import get_monitoring_site
+from wv.persistence.repositories import (
+    DeploymentRepository,
+    DeviceRepository,
+    MonitoringSiteRepository,
+)
+from wv.persistence.session import session_scope
 from wv.workspace.common import WorkspaceError
 from wv.workspace.config import get_workspace_path
 from wv.workspace.workspace_config import get_workspace_database_path
@@ -134,46 +138,43 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _get_existing_device(database_path: Path, device_id: str) -> DeviceRecord:
-    return get_device(database_path, device_id)
+def _get_existing_device(repository: DeviceRepository, device_id: str) -> Device:
+    return repository.get(device_id)
 
 
-def _validate_monitoring_site_exists(database_path: Path, monitoring_site_id: str) -> None:
-    get_monitoring_site(database_path, monitoring_site_id)
+def _validate_monitoring_site_exists(
+    repository: MonitoringSiteRepository, monitoring_site_id: str
+) -> None:
+    repository.get(monitoring_site_id)
 
 
 def _set_device_monitoring_site(
-    database_path: Path,
+    repository: DeviceRepository,
     device_id: str,
     monitoring_site_id: str | None,
-) -> DeviceRecord:
-    return update_device(
-        database_path,
-        device_id,
-        {"monitoring_site_id": monitoring_site_id},
-    )
+) -> Device:
+    return repository.update(device_id, {"monitoring_site_id": monitoring_site_id})
 
 
 def _clear_assignment_if_matches(
-    database_path: Path,
+    repository: DeviceRepository,
     device_id: str,
     monitoring_site_id: str,
 ) -> None:
-    device = _get_existing_device(database_path, device_id)
+    device = _get_existing_device(repository, device_id)
     if device.monitoring_site_id == monitoring_site_id:
-        _set_device_monitoring_site(database_path, device_id, None)
+        _set_device_monitoring_site(repository, device_id, None)
 
 
 def _record_deployment(
-    database_path: Path,
+    repository: DeploymentRepository,
     device_id: str,
     monitoring_site_id: str,
     sd_card_path: Path,
     timestamp: str,
-) -> DeploymentRecord:
-    return create_deployment(
-        database_path,
-        DeploymentRecord(
+) -> Deployment:
+    return repository.create(
+        Deployment(
             id=uuid4().hex,
             device_id=device_id,
             monitoring_site_id=monitoring_site_id,
@@ -194,26 +195,41 @@ def run_init(input_data: SdInitInput) -> SdCommandResult:
             f"SD config already exists at {config_path}. Use 'wv sd update' instead."
         )
 
-    device = _get_existing_device(database_path, input_data.device_id)
-    _validate_monitoring_site_exists(database_path, input_data.monitoring_site_id)
-
-    if device.monitoring_site_id is not None:
-        raise SdError(
-            f"Device '{device.id}' is already assigned to monitoring site '{device.monitoring_site_id}'. "
-            "Use 'wv sd update' instead."
-        )
-
     timestamp = _now_iso()
     config = SdConfigRecord(
-        device_id=device.id,
+        device_id=input_data.device_id,
         monitoring_site_id=input_data.monitoring_site_id,
         created_at=timestamp,
         updated_at=timestamp,
     )
 
     _write_sd_config(config_path, config)
-    _set_device_monitoring_site(database_path, device.id, input_data.monitoring_site_id)
-    _record_deployment(database_path, device.id, input_data.monitoring_site_id, sd_path, timestamp)
+
+    with session_scope(database_path) as session:
+        device_repository = DeviceRepository(session)
+        monitoring_site_repository = MonitoringSiteRepository(session)
+        deployment_repository = DeploymentRepository(session)
+        device = _get_existing_device(device_repository, input_data.device_id)
+        _validate_monitoring_site_exists(
+            monitoring_site_repository, input_data.monitoring_site_id
+        )
+
+        if device.monitoring_site_id is not None:
+            raise SdError(
+                f"Device '{device.id}' is already assigned to monitoring site '{device.monitoring_site_id}'. "
+                "Use 'wv sd update' instead."
+            )
+
+        _set_device_monitoring_site(
+            device_repository, device.id, input_data.monitoring_site_id
+        )
+        _record_deployment(
+            deployment_repository,
+            device.id,
+            input_data.monitoring_site_id,
+            sd_path,
+            timestamp,
+        )
 
     return SdCommandResult(path=sd_path, config_path=config_path, config=config)
 
@@ -239,30 +255,48 @@ def run_update(input_data: SdUpdateInput) -> SdCommandResult:
         input_data.monitoring_site_id or current_config.monitoring_site_id
     )
 
-    next_device = _get_existing_device(database_path, next_device_id)
-    _validate_monitoring_site_exists(database_path, next_monitoring_site_id)
-
-    if next_device.id != current_config.device_id and next_device.monitoring_site_id is not None:
-        raise SdError(
-            f"Device '{next_device.id}' is already assigned to monitoring site '{next_device.monitoring_site_id}'."
-        )
-
-    _clear_assignment_if_matches(
-        database_path,
-        current_config.device_id,
-        current_config.monitoring_site_id,
-    )
-    _set_device_monitoring_site(database_path, next_device.id, next_monitoring_site_id)
-
     timestamp = _now_iso()
     updated_config = SdConfigRecord(
-        device_id=next_device.id,
+        device_id=next_device_id,
         monitoring_site_id=next_monitoring_site_id,
         created_at=current_config.created_at,
         updated_at=timestamp,
     )
+
+    with session_scope(database_path) as session:
+        device_repository = DeviceRepository(session)
+        monitoring_site_repository = MonitoringSiteRepository(session)
+        deployment_repository = DeploymentRepository(session)
+        next_device = _get_existing_device(device_repository, next_device_id)
+        _validate_monitoring_site_exists(
+            monitoring_site_repository, next_monitoring_site_id
+        )
+
+        if (
+            next_device.id != current_config.device_id
+            and next_device.monitoring_site_id is not None
+        ):
+            raise SdError(
+                f"Device '{next_device.id}' is already assigned to monitoring site '{next_device.monitoring_site_id}'."
+            )
+
+        _clear_assignment_if_matches(
+            device_repository,
+            current_config.device_id,
+            current_config.monitoring_site_id,
+        )
+        _set_device_monitoring_site(
+            device_repository, next_device.id, next_monitoring_site_id
+        )
+        _record_deployment(
+            deployment_repository,
+            next_device.id,
+            next_monitoring_site_id,
+            sd_path,
+            timestamp,
+        )
+
     _write_sd_config(config_path, updated_config)
-    _record_deployment(database_path, next_device.id, next_monitoring_site_id, sd_path, timestamp)
 
     return SdCommandResult(path=sd_path, config_path=config_path, config=updated_config)
 
@@ -273,11 +307,13 @@ def run_clear(input_data: SdClearInput) -> SdClearResult:
     config_path = _get_sd_config_path(sd_path)
     config = _load_sd_config(config_path)
 
-    _clear_assignment_if_matches(
-        database_path,
-        config.device_id,
-        config.monitoring_site_id,
-    )
+    with session_scope(database_path) as session:
+        _clear_assignment_if_matches(
+            DeviceRepository(session),
+            config.device_id,
+            config.monitoring_site_id,
+        )
+
     config_path.unlink()
 
     return SdClearResult(
