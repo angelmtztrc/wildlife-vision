@@ -1,44 +1,220 @@
 # wildlife-vision
 
+## Introduction
+
 An offline-first set of automated image pipelines for managing, organizing, reviewing, and curating images captured by trail and hunting cameras.
 
 The project is designed for large batches of wildlife photos collected from cameras placed in ranches, rural areas, and natural environments. Its goal is to reduce the manual effort required to review thousands of images while preserving the photos that are useful for long-term storage, research, species tracking, and publication on platforms such as iNaturalist.
 
-## Purpose
+## Motivation
 
-Trail and hunting cameras can produce hundreds or thousands of images in a short period of time. Many of those images are empty, highly similar, overexposed, blurry, or simply not useful.
+I have been monitoring various sites in the area where I live, intending to help the scientific community by capturing images of wildlife. This has not come easy in any way possible; the main problem I encountered was the number of images I could get from one camera, or even worse, from several. At every trip to extract the images from my cameras every week, I always ended up having a folder with **thousands** of pictures that needed to be reviewed one by one to determine which ones would be suitable to be posted on iNaturalist.
 
-Manually curating large image batches requires a significant amount of time and attention. `wildlife-vision` provides a structured pipeline for:
+Because of this, I decided to create a project that solves many problems I encounter when handling those images; that’s why the project provides the following features:
 
-1. Importing and organizing trail and hunting camera images.
-2. Preserving original image information and metadata.
-3. Detecting animal, human, vehicle, empty, and other image types.
-4. Reducing redundant images from bursts and near-duplicate sequences.
-5. Helping the user decide which animal photos should be published, kept, or rejected.
-6. Producing summaries and export-ready data for further review, research, or publication.
+1. Importing and organizing images: Automatically move the files from an input path to an established destination, and it renames the files using a suitable format.
+2. Clean up: It provides a set of commands that allow flagging corrupted, redundant, and overexposed images.
+3. Auto-detection: Use the mega-detector model to automatically detect the content of every image and sort them into animal, human, empty, and other categories.
+4. Manual verification: It provides a clear and easy-to-use interface to manually review the result of the detection process to verify or correct any misdetection.
+5. Exporting: It provides a set of commands to allow you to export those ready-to-use images for publishing or further research.
 
-## Testing
+## Definition
 
-Install project and development dependencies:
+### Workspace
+
+A workspace is a given filesystem path that serves as the output directory for the sessions generated using the `ingestion` process.
+
+Workspaces can be created using the command:
 
 ```bash
-uv sync --group dev
+wv workspace init <PATH>
 ```
 
-Run the test suite:
+When a workspace is initialized, the command would do the following:
+
+1. Resolve the absolute path.
+2. Verify that the directory is accessible and writable.
+3. Create the needed folders, which are: `sessions`, `models`, `exports`.
+4. Initialize and migrate SQLite
+5. Create the configuration file
+6. Activates the workspace
+
+The project would be prepared to only handle one workspace; there would not be commands or functionality to “switch” between created workspaces.
+
+Additional commands would be:
 
 ```bash
-uv run pytest
+wv workspace show # returns formatted information of the workspace
+wv workspace validate # ensures the workspace is accessible, and the database is up-to date
 ```
 
-Run tests with coverage for currently implemented modules:
+### Configuration
 
-```bash
-uv run pytest --cov=wv --cov-report=term-missing
+Once a workspace is created, a `config.yml` file will be available within the workspace.
+
+This file will contain all the needed configuration for every process that would be run; the configuration will contain the following:
+
+```yaml
+schema_version: 1
+
+processing:
+  overexposed_ir:
+    mean_threshold: 200.0
+    std_threshold: 25.0
+    high_level: 220
+    pct_high_threshold: 0.60
+
+  bursts:
+    burst_gap_seconds: 60
+    similarity_threshold: 5
+
+  detection:
+    model: "MDV5A"
+    confidence_threshold: 0.80
+    ambiguity_gap: 0.30
+    batch_size: 32
+
+runtime:
+  continue_on_file_error: true
 ```
 
-Generate an HTML coverage report:
+This would allow the running of processes like `overexposed_ir` to point to this configuration as default values.
+
+If, for any reason, the configuration file is missing or invalid, the CLI will automatically switch to and retrieve the default values defined in the code.
+
+Available commands for this feature will be:
 
 ```bash
-uv run pytest --cov=wv --cov-report=html
+wv config init # it creates/replace the config file of the workspace
+wv config get <KEY> # it returns the value of a certain config property
+wv config set <KEY> <VALUE> # it sets the value of a certain config property
+wv config reset <KEY> # it sets the default value of a certain config property
+wv config validate # it verifies if the active config is valid for use
+wv config path # it returns the path of the config
+```
+
+### Monitoring sites
+
+Wildlife Vision lets you define the monitoring sites you have; this is useful to determine and help you organise where a certain image was obtained.
+
+A monitoring site can be created using the following command and options.
+
+```bash
+wv site create <ID> \
+	--name "El Viejo Ranch - Westside Creek" \ # only required value
+	--description "Mesquite are approximately 20 meters east" \
+	--latitude 28.550981 \
+	--longitude -101.140348 \
+	--elevation 310 \
+	--notes "Password is 1234"
+```
+
+To manage monitoring sites, we provide the following commands:
+
+```bash
+wv site create <ID> --name <DISPLAY_NAME> # creates the monitoring site
+wv site list # returns the available monitoring sites
+wv site show <ID> # returns the information of a certain monitoring site
+wv site update <ID> --name <DISPLAY_NAME> # updates the monitoring site information
+wv site delete <ID> # soft-deletes a monitoring site, only if not being used
+```
+
+### Devices
+
+The devices feature allows you to register the cameras you have available for use; this is useful because it lets you relate an SD card to a device and also to determine where the device is located at the moment.
+
+To create a device, the following command is available:
+
+```bash
+wv device create <ID> \
+	--name "Red camera" \
+	--manufacturer "Stealth cam"
+	--model "SC-2131"
+	--serial-number "BR-1231"
+	--notes "It uses 8 batteries"
+```
+
+We also provide several commands for managing the information of your devices, which are:
+
+```bash
+wv device list # returns the available devices
+wv device show <ID> # returns the information of a certain device
+wv device update <ID> --name <DISPLAY_NAME> # update the monitoring information
+wv device delete <ID> # soft-deletes a device
+```
+
+### SD
+
+The SD feature allows you to prepare an SD card with the proper metadata information for its use. The primary command is the `init` which initializes a configuration file in the SD card containing information about the devices that would be using the SD card and the monitoring site in which it is deployed. The created file would be stored inside `.wv/config.json`
+
+The purpose of this command is to pair it with the `wv ingest sd` command, which would automatically read the information under the `config.json` to recover the information of the device and monitoring site, saving time by not having to write those values manually.
+
+To initialize an SD card, you must run:
+
+```bash
+wv sd init <PATH> \
+	--device <DEVICE_ID> \ # from registered devices
+	--monitoring-site <MONITORING_SITE_ID>  # from registered monitoring sites
+```
+
+We also provide additional helpful commands:
+
+```bash
+wv sd show <PATH> # returns the information of the SD card
+wv sd update <PATH> --device <DEVICE_ID> # it allows you to update the information of the SD card
+wv sd clear <PATH> # it clears the configuration file
+```
+
+### Ingestion
+
+The ingestion process happens when an input filesystem path, the system will iterate through the files of that path and look for valid image files. The criteria used for this are as follows:
+
+1. Is a readable and accessible file
+2. Its extension is any of the following: `.jpg`, `.jpeg`, `.png`, `.heic`
+
+When a file is a valid image file, the system will then proceed to prepare the new name of the file, which would be composed using the pattern: `YYYYMMDD_HHMMSS__MONITORING_SITE__UUID`
+
+Once the image file has been prepared, the following will happen:
+
+1. A folder within the workspace sessions will be created; this session folder MUST be created using the name: `YYYYMMDD_HHMMSS__DEVICE`
+2. The image will be safely copied into the generated session folder under the `init/` folder.
+3. Once the image file has been copied, verify that it was copied correctly. If it is, the following outcomes can happen depending on what mode was selected: `drain` or `copy`
+   1. When `drain` mode, the system will remove the original file from the input path once the image file has been copied and verified.
+   2. When `copy` mode, the system will not perform additional operations; the original files located in the input path will be preserved.
+
+Available commands for this feature are:
+
+```bash
+wv ingest sd <PATH> --mode <drain | copy> # automatically reads the .wv/config.json of an SD card
+wv ingest folder <PATH> --device <DEVICE> --monitoring-site <MONITORING_SITE> --mode <drain | copy>
+```
+
+Complete list of available options
+
+| Option           | Value   | Description                                                                                                                                                                   |
+| ---------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| —device          | string  | device                                                                                                                                                                        | The name of the device the image files belong to or where extracted from.                                                                                  |
+| —monitoring-site | string  | monitoring_site                                                                                                                                                               | The name of the monitoring device the images files where taken from.                                                                                       |
+| —mode            | “drain” | “copy”                                                                                                                                                                        | The extraction mode the system would use. `drain` will remove the original files from the source once the process has finished. `copy` will preserve them. |
+| —recursive       | boolean | When `true` it will iterate throught every folder in the given source to find image files, when `false` it will only look for image files at first level of the given source. |
+| —dry-run         | boolean | When `true` the command will no perform write operations, and it will only return the expected operations to be done.                                                         |
+
+### Pipeline
+
+The pipeline feature is probably the most useful and important feature of this project; it basically uses a session (created by the ingestion process) and runs the following processes:
+
+1. **Corruption clean-up**: It iterates inside the `init/` folder of a session, verifies every image file there, and moves into `ignored/corrupted/` the corrupted files. A corrupted file is any file that cannot be loaded, accessed, or opened.
+2. **Overexposed IR clean-up**: Using an algorithm with pre-configured values that can be customised, the process basically analyses the images of the `init/` folder that contains a certain amount of white color, producing bad-quality night-vision images. Those images that are flagged as overexposed will be moved into `ignored/overexposed/`
+3. **Burst-reduction**: The burst reduction step scans a folder of images and identifies sequences of photos that were likely captured as part of the same rapid burst. It first groups images by monitoring site and capture time, treating photos from the same site taken within a configurable time gap as one burst. For each image in a burst, the system computes a perceptual hash to estimate visual similarity and a simple quality score based on sharpness, contrast, and brightness. Images that look alike are grouped together into similarity clusters. Within each cluster, the highest-quality images are kept, and the lower-ranked duplicates are reduced. Reduced images are moved to `ignored/bursts`, while the best images remain in place.
+4. **Auto-detection**: Using the MegaDetector model, images within the `init/` folder are analysed in clusters of configurable sizes; every image would be evaluated and determined if the content of the images belongs to **animal, human, vehicle, empty, or other.** Once evaluated, the image will be moved to `detection/...` based on its detection value. This step is only intended to be used to save time of manual review; it doesn’t determine the exact species; it only provides a way to determine if the image is worth checking.
+
+It’s important to clarify that the pipeline feature is heavily related to sessions, which means you need one to be able to run a pipeline process.
+
+To execute a pipeline, we provide the following commands:
+
+```bash
+wv pipeline run <SESSION_ID> # run the pipeline within a session
+wv pipeline run latest # run the pipeline with the last created session
+wv pipeline run <SESSION_ID> --next # runs the pipeline from the next available stage
+wv pipeline run <SESSION_ID> --until <STAGE> # run the pipeline before reaching the provided stage
 ```
