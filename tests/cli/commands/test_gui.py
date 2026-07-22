@@ -46,3 +46,32 @@ def test_gui_review_rejects_unknown_detection_label(cli_runner, tmp_path: Path):
 
     assert result.exit_code != 0
     assert "Unknown detection label 'bird'" in result.output
+
+
+def test_gui_research_grade_help_lists_pending_only(cli_runner):
+    result = cli_runner.invoke(app, ["gui", "research-grade", "--help"])
+
+    assert result.exit_code == 0
+    assert "--pending-only" in result.output
+
+
+def test_gui_research_grade_launches_application(
+    cli_runner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls: list[tuple[Path, bool]] = []
+
+    monkeypatch.setattr(
+        gui_command,
+        "launch_research_grade_app",
+        lambda session_path, pending_only: calls.append((session_path, pending_only)),
+    )
+
+    result = cli_runner.invoke(
+        app,
+        ["gui", "research-grade", str(tmp_path), "--pending-only"],
+    )
+
+    assert result.exit_code == 0
+    assert calls == [(tmp_path, True)]
