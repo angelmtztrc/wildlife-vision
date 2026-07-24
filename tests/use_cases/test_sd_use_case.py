@@ -4,7 +4,7 @@ import platformdirs
 import pytest
 
 from wv.persistence.repositories import DeploymentRepository
-from wv.persistence.session import session_scope
+from wv.persistence.sql_session import sql_session_scope
 from wv.use_cases.device import DeviceInput, run_create as run_create_device, run_show as run_show_device
 from wv.use_cases.monitoring_site import MonitoringSiteInput, run_create as run_create_monitoring_site
 from wv.use_cases.sd import (
@@ -24,8 +24,8 @@ from wv.workspace.workspace_config import get_workspace_database_path
 
 
 def _list_deployments_for_device(database_path: Path, device_id: str):
-    with session_scope(database_path) as session:
-        return DeploymentRepository(session).list_for_device(device_id)
+    with sql_session_scope(database_path) as sql_session:
+        return DeploymentRepository(sql_session).list_for_device(device_id)
 
 
 @pytest.fixture

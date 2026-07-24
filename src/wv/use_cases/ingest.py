@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session as SqlSession
 
 from wv.core.display import display_file, display_path
 from wv.core.files import copy_file_preserving_metadata, ensure_directory, get_file_id, is_allowed_image_file
@@ -11,7 +11,7 @@ from wv.core.images import get_image_datetime
 from wv.core.logger import get_logger, get_progress
 from wv.core.session import get_init_path, require_session_component
 from wv.persistence.repositories import DeviceRepository, MonitoringSiteRepository
-from wv.persistence.session import session_scope
+from wv.persistence.sql_session import sql_session_scope
 from wv.workspace.workspace_config import require_workspace_database_path, require_workspace_path
 
 logger = get_logger(__name__)
@@ -39,10 +39,10 @@ class IngestResult:
 
 
 def _validate_ingest_identity(
-    session: Session, device_id: str, monitoring_site_id: str
+    sql_session: SqlSession, device_id: str, monitoring_site_id: str
 ) -> None:
-    DeviceRepository(session).get(device_id)
-    MonitoringSiteRepository(session).get(monitoring_site_id)
+    DeviceRepository(sql_session).get(device_id)
+    MonitoringSiteRepository(sql_session).get(monitoring_site_id)
 
 
 def _verify_copy(source_file_id: str, copied_file: Path) -> bool:
@@ -93,9 +93,9 @@ def run(input_data: IngestInput) -> IngestResult:
         raise ValueError(f"Unknown ingest mode: {input_data.mode}")
 
     workspace_path = require_workspace_path()
-    with session_scope(require_workspace_database_path(workspace_path)) as session:
+    with sql_session_scope(require_workspace_database_path(workspace_path)) as sql_session:
         _validate_ingest_identity(
-            session, input_data.device_id, input_data.monitoring_site_id
+            sql_session, input_data.device_id, input_data.monitoring_site_id
         )
 
     ensure_directory(input_data.source)

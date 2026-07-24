@@ -4,15 +4,15 @@ from wv.models import MonitoringSite
 from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
 from wv.persistence.database import initialize_database
 from wv.persistence.repositories import MonitoringSiteRepository
-from wv.persistence.session import session_scope
+from wv.persistence.sql_session import sql_session_scope
 
 
 def test_create_monitoring_site_inserts_row(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
 
-    with session_scope(database_path) as session:
-        repository = MonitoringSiteRepository(session)
+    with sql_session_scope(database_path) as sql_session:
+        repository = MonitoringSiteRepository(sql_session)
         record = repository.create(
             MonitoringSite(
                 id="SITE001",
@@ -26,8 +26,8 @@ def test_create_monitoring_site_inserts_row(tmp_path: Path):
         )
 
     assert record.id == "SITE001"
-    with session_scope(database_path) as session:
-        assert MonitoringSiteRepository(session).get("SITE001") == record
+    with sql_session_scope(database_path) as sql_session:
+        assert MonitoringSiteRepository(sql_session).get("SITE001") == record
 
 
 def test_create_monitoring_site_rejects_duplicate_id(tmp_path: Path):
@@ -35,12 +35,12 @@ def test_create_monitoring_site_rejects_duplicate_id(tmp_path: Path):
     initialize_database(database_path)
     record = MonitoringSite(id="SITE001", name="North Ridge")
 
-    with session_scope(database_path) as session:
-        MonitoringSiteRepository(session).create(record)
+    with sql_session_scope(database_path) as sql_session:
+        MonitoringSiteRepository(sql_session).create(record)
 
-    with session_scope(database_path) as session:
+    with sql_session_scope(database_path) as sql_session:
         try:
-            MonitoringSiteRepository(session).create(record)
+            MonitoringSiteRepository(sql_session).create(record)
         except RecordAlreadyExistsError:
             pass
         else:
@@ -50,13 +50,13 @@ def test_create_monitoring_site_rejects_duplicate_id(tmp_path: Path):
 def test_list_monitoring_sites_returns_rows_ordered_by_id(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
-    with session_scope(database_path) as session:
-        repository = MonitoringSiteRepository(session)
+    with sql_session_scope(database_path) as sql_session:
+        repository = MonitoringSiteRepository(sql_session)
         repository.create(MonitoringSite(id="SITE002", name="Beta"))
         repository.create(MonitoringSite(id="SITE001", name="Alpha"))
 
-    with session_scope(database_path) as session:
-        result = MonitoringSiteRepository(session).list()
+    with sql_session_scope(database_path) as sql_session:
+        result = MonitoringSiteRepository(sql_session).list()
 
     assert [site.id for site in result] == ["SITE001", "SITE002"]
 
@@ -65,9 +65,9 @@ def test_get_monitoring_site_rejects_missing_id(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
 
-    with session_scope(database_path) as session:
+    with sql_session_scope(database_path) as sql_session:
         try:
-            MonitoringSiteRepository(session).get("MISSING")
+            MonitoringSiteRepository(sql_session).get("MISSING")
         except RecordNotFoundError:
             pass
         else:
@@ -77,8 +77,8 @@ def test_get_monitoring_site_rejects_missing_id(tmp_path: Path):
 def test_update_monitoring_site_changes_only_provided_fields(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
-    with session_scope(database_path) as session:
-        repository = MonitoringSiteRepository(session)
+    with sql_session_scope(database_path) as sql_session:
+        repository = MonitoringSiteRepository(sql_session)
         repository.create(
             MonitoringSite(
                 id="SITE001",
@@ -91,8 +91,8 @@ def test_update_monitoring_site_changes_only_provided_fields(tmp_path: Path):
             )
         )
 
-    with session_scope(database_path) as session:
-        result = MonitoringSiteRepository(session).update(
+    with sql_session_scope(database_path) as sql_session:
+        result = MonitoringSiteRepository(sql_session).update(
             "SITE001",
             {"name": "South Ridge", "notes": "Updated notes"},
         )
@@ -112,9 +112,9 @@ def test_update_monitoring_site_rejects_missing_id(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
 
-    with session_scope(database_path) as session:
+    with sql_session_scope(database_path) as sql_session:
         try:
-            MonitoringSiteRepository(session).update("MISSING", {"name": "Updated"})
+            MonitoringSiteRepository(sql_session).update("MISSING", {"name": "Updated"})
         except RecordNotFoundError:
             pass
         else:

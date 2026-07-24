@@ -12,7 +12,7 @@ from wv.persistence.repositories import (
     DeviceRepository,
     MonitoringSiteRepository,
 )
-from wv.persistence.session import session_scope
+from wv.persistence.sql_session import sql_session_scope
 from wv.workspace.workspace_config import require_workspace_database_path
 
 
@@ -196,10 +196,10 @@ def run_init(input_data: SdInitInput) -> SdCommandResult:
 
     _write_sd_config(config_path, config)
 
-    with session_scope(database_path) as session:
-        device_repository = DeviceRepository(session)
-        monitoring_site_repository = MonitoringSiteRepository(session)
-        deployment_repository = DeploymentRepository(session)
+    with sql_session_scope(database_path) as sql_session:
+        device_repository = DeviceRepository(sql_session)
+        monitoring_site_repository = MonitoringSiteRepository(sql_session)
+        deployment_repository = DeploymentRepository(sql_session)
         device = _get_existing_device(device_repository, input_data.device_id)
         _validate_monitoring_site_exists(
             monitoring_site_repository, input_data.monitoring_site_id
@@ -254,10 +254,10 @@ def run_update(input_data: SdUpdateInput) -> SdCommandResult:
         updated_at=timestamp,
     )
 
-    with session_scope(database_path) as session:
-        device_repository = DeviceRepository(session)
-        monitoring_site_repository = MonitoringSiteRepository(session)
-        deployment_repository = DeploymentRepository(session)
+    with sql_session_scope(database_path) as sql_session:
+        device_repository = DeviceRepository(sql_session)
+        monitoring_site_repository = MonitoringSiteRepository(sql_session)
+        deployment_repository = DeploymentRepository(sql_session)
         next_device = _get_existing_device(device_repository, next_device_id)
         _validate_monitoring_site_exists(
             monitoring_site_repository, next_monitoring_site_id
@@ -298,9 +298,9 @@ def run_clear(input_data: SdClearInput) -> SdClearResult:
     config_path = _get_sd_config_path(sd_path)
     config = _load_sd_config(config_path)
 
-    with session_scope(database_path) as session:
+    with sql_session_scope(database_path) as sql_session:
         _clear_assignment_if_matches(
-            DeviceRepository(session),
+            DeviceRepository(sql_session),
             config.device_id,
             config.monitoring_site_id,
         )

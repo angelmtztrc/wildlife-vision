@@ -4,7 +4,7 @@ from alembic import command
 from alembic.config import Config
 
 from wv.persistence.alembic import get_alembic_directory
-from wv.persistence.session import build_database_url
+from wv.persistence.sql_session import build_database_url
 
 
 def initialize_database(database_path: Path) -> Path:

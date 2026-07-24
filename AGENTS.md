@@ -38,9 +38,9 @@ When you're giving the order to define a plan, always ask for whatever informati
 - Use `SQLAlchemy` ORM models only for database persistence concerns.
 - Keep ORM entities inside `src/wv/persistence/models/`; they must not leak into CLI or use-case layers.
 - Use class-based repositories in `src/wv/persistence/repositories/` for database access.
-- Repositories must accept a `SQLAlchemy Session` and return application dataclasses, not ORM entities.
-- Use `SQLAlchemy Session` as the transaction and unit-of-work boundary.
-- Top-level use cases should own the session lifecycle for their work; repositories should never create their own sessions.
+- Repositories must accept a `SqlSession` (the local name for SQLAlchemy's `Session`) and return application dataclasses, not ORM entities.
+- Use `SqlSession` as the transaction and unit-of-work boundary.
+- Top-level use cases should own the SQL session lifecycle for their work; repositories should never create their own SQL sessions.
 - Do not use raw `sqlite3` for application persistence. Prefer the shared SQLAlchemy persistence stack.
 
 ## Data Boundaries
@@ -62,7 +62,7 @@ When you're giving the order to define a plan, always ask for whatever informati
 - Preserve clear separation:
   - CLI -> use cases
   - use cases -> repositories
-  - repositories -> SQLAlchemy models/session
+  - repositories -> SQLAlchemy models/SqlSession
 - Avoid leaking ORM behavior into business logic.
 - When adding persistence-backed features, first check whether an existing repository or domain dataclass should be extended instead of creating parallel patterns.
 

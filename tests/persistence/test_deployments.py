@@ -3,15 +3,15 @@ from pathlib import Path
 from wv.models import Deployment
 from wv.persistence.database import initialize_database
 from wv.persistence.repositories import DeploymentRepository
-from wv.persistence.session import session_scope
+from wv.persistence.sql_session import sql_session_scope
 
 
 def test_create_and_list_deployments_for_device(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
 
-    with session_scope(database_path) as session:
-        repository = DeploymentRepository(session)
+    with sql_session_scope(database_path) as sql_session:
+        repository = DeploymentRepository(sql_session)
         first = repository.create(
             Deployment(
                 id="dep-1",
@@ -33,16 +33,16 @@ def test_create_and_list_deployments_for_device(tmp_path: Path):
             )
         )
 
-    with session_scope(database_path) as session:
-        assert DeploymentRepository(session).list_for_device("HNT001") == [first, second]
+    with sql_session_scope(database_path) as sql_session:
+        assert DeploymentRepository(sql_session).list_for_device("HNT001") == [first, second]
 
 
 def test_list_deployments_for_sd_card_filters_by_path(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
 
-    with session_scope(database_path) as session:
-        repository = DeploymentRepository(session)
+    with sql_session_scope(database_path) as sql_session:
+        repository = DeploymentRepository(sql_session)
         repository.create(
             Deployment(
                 id="dep-1",
@@ -64,5 +64,5 @@ def test_list_deployments_for_sd_card_filters_by_path(tmp_path: Path):
             )
         )
 
-    with session_scope(database_path) as session:
-        assert DeploymentRepository(session).list_for_sd_card("/Volumes/SD2") == [matching]
+    with sql_session_scope(database_path) as sql_session:
+        assert DeploymentRepository(sql_session).list_for_sd_card("/Volumes/SD2") == [matching]

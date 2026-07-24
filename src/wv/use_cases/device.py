@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from wv.models import Device
 from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
 from wv.persistence.repositories import DeviceRepository
-from wv.persistence.session import session_scope
+from wv.persistence.sql_session import sql_session_scope
 from wv.workspace.common import WorkspaceError
 from wv.workspace.workspace_config import require_workspace_database_path
 
@@ -26,8 +26,8 @@ class DeviceUpdateInput:
 
 
 def run_create(input_data: DeviceInput) -> Device:
-    with session_scope(require_workspace_database_path()) as session:
-        return DeviceRepository(session).create(
+    with sql_session_scope(require_workspace_database_path()) as sql_session:
+        return DeviceRepository(sql_session).create(
             Device(
                 id=input_data.id,
                 name=input_data.name,
@@ -39,13 +39,13 @@ def run_create(input_data: DeviceInput) -> Device:
 
 
 def run_list() -> list[Device]:
-    with session_scope(require_workspace_database_path()) as session:
-        return DeviceRepository(session).list()
+    with sql_session_scope(require_workspace_database_path()) as sql_session:
+        return DeviceRepository(sql_session).list()
 
 
 def run_show(device_id: str) -> Device:
-    with session_scope(require_workspace_database_path()) as session:
-        return DeviceRepository(session).get(device_id)
+    with sql_session_scope(require_workspace_database_path()) as sql_session:
+        return DeviceRepository(sql_session).get(device_id)
 
 
 def run_update(input_data: DeviceUpdateInput) -> Device:
@@ -63,8 +63,8 @@ def run_update(input_data: DeviceUpdateInput) -> Device:
     if not updates:
         raise WorkspaceError("At least one field must be provided for update.")
 
-    with session_scope(require_workspace_database_path()) as session:
-        return DeviceRepository(session).update(input_data.id, updates)
+    with sql_session_scope(require_workspace_database_path()) as sql_session:
+        return DeviceRepository(sql_session).update(input_data.id, updates)
 
 
 __all__ = [

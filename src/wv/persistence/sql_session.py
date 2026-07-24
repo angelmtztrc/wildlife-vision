@@ -4,7 +4,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session as SqlSession
+from sqlalchemy.orm import sessionmaker
 
 
 def build_database_url(database_path: Path) -> str:
@@ -20,18 +21,18 @@ def get_engine(database_path: Path) -> Engine:
     return _get_engine(build_database_url(database_path))
 
 
-def get_session_factory(database_path: Path) -> sessionmaker[Session]:
+def get_sql_session_factory(database_path: Path) -> sessionmaker[SqlSession]:
     return sessionmaker(bind=get_engine(database_path), expire_on_commit=False)
 
 
 @contextmanager
-def session_scope(database_path: Path) -> Iterator[Session]:
-    session = get_session_factory(database_path)()
+def sql_session_scope(database_path: Path) -> Iterator[SqlSession]:
+    sql_session = get_sql_session_factory(database_path)()
     try:
-        yield session
-        session.commit()
+        yield sql_session
+        sql_session.commit()
     except Exception:
-        session.rollback()
+        sql_session.rollback()
         raise
     finally:
-        session.close()
+        sql_session.close()

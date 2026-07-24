@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from wv.models import MonitoringSite
 from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
 from wv.persistence.repositories import MonitoringSiteRepository
-from wv.persistence.session import session_scope
+from wv.persistence.sql_session import sql_session_scope
 from wv.workspace.common import WorkspaceError
 from wv.workspace.workspace_config import require_workspace_database_path
 
@@ -30,8 +30,8 @@ class MonitoringSiteUpdateInput:
 
 
 def run_create(input_data: MonitoringSiteInput) -> MonitoringSite:
-    with session_scope(require_workspace_database_path()) as session:
-        return MonitoringSiteRepository(session).create(
+    with sql_session_scope(require_workspace_database_path()) as sql_session:
+        return MonitoringSiteRepository(sql_session).create(
             MonitoringSite(
                 id=input_data.id,
                 name=input_data.name,
@@ -45,13 +45,13 @@ def run_create(input_data: MonitoringSiteInput) -> MonitoringSite:
 
 
 def run_list() -> list[MonitoringSite]:
-    with session_scope(require_workspace_database_path()) as session:
-        return MonitoringSiteRepository(session).list()
+    with sql_session_scope(require_workspace_database_path()) as sql_session:
+        return MonitoringSiteRepository(sql_session).list()
 
 
 def run_show(site_id: str) -> MonitoringSite:
-    with session_scope(require_workspace_database_path()) as session:
-        return MonitoringSiteRepository(session).get(site_id)
+    with sql_session_scope(require_workspace_database_path()) as sql_session:
+        return MonitoringSiteRepository(sql_session).get(site_id)
 
 
 def run_update(input_data: MonitoringSiteUpdateInput) -> MonitoringSite:
@@ -71,8 +71,8 @@ def run_update(input_data: MonitoringSiteUpdateInput) -> MonitoringSite:
     if not updates:
         raise WorkspaceError("At least one field must be provided for update.")
 
-    with session_scope(require_workspace_database_path()) as session:
-        return MonitoringSiteRepository(session).update(input_data.id, updates)
+    with sql_session_scope(require_workspace_database_path()) as sql_session:
+        return MonitoringSiteRepository(sql_session).update(input_data.id, updates)
 
 
 __all__ = [

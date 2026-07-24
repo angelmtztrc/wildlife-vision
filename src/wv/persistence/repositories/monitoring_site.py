@@ -1,6 +1,6 @@
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session as SqlSession
 
 from wv.models import MonitoringSite
 from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
@@ -8,8 +8,8 @@ from wv.persistence.models.monitoring_site import MonitoringSiteModel
 
 
 class MonitoringSiteRepository:
-    def __init__(self, session: Session):
-        self.session = session
+    def __init__(self, sql_session: SqlSession):
+        self.sql_session = sql_session
 
     def create(self, monitoring_site: MonitoringSite) -> MonitoringSite:
         model = MonitoringSiteModel(
@@ -21,12 +21,12 @@ class MonitoringSiteRepository:
             elevation=monitoring_site.elevation,
             notes=monitoring_site.notes,
         )
-        self.session.add(model)
+        self.sql_session.add(model)
 
         try:
-            self.session.flush()
+            self.sql_session.flush()
         except IntegrityError as exc:
-            self.session.rollback()
+            self.sql_session.rollback()
             raise RecordAlreadyExistsError(
                 f"Monitoring site already exists: {monitoring_site.id}"
             ) from exc
@@ -34,13 +34,13 @@ class MonitoringSiteRepository:
         return _model_to_monitoring_site(model)
 
     def list(self) -> list[MonitoringSite]:
-        models = self.session.scalars(
+        models = self.sql_session.scalars(
             select(MonitoringSiteModel).order_by(MonitoringSiteModel.id)
         ).all()
         return [_model_to_monitoring_site(model) for model in models]
 
     def get(self, site_id: str) -> MonitoringSite:
-        model = self.session.get(MonitoringSiteModel, site_id)
+        model = self.sql_session.get(MonitoringSiteModel, site_id)
         if model is None:
             raise RecordNotFoundError(f"Monitoring site not found: {site_id}")
         return _model_to_monitoring_site(model)
@@ -48,14 +48,14 @@ class MonitoringSiteRepository:
     def update(
         self, site_id: str, updates: dict[str, str | float | None]
     ) -> MonitoringSite:
-        model = self.session.get(MonitoringSiteModel, site_id)
+        model = self.sql_session.get(MonitoringSiteModel, site_id)
         if model is None:
             raise RecordNotFoundError(f"Monitoring site not found: {site_id}")
 
         for column, value in updates.items():
             setattr(model, column, value)
 
-        self.session.flush()
+        self.sql_session.flush()
         return _model_to_monitoring_site(model)
 
 
