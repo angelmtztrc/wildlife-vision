@@ -3,6 +3,8 @@ from pathlib import Path
 import piexif
 from PIL import ExifTags, Image
 
+from wv.core.files import is_allowed_image_file
+
 
 def read_exif(file_path: Path, metadata_tag: str) -> str | None:
     """Read one EXIF metadata value from an image file.
@@ -57,22 +59,23 @@ def write_exif_image_description(file_path: Path, data: str) -> None:
     """Write text to an image's EXIF ``ImageDescription`` tag in place.
 
     Args:
-        file_path: Path to the image file.
+        file_path: Path to a JPEG image file.
         data: Description text to encode as UTF-8.
 
     Raises:
+        ValueError: If ``file_path`` is not a supported JPEG image.
         OSError: If the image cannot be read or written.
 
     Notes:
-        The image is re-saved at the same path with updated EXIF data.
+        The EXIF container is updated without decoding or re-encoding JPEG
+        pixel data.
     """
-    with Image.open(file_path) as image:
-        exif_bytes = image.info.get("exif")
-        if exif_bytes:
-            exif_dict = piexif.load(exif_bytes)
-        else:
-            exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+    if not is_allowed_image_file(file_path):
+        raise ValueError(
+            f"Writing EXIF ImageDescription is supported only for JPEG files: {file_path}"
+        )
 
-        exif_dict["0th"][piexif.ImageIFD.ImageDescription] = data.encode("utf-8")
-        image.save(file_path, exif=piexif.dump(exif_dict))
+    exif_dict = piexif.load(str(file_path))
+    exif_dict["0th"][piexif.ImageIFD.ImageDescription] = data.encode("utf-8")
+    piexif.insert(piexif.dump(exif_dict), str(file_path))
 """Best-effort EXIF reading and writing helpers."""

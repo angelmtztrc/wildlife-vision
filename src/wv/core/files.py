@@ -5,7 +5,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-allowed_image_exts = {".jpg", ".jpeg", ".png", ".heic"}
+allowed_image_exts = {".jpg", ".jpeg"}
 
 
 def is_allowed_image_file(file_path: Path) -> bool:

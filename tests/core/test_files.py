@@ -16,8 +16,8 @@ from wv.core.files import (
     [
         ("photo.jpg", True),
         ("photo.JPEG", True),
-        ("photo.PNG", True),
-        ("photo.HeIc", True),
+        ("photo.PNG", False),
+        ("photo.HeIc", False),
         ("photo.gif", False),
         ("photo", False),
     ],

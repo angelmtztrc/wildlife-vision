@@ -167,6 +167,32 @@ def test_run_does_not_move_or_write_in_dry_run(make_image, tmp_path: Path, monke
     assert read_exif(image_path, "ImageDescription") is None
 
 
+def test_run_ignores_unsupported_image_formats(make_image, tmp_path: Path, monkeypatch):
+    source = tmp_path / "source"
+    output = tmp_path / "output"
+    source.mkdir()
+    jpeg_path = make_image(source / "animal.jpg")
+    png_path = make_image(source / "ignored.png")
+    heic_path = source / "ignored.heic"
+    heic_path.write_bytes(b"not a JPEG")
+
+    def evaluate_jpeg_only(model, image_paths, confidence_threshold, batch_size):
+        assert image_paths == [jpeg_path]
+        return [_result_for(jpeg_path, [MlDetection(label="animal", confidence=0.91)])]
+
+    monkeypatch.setattr(content, "evaluate_images", evaluate_jpeg_only)
+
+    result = run(DetectContentInput(source=source, output=output))
+
+    assert result.files_discovered == 3
+    assert result.files_ignored == 2
+    assert result.files_moved == 1
+    assert result.files_failed == 0
+    assert (output / "detection" / "animal" / "animal.jpg").exists()
+    assert png_path.exists()
+    assert heic_path.exists()
+
+
 def test_run_counts_metadata_write_failures_and_leaves_file_in_place(
     make_image,
     tmp_path: Path,
