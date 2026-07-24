@@ -6,8 +6,8 @@ from wv.core.exif import read_exif
 from wv.core.files import copy_file_preserving_metadata, ensure_directory, is_allowed_image_file
 from wv.core.logger import get_logger, get_progress
 from wv.core.metadata import parse_image_description
+from wv.core.session import get_detection_path
 
-ANIMAL_DETECTION_LABEL = "animal"
 RESEARCH_GRADE_TRUE = "true"
 
 logger = get_logger(__name__)
@@ -33,7 +33,7 @@ class ExportResearchGradeResult:
 
 
 def _animal_detection_directory(session_path: Path) -> Path:
-    return session_path / "detection" / ANIMAL_DETECTION_LABEL
+    return get_detection_path(session_path, "animal")
 
 
 def _default_output_directory(session_path: Path) -> Path:

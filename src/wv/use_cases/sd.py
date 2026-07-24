@@ -13,9 +13,7 @@ from wv.persistence.repositories import (
     MonitoringSiteRepository,
 )
 from wv.persistence.session import session_scope
-from wv.workspace.common import WorkspaceError
-from wv.workspace.config import get_workspace_path
-from wv.workspace.workspace_config import get_workspace_database_path
+from wv.workspace.workspace_config import require_workspace_database_path
 
 
 class SdError(ValueError):
@@ -63,18 +61,6 @@ class SdClearResult:
     cleared_device_id: str
 
 
-def _get_database_path() -> Path:
-    workspace_path = get_workspace_path()
-    if workspace_path is None:
-        raise WorkspaceError("No workspace configured.")
-
-    database_path = get_workspace_database_path(workspace_path)
-    if not database_path.is_file():
-        raise WorkspaceError(f"Workspace database file not found: {database_path}")
-
-    return database_path
-
-
 def _resolve_sd_path(path: Path) -> Path:
     resolved_path = path.expanduser().resolve()
     if not resolved_path.exists():
@@ -114,6 +100,11 @@ def _load_sd_config(config_path: Path) -> SdConfigRecord:
         created_at=value["created_at"],
         updated_at=value["updated_at"],
     )
+
+
+def read_config(path: Path) -> SdConfigRecord:
+    sd_path = _resolve_sd_path(path)
+    return _load_sd_config(_get_sd_config_path(sd_path))
 
 
 def _write_sd_config(config_path: Path, config: SdConfigRecord) -> Path:
@@ -186,7 +177,7 @@ def _record_deployment(
 
 
 def run_init(input_data: SdInitInput) -> SdCommandResult:
-    database_path = _get_database_path()
+    database_path = require_workspace_database_path()
     sd_path = _resolve_sd_path(input_data.path)
     config_path = _get_sd_config_path(sd_path)
 
@@ -237,12 +228,12 @@ def run_init(input_data: SdInitInput) -> SdCommandResult:
 def run_show(path: Path) -> SdCommandResult:
     sd_path = _resolve_sd_path(path)
     config_path = _get_sd_config_path(sd_path)
-    config = _load_sd_config(config_path)
+    config = read_config(sd_path)
     return SdCommandResult(path=sd_path, config_path=config_path, config=config)
 
 
 def run_update(input_data: SdUpdateInput) -> SdCommandResult:
-    database_path = _get_database_path()
+    database_path = require_workspace_database_path()
     sd_path = _resolve_sd_path(input_data.path)
     config_path = _get_sd_config_path(sd_path)
     current_config = _load_sd_config(config_path)
@@ -302,7 +293,7 @@ def run_update(input_data: SdUpdateInput) -> SdCommandResult:
 
 
 def run_clear(input_data: SdClearInput) -> SdClearResult:
-    database_path = _get_database_path()
+    database_path = require_workspace_database_path()
     sd_path = _resolve_sd_path(input_data.path)
     config_path = _get_sd_config_path(sd_path)
     config = _load_sd_config(config_path)

@@ -12,16 +12,29 @@ def get_workspace_metadata_dir(workspace_path: Path) -> Path:
     return workspace_path / WORKSPACE_METADATA_DIRNAME
 
 
-def get_workspace_config_path() -> Path:
+def require_workspace_path() -> Path:
     workspace_path = get_workspace_path()
     if workspace_path is None:
         raise WorkspaceError("No workspace configured.")
+    if not workspace_path.is_dir():
+        raise WorkspaceError(f"Workspace path does not exist: {workspace_path}")
+    return workspace_path
 
-    return get_workspace_metadata_dir(workspace_path) / WORKSPACE_CONFIG_NAME
+
+def get_workspace_config_path() -> Path:
+    return get_workspace_metadata_dir(require_workspace_path()) / WORKSPACE_CONFIG_NAME
 
 
 def get_workspace_database_path(workspace_path: Path) -> Path:
     return get_workspace_metadata_dir(workspace_path) / WORKSPACE_DATABASE_NAME
+
+
+def require_workspace_database_path(workspace_path: Path | None = None) -> Path:
+    active_workspace_path = workspace_path or require_workspace_path()
+    database_path = get_workspace_database_path(active_workspace_path)
+    if not database_path.is_file():
+        raise WorkspaceError(f"Workspace database file not found: {database_path}")
+    return database_path
 
 
 def load_workspace_config(config_file: Path | None = None) -> dict[str, Any]:

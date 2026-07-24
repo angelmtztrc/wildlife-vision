@@ -16,21 +16,21 @@ def test_pipeline_preprocess_prints_summary_for_success(
     monkeypatch: pytest.MonkeyPatch,
 ):
     session_path = tmp_path / "20260707_101530__Camera_01"
-    initial_path = session_path / "initial"
-    initial_path.mkdir(parents=True)
+    init_path = session_path / "init"
+    init_path.mkdir(parents=True)
 
     monkeypatch.setattr(
         pipeline,
         "run_pipeline_preprocess",
         lambda input_data: PipelinePreprocessResult(
             session_path=session_path,
-            initial_path=initial_path,
+            init_path=init_path,
             corrupted_result=CleanCorruptedResult(files_corrupted=1, destination=session_path / "ignored" / "corrupted"),
             overexposed_result=CleanOverexposedIrResult(files_overexposed=2, destination=session_path / "ignored" / "overexposed"),
             bursts_result=CleanBurstsResult(files_reduced=3, destination=session_path / "ignored" / "bursts"),
             detect_result=DetectContentResult(files_evaluated=4, files_moved=4, destination=session_path / "detection"),
             files_failed=0,
-            files_remaining_in_initial=1,
+            files_remaining_in_init=1,
             dry_run=True,
         ),
     )
@@ -51,7 +51,7 @@ def test_pipeline_preprocess_prints_summary_for_success(
     assert "evaluated=4" in result.output
     assert "moved=4" in result.output
     assert "failed=0" in result.output
-    assert "remaining_in_initial=1" in result.output
+    assert "remaining_in_init=1" in result.output
     assert "(dry run)" in result.output
 
 
@@ -61,21 +61,21 @@ def test_pipeline_preprocess_exits_with_code_one_when_use_case_reports_failures(
     monkeypatch: pytest.MonkeyPatch,
 ):
     session_path = tmp_path / "20260707_101530__Camera_01"
-    initial_path = session_path / "initial"
-    initial_path.mkdir(parents=True)
+    init_path = session_path / "init"
+    init_path.mkdir(parents=True)
 
     monkeypatch.setattr(
         pipeline,
         "run_pipeline_preprocess",
         lambda input_data: PipelinePreprocessResult(
             session_path=session_path,
-            initial_path=initial_path,
+            init_path=init_path,
             corrupted_result=CleanCorruptedResult(destination=session_path / "ignored" / "corrupted"),
             overexposed_result=CleanOverexposedIrResult(destination=session_path / "ignored" / "overexposed"),
             bursts_result=CleanBurstsResult(destination=session_path / "ignored" / "bursts"),
             detect_result=DetectContentResult(destination=session_path / "detection"),
             files_failed=1,
-            files_remaining_in_initial=2,
+            files_remaining_in_init=2,
             dry_run=False,
         ),
     )

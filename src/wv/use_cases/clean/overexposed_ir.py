@@ -7,6 +7,7 @@ from PIL import Image, ImageStat
 from wv.core.display import display_file, display_path
 from wv.core.files import ensure_directory, is_allowed_image_file
 from wv.core.logger import get_logger, get_progress
+from wv.core.session import get_ignored_overexposed_path
 
 logger = get_logger(__name__)
 
@@ -83,7 +84,7 @@ def _is_overexposed(
 
 
 def run(input_data: CleanOverexposedIrInput) -> CleanOverexposedIrResult:
-    destination = input_data.output / "ignored" / "overexposed"
+    destination = get_ignored_overexposed_path(input_data.output)
     result = CleanOverexposedIrResult(
         destination=destination, dry_run=input_data.dry_run
     )

@@ -9,13 +9,13 @@ allowed_image_exts = {".jpg", ".jpeg", ".png", ".heic"}
 
 
 def is_allowed_image_file(file_path: Path) -> bool:
-    """Return whether ``path`` has an allowed image file extension.
+    """Return whether a file path has a supported image extension.
 
     Args:
         file_path: File path to validate.
 
     Returns:
-        ``True`` if ``path`` has an extension listed in
+        ``True`` when the suffix, compared case-insensitively, is listed in
         ``allowed_image_exts``. Otherwise, ``False``.
     """
     return file_path.suffix.lower() in allowed_image_exts
@@ -39,7 +39,21 @@ def ensure_directory(path: Path) -> None:
 
 
 def get_file_id(file_path: Path) -> str:
-    """Return a stable 6-character file ID derived from file content."""
+    """Return a stable six-character ID derived from file content.
+
+    The ID is the first six Base32 characters of a 20-byte Blake2b digest. It
+    is intended for concise ingest filenames, not as a collision-proof file
+    identity.
+
+    Args:
+        file_path: File whose bytes will be hashed.
+
+    Returns:
+        An uppercase six-character Base32 identifier.
+
+    Raises:
+        OSError: If the file cannot be opened or read.
+    """
     hasher = hashlib.blake2b(digest_size=20)
 
     with file_path.open("rb") as file_handle:
@@ -57,7 +71,10 @@ def parse_ingested_image_filename(file_path: Path) -> dict[str, str] | None:
 
     Returns:
         A dictionary with ``captured_at``, ``monitoring_site``, and ``file_id``
-        when the stem matches the ingest naming convention. Otherwise, ``None``.
+        when the stem matches the strict ingest naming convention. Otherwise,
+        ``None``. The timestamp must be valid, the monitoring site must contain
+        uppercase letters, digits, or underscores, and the file ID must be a
+        six-character Base32 value.
     """
     match = re.fullmatch(
         r"(?P<captured_at>\d{8}_\d{6})__(?P<monitoring_site>[A-Z0-9_]+)__(?P<file_id>[A-Z2-7]{6})",
@@ -112,3 +129,4 @@ def copy_file_preserving_metadata(source: Path, destination: Path) -> Path:
     shutil.copy2(source, destination)
 
     return destination
+"""Shared filesystem helpers for image ingestion and processing."""

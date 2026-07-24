@@ -6,8 +6,9 @@ from uuid import uuid4
 from wv.core.exif import read_exif, write_exif_image_description
 from wv.core.files import ensure_directory, is_allowed_image_file
 from wv.core.metadata import parse_image_description, upsert_image_description_properties
+from wv.core.session import DETECTION_LABELS, get_detection_path
 
-REVIEW_LABELS = ("animal", "human", "vehicle", "empty", "other")
+REVIEW_LABELS = DETECTION_LABELS
 
 
 @dataclass
@@ -82,7 +83,7 @@ def _is_reviewed(file_path: Path) -> bool:
 
 
 def _detection_directory(session_path: Path, detection_label: str) -> Path:
-    return session_path / "detection" / detection_label
+    return get_detection_path(session_path, detection_label)
 
 
 def _move_source_to_destination(source: Path, destination: Path) -> tuple[bool, bool]:

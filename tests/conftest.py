@@ -4,12 +4,19 @@ from datetime import datetime
 from pathlib import Path
 
 import piexif
+import platformdirs
 import pytest
 from PIL import Image
 from typer.testing import CliRunner
 
 import wv.config as config
 from wv.core.logger import reset_logging
+from wv.use_cases.device import DeviceInput, run_create as run_create_device
+from wv.use_cases.monitoring_site import (
+    MonitoringSiteInput,
+    run_create as run_create_monitoring_site,
+)
+from wv.use_cases.workspace import WorkspaceInitInput, run_init as run_workspace_init
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +33,18 @@ def clear_config_caches():
 @pytest.fixture
 def cli_runner() -> CliRunner:
     return CliRunner()
+
+
+@pytest.fixture
+def configured_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    run_workspace_init(WorkspaceInitInput(path=workspace_path))
+    run_create_device(DeviceInput(id="HNT001", name="North Camera"))
+    run_create_monitoring_site(MonitoringSiteInput(id="SITE001", name="North Ridge"))
+    return workspace_path
 
 
 @pytest.fixture

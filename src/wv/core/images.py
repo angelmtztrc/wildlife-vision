@@ -5,14 +5,18 @@ from wv.core.exif import read_exif
 
 
 def get_image_datetime(file_path: Path) -> datetime:
-    """Return the image datetime from EXIF metadata or file modification time.
+    """Return an image capture datetime from EXIF metadata or modification time.
 
     Args:
-        path: Path to the image file.
+        file_path: Path to the image file.
 
     Returns:
-        The datetime read from the image EXIF metadata. If no supported EXIF
-        datetime is available, returns the file's last modified datetime.
+        A naive datetime from ``DateTimeOriginal`` first, then ``DateTime``.
+        If neither contains a valid ``YYYY:MM:DD HH:MM:SS`` value, returns the
+        local datetime represented by the file's modification timestamp.
+
+    Raises:
+        OSError: If the modification time cannot be read after EXIF fallback.
     """
     for metadata_tag in ("DateTimeOriginal", "DateTime"):
         value = read_exif(file_path, metadata_tag)
@@ -23,3 +27,4 @@ def get_image_datetime(file_path: Path) -> datetime:
                 pass
 
     return datetime.fromtimestamp(file_path.stat().st_mtime)
+"""Image metadata helpers shared by ingest and cleanup workflows."""

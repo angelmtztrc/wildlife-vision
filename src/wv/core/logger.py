@@ -53,7 +53,7 @@ _quiet_library_loggers = ("PIL", "megadetector")
 
 
 class FullBlockProgressBar(ProgressBar):
-    """Render a thicker-looking single-line progress bar with full block glyphs."""
+    """Internal Rich progress bar that renders full-block glyphs."""
 
     def __rich_console__(self, console, options):
         width = min(self.width or options.max_width, options.max_width)
@@ -91,6 +91,8 @@ class FullBlockProgressBar(ProgressBar):
 
 
 class FullBlockBarColumn(BarColumn):
+    """Internal Rich column that creates ``FullBlockProgressBar`` instances."""
+
     def render(self, task: Task) -> ProgressBar:
         return FullBlockProgressBar(
             total=max(0, task.total) if task.total is not None else None,
@@ -106,10 +108,14 @@ class FullBlockBarColumn(BarColumn):
 
 
 def set_verbose(verbose: bool) -> None:
-    """Enable/disable DEBUG messages globally, for every logger created via get_logger.
+    """Set the global verbosity for every logger created by this module.
 
-    Call this once at startup, e.g. after parsing a --verbose CLI flag:
-        set_verbose(args.verbose)
+    Args:
+        verbose: Whether managed loggers should emit ``DEBUG`` records.
+
+    Notes:
+        This mutates process-wide logger state. Call it during application
+        startup after parsing the root CLI verbosity option.
     """
     global _verbose
     _verbose = verbose
@@ -119,7 +125,12 @@ def set_verbose(verbose: bool) -> None:
 
 
 def reset_logging() -> None:
-    """Reset logger state managed by this module back to its startup defaults."""
+    """Reset logging state managed by this module to startup defaults.
+
+    Resets managed logger levels and propagation, quiet-library logger levels,
+    warning filters, and global verbosity. This is intended for test fixtures
+    and process-reset support rather than normal command execution.
+    """
     global _verbose
 
     _verbose = False
@@ -135,13 +146,15 @@ def reset_logging() -> None:
 
 
 class CustomFormatter(logging.Formatter):
-    """Formats log records as: HH:MM:SS.sss [LEVEL] Scope: Message"""
+    """Internal formatter that returns only the rendered log message."""
 
     def format(self, record: logging.LogRecord) -> str:
         return record.getMessage()
 
 
 class ConsoleLogHandler(logging.Handler):
+    """Internal Rich handler that applies timestamps, levels, and tracebacks."""
+
     def emit(self, record: logging.LogRecord) -> None:
         try:
             message = self.format(record)
@@ -180,10 +193,19 @@ class ConsoleLogHandler(logging.Handler):
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Create (or reuse) a logger with the Rich-powered format above.
+    """Create or reuse a Rich-backed logger managed by this module.
 
-    'name' is used as the Scope in the log output, e.g. get_logger("Database")
-    Its level is controlled globally by set_verbose().
+    Args:
+        name: Logger name used as the verbose-mode output scope.
+
+    Returns:
+        A non-propagating logger with one Rich console handler. Its level tracks
+        the current global verbosity and it has a dynamically attached
+        ``logger.done(...)`` method for completion messages.
+
+    Notes:
+        The dynamic ``done`` method is available at runtime but is not declared
+        on ``logging.Logger`` for static type checkers.
     """
     logger = logging.getLogger(name)
 
@@ -202,6 +224,16 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def configure_external_output(verbose: bool) -> None:
+    """Configure third-party logger levels and warning filtering.
+
+    Args:
+        verbose: Whether managed third-party libraries should emit ``DEBUG``
+            records instead of being limited to warnings.
+
+    Notes:
+        This mutates process-wide logger levels and warning filters for PIL and
+        MegaDetector. Call it during application startup.
+    """
     library_log_level = logging.DEBUG if verbose else logging.WARNING
 
     for logger_name in _quiet_library_loggers:
@@ -214,6 +246,20 @@ def configure_external_output(verbose: bool) -> None:
 
 @contextmanager
 def capture_external_output(logger: logging.Logger, scope: str):
+    """Capture stdout and stderr from a block and log them in verbose mode.
+
+    Args:
+        logger: Managed logger that receives captured output at ``DEBUG`` level.
+        scope: Description included with captured output messages.
+
+    Yields:
+        Control to the wrapped block while process stdout and stderr are
+        redirected to in-memory buffers.
+
+    Notes:
+        Redirection is process-global for the duration of the context. Captured
+        output is discarded unless global verbose logging is enabled.
+    """
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
 
@@ -234,9 +280,14 @@ def capture_external_output(logger: logging.Logger, scope: str):
 
 
 def get_progress() -> Progress:
-    """Create a Rich Progress bar for long-running processes.
+    """Create the configured Rich progress display for long-running work.
 
-    Usage:
+    Returns:
+        A Rich ``Progress`` instance configured for this application's console.
+        Use it as a context manager so terminal rendering is started and stopped
+        correctly.
+
+    Examples:
         with get_progress() as progress:
             task = progress.add_task("Processing items...", total=100)
             for item in items:
@@ -252,3 +303,4 @@ def get_progress() -> Progress:
         console=_console,
         expand=True,
     )
+"""Process-wide Rich logging and progress helpers for application code."""

@@ -5,15 +5,17 @@ from PIL import ExifTags, Image
 
 
 def read_exif(file_path: Path, metadata_tag: str) -> str | None:
-    """
-    Read a specific EXIF metadata from an image file.
+    """Read one EXIF metadata value from an image file.
 
     Args:
-        file_path (Path): Path to the image file.
-        metadata_tag (str): EXIF metadata tag to retrieve (e.g., "DateTime", "ImageDescription").
+        file_path: Path to the image file.
+        metadata_tag: EXIF tag name to retrieve, such as ``DateTime`` or
+            ``ImageDescription``.
 
     Returns:
-        str | None: The value of the specified EXIF metadata tag, or None if not found.
+        The matching EXIF value, decoding byte values as UTF-8, or ``None`` if
+        the tag is absent or the image cannot be read. Read failures are
+        intentionally suppressed for best-effort metadata access.
     """
     try:
         with Image.open(file_path) as image:
@@ -52,12 +54,17 @@ def read_exif(file_path: Path, metadata_tag: str) -> str | None:
 
 
 def write_exif_image_description(file_path: Path, data: str) -> None:
-    """
-    Write content into the ImageDescription EXIF metadata tag of an image file.
+    """Write text to an image's EXIF ``ImageDescription`` tag in place.
 
     Args:
-        file_path (Path): Path to the image file.
-        data (str): Description to write to the image's EXIF metadata.
+        file_path: Path to the image file.
+        data: Description text to encode as UTF-8.
+
+    Raises:
+        OSError: If the image cannot be read or written.
+
+    Notes:
+        The image is re-saved at the same path with updated EXIF data.
     """
     with Image.open(file_path) as image:
         exif_bytes = image.info.get("exif")
@@ -68,3 +75,4 @@ def write_exif_image_description(file_path: Path, data: str) -> None:
 
         exif_dict["0th"][piexif.ImageIFD.ImageDescription] = data.encode("utf-8")
         image.save(file_path, exif=piexif.dump(exif_dict))
+"""Best-effort EXIF reading and writing helpers."""

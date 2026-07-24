@@ -19,6 +19,7 @@ from wv.use_cases.detect.content import (
     DetectContentResult,
 )
 from wv.use_cases.detect.content import run as run_detect_content
+from wv.core.session import get_init_path
 
 SESSION_NAME_PATTERN = re.compile(
     r"(?P<timestamp>\d{8}_\d{6})__(?P<camera>[A-Za-z0-9_]+)"
@@ -43,13 +44,13 @@ class PipelinePreprocessInput:
 @dataclass
 class PipelinePreprocessResult:
     session_path: Path
-    initial_path: Path
+    init_path: Path
     corrupted_result: CleanCorruptedResult
     overexposed_result: CleanOverexposedIrResult
     bursts_result: CleanBurstsResult
     detect_result: DetectContentResult
     files_failed: int
-    files_remaining_in_initial: int
+    files_remaining_in_init: int
     dry_run: bool = False
 
 
@@ -77,23 +78,23 @@ def _validate_session_path(session_path: Path) -> None:
 def run(input_data: PipelinePreprocessInput) -> PipelinePreprocessResult:
     _validate_session_path(input_data.session_path)
 
-    initial_path = input_data.session_path / "initial"
-    if not initial_path.exists():
-        raise FileNotFoundError(f"expected initial directory at {initial_path}")
+    init_path = get_init_path(input_data.session_path)
+    if not init_path.exists():
+        raise FileNotFoundError(f"expected init directory at {init_path}")
 
-    if not initial_path.is_dir():
-        raise NotADirectoryError(f"expected initial directory at {initial_path}")
+    if not init_path.is_dir():
+        raise NotADirectoryError(f"expected init directory at {init_path}")
 
     corrupted_result = run_clean_corrupted(
         CleanCorruptedInput(
-            source=initial_path,
+            source=init_path,
             output=input_data.session_path,
             dry_run=input_data.dry_run,
         )
     )
     overexposed_result = run_clean_overexposed_ir(
         CleanOverexposedIrInput(
-            source=initial_path,
+            source=init_path,
             output=input_data.session_path,
             mean_threshold=input_data.mean_threshold,
             std_threshold=input_data.std_threshold,
@@ -104,7 +105,7 @@ def run(input_data: PipelinePreprocessInput) -> PipelinePreprocessResult:
     )
     bursts_result = run_clean_bursts(
         CleanBurstsInput(
-            source=initial_path,
+            source=init_path,
             output=input_data.session_path,
             burst_gap_threshold=input_data.burst_gap_threshold,
             similarity_threshold=input_data.similarity_threshold,
@@ -113,7 +114,7 @@ def run(input_data: PipelinePreprocessInput) -> PipelinePreprocessResult:
     )
     detect_result = run_detect_content(
         DetectContentInput(
-            source=initial_path,
+            source=init_path,
             output=input_data.session_path,
             model=input_data.model,
             confidence_threshold=input_data.confidence_threshold,
@@ -122,7 +123,7 @@ def run(input_data: PipelinePreprocessInput) -> PipelinePreprocessResult:
         )
     )
 
-    files_remaining_in_initial = len(list(initial_path.iterdir()))
+    files_remaining_in_init = len(list(init_path.iterdir()))
     files_failed = (
         corrupted_result.files_failed
         + overexposed_result.files_failed
@@ -132,12 +133,12 @@ def run(input_data: PipelinePreprocessInput) -> PipelinePreprocessResult:
 
     return PipelinePreprocessResult(
         session_path=input_data.session_path,
-        initial_path=initial_path,
+        init_path=init_path,
         corrupted_result=corrupted_result,
         overexposed_result=overexposed_result,
         bursts_result=bursts_result,
         detect_result=detect_result,
         files_failed=files_failed,
-        files_remaining_in_initial=files_remaining_in_initial,
+        files_remaining_in_init=files_remaining_in_init,
         dry_run=input_data.dry_run,
     )

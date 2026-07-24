@@ -4,8 +4,8 @@ from pathlib import Path
 from wv.core.exif import read_exif, write_exif_image_description
 from wv.core.files import ensure_directory, is_allowed_image_file
 from wv.core.metadata import parse_image_description, upsert_image_description_properties
+from wv.core.session import get_detection_path
 
-ANIMAL_DETECTION_LABEL = "animal"
 RESEARCH_GRADE_TRUE = "true"
 RESEARCH_GRADE_FALSE = "false"
 
@@ -59,7 +59,7 @@ class ApplyResearchGradeResult:
 
 
 def _animal_detection_directory(session_path: Path) -> Path:
-    return session_path / "detection" / ANIMAL_DETECTION_LABEL
+    return get_detection_path(session_path, "animal")
 
 
 def _research_grade_metadata(file_path: Path) -> dict[str, str]:

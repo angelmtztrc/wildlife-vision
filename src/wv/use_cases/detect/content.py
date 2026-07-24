@@ -8,6 +8,7 @@ from wv.core.exif import read_exif, write_exif_image_description
 from wv.core.files import ensure_directory, is_allowed_image_file
 from wv.core.logger import get_logger, get_progress
 from wv.core.metadata import upsert_image_description_properties
+from wv.core.session import get_detection_path
 from wv.ml.megadetector import DEFAULT_MODEL, MlDetection, evaluate_images
 
 DEFAULT_CONFIDENCE_THRESHOLD = 0.8
@@ -131,7 +132,7 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
     if input_data.batch_size < 1:
         raise ValueError("batch_size must be at least 1.")
 
-    destination_root = input_data.output / "detection"
+    destination_root = get_detection_path(input_data.output)
     result = DetectContentResult(destination=destination_root, dry_run=input_data.dry_run)
 
     ensure_directory(input_data.source)
@@ -230,7 +231,7 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
                 logger.debug(
                     "Dry run: would move %s to %s",
                     display_file(file_path),
-                    display_file(destination_root / decision.label / file_path.name),
+                    display_file(get_detection_path(input_data.output, decision.label) / file_path.name),
                 )
                 progress.update(process, advance=1)
                 continue
@@ -249,20 +250,27 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
 
                 moved, replaced_existing = _move_source_to_destination(
                     source=file_path,
-                    destination=destination_root / decision.label / file_path.name,
+                    destination=get_detection_path(input_data.output, decision.label)
+                    / file_path.name,
                 )
                 if moved:
                     result.files_moved += 1
                     logger.debug(
                         "Moved %s to %s",
                         display_file(file_path),
-                        display_file(destination_root / decision.label / file_path.name),
+                        display_file(
+                            get_detection_path(input_data.output, decision.label)
+                            / file_path.name
+                        ),
                     )
                 if replaced_existing:
                     result.files_replaced += 1
                     logger.debug(
                         "Replaced existing detection destination at %s",
-                        display_file(destination_root / decision.label / file_path.name),
+                        display_file(
+                            get_detection_path(input_data.output, decision.label)
+                            / file_path.name
+                        ),
                     )
             except Exception:
                 result.files_failed += 1

@@ -5,6 +5,7 @@ import typer
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
+from wv.core.session import get_init_path
 from wv.use_cases.detect.content import DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_MODEL
 from wv.use_cases.pipeline.preprocess import PipelinePreprocessInput
 from wv.use_cases.pipeline.preprocess import run as run_pipeline_preprocess
@@ -107,11 +108,11 @@ def pipeline_preprocess(
     ] = False,
 ):
     """Run corrupted cleanup, overexposed cleanup, burst reduction, and content detection for one ingested session."""
-    initial_path = session_path / "initial"
+    init_path = get_init_path(session_path)
     logger.info(
         "Starting preprocess pipeline for %s using %s (dry_run=%s)",
         display_path(session_path),
-        display_path(initial_path),
+        display_path(init_path),
         dry_run,
     )
 
@@ -135,7 +136,7 @@ def pipeline_preprocess(
         raise typer.BadParameter(str(exc), param_hint="session_path") from exc
 
     logger.done(
-        "Finished preprocess pipeline for %s: corrupted=%s overexposed=%s reduced=%s evaluated=%s moved=%s failed=%s remaining_in_initial=%s%s",
+        "Finished preprocess pipeline for %s: corrupted=%s overexposed=%s reduced=%s evaluated=%s moved=%s failed=%s remaining_in_init=%s%s",
         display_path(result.session_path),
         result.corrupted_result.files_corrupted,
         result.overexposed_result.files_overexposed,
@@ -143,7 +144,7 @@ def pipeline_preprocess(
         result.detect_result.files_evaluated,
         result.detect_result.files_moved,
         result.files_failed,
-        result.files_remaining_in_initial,
+        result.files_remaining_in_init,
         " (dry run)" if result.dry_run else "",
     )
 

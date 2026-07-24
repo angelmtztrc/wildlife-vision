@@ -7,6 +7,7 @@ from PIL import Image
 from wv.core.display import display_file, display_path
 from wv.core.files import ensure_directory, is_allowed_image_file
 from wv.core.logger import get_logger, get_progress
+from wv.core.session import get_ignored_corrupted_path
 
 logger = get_logger(__name__)
 
@@ -43,7 +44,7 @@ def _is_corrupted_image(file_path: Path) -> bool:
 
 
 def run(input_data: CleanCorruptedInput) -> CleanCorruptedResult:
-    destination = input_data.output / "ignored" / "corrupted"
+    destination = get_ignored_corrupted_path(input_data.output)
     result = CleanCorruptedResult(destination=destination, dry_run=input_data.dry_run)
 
     ensure_directory(input_data.source)

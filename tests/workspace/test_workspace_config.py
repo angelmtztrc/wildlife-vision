@@ -9,6 +9,8 @@ from wv.workspace.workspace_config import (
     get_config_property,
     initialize_workspace_config,
     load_workspace_config,
+    require_workspace_database_path,
+    require_workspace_path,
     reset_config_property,
     set_config_property,
     validate_known_key,
@@ -55,6 +57,31 @@ def test_get_workspace_path_returns_resolved_path(tmp_path: Path, monkeypatch):
     config.write_global_config({"workspace": {"path": str(workspace_path)}})
 
     assert config.get_workspace_path() == workspace_path.resolve()
+
+
+def test_require_workspace_path_rejects_missing_global_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        platformdirs, "user_config_path", lambda *args, **kwargs: tmp_path / "user-config"
+    )
+
+    with pytest.raises(WorkspaceError, match="No workspace configured"):
+        require_workspace_path()
+
+
+def test_require_workspace_database_path_returns_active_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    database_path = workspace_path / ".wv" / "database.sqlite"
+    database_path.parent.mkdir(parents=True)
+    database_path.touch()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    config.write_global_config({"workspace": {"path": str(workspace_path)}})
+
+    assert require_workspace_database_path() == database_path
 
 
 def test_initialize_workspace_config_writes_expected_defaults(tmp_path: Path):

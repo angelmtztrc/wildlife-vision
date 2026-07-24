@@ -1,5 +1,20 @@
+"""Helpers for wildlife-vision metadata stored in EXIF descriptions."""
+
+
 def parse_image_description(value: str | None) -> dict[str, str]:
-    """Parse wildlife-vision metadata from EXIF ``ImageDescription`` text."""
+    """Parse ``key=value;`` metadata from EXIF ``ImageDescription`` text.
+
+    Args:
+        value: Description text to parse, or ``None`` when no metadata exists.
+
+    Returns:
+        Parsed properties in encounter order. Empty keys and fragments without
+        an equals sign are ignored; repeated keys keep their final value.
+
+    Notes:
+        The format has no escaping mechanism, so semicolons and equals signs in
+        values cannot round-trip without ambiguity.
+    """
     if not value:
         return {}
 
@@ -21,7 +36,15 @@ def parse_image_description(value: str | None) -> dict[str, str]:
 
 
 def serialize_image_description(properties: dict[str, str]) -> str:
-    """Serialize wildlife-vision metadata to canonical EXIF text."""
+    """Serialize metadata to canonical ``key=value;`` EXIF text.
+
+    Args:
+        properties: Metadata properties to serialize in insertion order.
+
+    Returns:
+        An empty string for no properties; otherwise, semicolon-terminated
+        key-value pairs. Entries with empty keys are omitted.
+    """
     if not properties:
         return ""
 
@@ -31,7 +54,16 @@ def serialize_image_description(properties: dict[str, str]) -> str:
 def upsert_image_description_properties(
     existing: str | None, updates: dict[str, str]
 ) -> str:
-    """Best-effort parse ``existing`` metadata and upsert ``updates``."""
+    """Parse existing metadata, apply updates, and serialize the result.
+
+    Args:
+        existing: Existing EXIF description text, if present.
+        updates: Properties to insert or overwrite.
+
+    Returns:
+        Canonical serialized metadata preserving existing property order while
+        replacing values for matching update keys.
+    """
     properties = parse_image_description(existing)
 
     for key, value in updates.items():

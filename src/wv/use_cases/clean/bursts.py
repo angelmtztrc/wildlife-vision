@@ -14,6 +14,7 @@ from wv.core.files import (
 )
 from wv.core.images import get_image_datetime
 from wv.core.logger import get_logger, get_progress
+from wv.core.session import get_ignored_bursts_path
 
 logger = get_logger(__name__)
 
@@ -206,7 +207,7 @@ def _get_keep_amount(cluster_size: int) -> int:
 
 
 def run(input_data: CleanBurstsInput) -> CleanBurstsResult:
-    destination = input_data.output / "ignored" / "bursts"
+    destination = get_ignored_bursts_path(input_data.output)
     result = CleanBurstsResult(destination=destination, dry_run=input_data.dry_run)
 
     ensure_directory(input_data.source)
