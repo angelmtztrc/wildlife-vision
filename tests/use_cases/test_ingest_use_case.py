@@ -3,9 +3,8 @@ from pathlib import Path
 
 import pytest
 
-import wv.use_cases.ingest.common as common
+import wv.use_cases.ingest as ingest
 from wv.persistence.common import RecordNotFoundError
-from wv.use_cases.ingest.folder import IngestFolderInput, run
 
 
 class FrozenDateTime:
@@ -14,7 +13,16 @@ class FrozenDateTime:
         return datetime(2024, 6, 28, 12, 0, 0)
 
 
-def test_run_copy_uses_option_identity_and_workspace_session(
+def _freeze_ingest_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ingest, "datetime", FrozenDateTime)
+    monkeypatch.setattr(
+        ingest,
+        "get_image_datetime",
+        lambda file_path: datetime(2024, 6, 28, 10, 15, 30),
+    )
+
+
+def test_run_dry_copy_uses_identity_and_workspace_session(
     configured_workspace: Path,
     make_image,
     tmp_path: Path,
@@ -23,23 +31,53 @@ def test_run_copy_uses_option_identity_and_workspace_session(
     source = tmp_path / "source"
     source.mkdir()
     image_path = make_image(source / "capture.jpg")
-    monkeypatch.setattr(common, "datetime", FrozenDateTime)
-    monkeypatch.setattr(
-        common,
-        "get_image_datetime",
-        lambda file_path: datetime(2024, 6, 28, 10, 15, 30),
-    )
+    (source / "notes.txt").write_text("ignore me")
+    (source / "subdir").mkdir()
+    _freeze_ingest_environment(monkeypatch)
 
-    result = run(
-        IngestFolderInput(
+    result = ingest.run(
+        ingest.IngestInput(
             source=source,
             device_id="HNT001",
             monitoring_site_id="SITE001",
             mode="copy",
+            dry_run=True,
         )
     )
 
-    file_id = common.get_file_id(image_path)
+    assert result.destination == (
+        configured_workspace / "sessions" / "20240628_120000__HNT001" / "init"
+    )
+    assert result.files_discovered == 3
+    assert result.files_copied == 1
+    assert result.files_deleted == 0
+    assert result.files_ignored == 2
+    assert result.files_failed == 0
+    assert result.dry_run is True
+    assert image_path.exists()
+    assert not result.destination.exists()
+
+
+def test_run_drain_writes_expected_file_and_deletes_source(
+    configured_workspace: Path,
+    make_image,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    image_path = make_image(source / "capture.jpg")
+    _freeze_ingest_environment(monkeypatch)
+
+    file_id = ingest.get_file_id(image_path)
+    result = ingest.run(
+        ingest.IngestInput(
+            source=source,
+            device_id="HNT001",
+            monitoring_site_id="SITE001",
+            mode="drain",
+        )
+    )
     expected_destination = (
         configured_workspace
         / "sessions"
@@ -47,20 +85,21 @@ def test_run_copy_uses_option_identity_and_workspace_session(
         / "init"
         / f"20240628_101530__SITE001__{file_id}.jpg"
     )
-    assert result.destination == expected_destination.parent
+
+    assert result.files_copied == 1
+    assert result.files_deleted == 1
+    assert result.files_failed == 0
     assert expected_destination.exists()
-    assert image_path.exists()
+    assert not image_path.exists()
 
 
-def test_run_rejects_unregistered_option_identity(
-    configured_workspace: Path, tmp_path: Path
-):
+def test_run_rejects_unregistered_identity(configured_workspace: Path, tmp_path: Path):
     source = tmp_path / "source"
     source.mkdir()
 
     with pytest.raises(RecordNotFoundError, match="Monitoring site not found: UNKNOWN"):
-        run(
-            IngestFolderInput(
+        ingest.run(
+            ingest.IngestInput(
                 source=source,
                 device_id="HNT001",
                 monitoring_site_id="UNKNOWN",
@@ -78,16 +117,11 @@ def test_run_uses_next_timestamp_when_session_already_exists(
     source = tmp_path / "source"
     source.mkdir()
     make_image(source / "capture.jpg")
-    monkeypatch.setattr(common, "datetime", FrozenDateTime)
-    monkeypatch.setattr(
-        common,
-        "get_image_datetime",
-        lambda file_path: datetime(2024, 6, 28, 10, 15, 30),
-    )
+    _freeze_ingest_environment(monkeypatch)
     (configured_workspace / "sessions" / "20240628_120000__HNT001").mkdir()
 
-    result = run(
-        IngestFolderInput(
+    result = ingest.run(
+        ingest.IngestInput(
             source=source,
             device_id="HNT001",
             monitoring_site_id="SITE001",
@@ -108,10 +142,10 @@ def test_run_creates_init_route_for_unsupported_only_source(
     source = tmp_path / "source"
     source.mkdir()
     (source / "notes.txt").write_text("ignore me")
-    monkeypatch.setattr(common, "datetime", FrozenDateTime)
+    monkeypatch.setattr(ingest, "datetime", FrozenDateTime)
 
-    result = run(
-        IngestFolderInput(
+    result = ingest.run(
+        ingest.IngestInput(
             source=source,
             device_id="HNT001",
             monitoring_site_id="SITE001",

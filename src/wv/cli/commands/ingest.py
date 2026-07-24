@@ -6,11 +6,11 @@ import typer
 from wv.core.display import display_path
 from wv.core.logger import get_logger
 from wv.persistence.common import RecordNotFoundError
-from wv.use_cases.ingest.folder import IngestFolderInput
-from wv.use_cases.ingest.folder import run as run_ingest_folder
-from wv.use_cases.ingest.sd import IngestSdInput
-from wv.use_cases.ingest.sd import run as run_ingest_sd
-from wv.use_cases.sd import SdError
+from wv.use_cases.device import run_list as run_list_devices
+from wv.use_cases.ingest import IngestInput, IngestResult
+from wv.use_cases.ingest import run as run_ingest
+from wv.use_cases.monitoring_site import run_list as run_list_monitoring_sites
+from wv.use_cases.sd import SdError, read_config
 from wv.workspace.common import WorkspaceError
 
 app = typer.Typer(help="Ingest photos from SD cards and other source locations.")
@@ -18,7 +18,25 @@ app = typer.Typer(help="Ingest photos from SD cards and other source locations."
 logger = get_logger(__name__)
 
 
-def _log_result(source_kind: str, destination: Path, result) -> None:
+def _complete_device(incomplete: str) -> list[str]:
+    try:
+        return [device.id for device in run_list_devices() if device.id.startswith(incomplete)]
+    except WorkspaceError:
+        return []
+
+
+def _complete_monitoring_site(incomplete: str) -> list[str]:
+    try:
+        return [
+            site.id
+            for site in run_list_monitoring_sites()
+            if site.id.startswith(incomplete)
+        ]
+    except WorkspaceError:
+        return []
+
+
+def _log_result(source_kind: str, destination: Path, result: IngestResult) -> None:
     logger.done(
         "Finished %s ingest to %s: discovered=%s copied=%s replaced=%s ignored=%s deleted=%s failed=%s%s",
         source_kind,
@@ -67,7 +85,16 @@ def ingest_sd(
     )
 
     try:
-        result = run_ingest_sd(IngestSdInput(source=source, mode=mode, dry_run=dry_run))
+        config = read_config(source)
+        result = run_ingest(
+            IngestInput(
+                source=source,
+                device_id=config.device_id,
+                monitoring_site_id=config.monitoring_site_id,
+                mode=mode,
+                dry_run=dry_run,
+            )
+        )
     except (WorkspaceError, RecordNotFoundError, SdError, ValueError) as exc:
         logger.error("SD ingest failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -91,9 +118,17 @@ def ingest_folder(
             readable=True,
         ),
     ],
-    device: Annotated[str, typer.Option(help="Registered device ID.")],
+    device: Annotated[
+        str,
+        typer.Option(help="Registered device ID.", autocompletion=_complete_device),
+    ],
     monitoring_site: Annotated[
-        str, typer.Option("--monitoring-site", help="Registered monitoring site ID.")
+        str,
+        typer.Option(
+            "--monitoring-site",
+            help="Registered monitoring site ID.",
+            autocompletion=_complete_monitoring_site,
+        ),
     ],
     mode: Annotated[
         Literal["drain", "copy"],
@@ -119,8 +154,8 @@ def ingest_folder(
     )
 
     try:
-        result = run_ingest_folder(
-            IngestFolderInput(
+        result = run_ingest(
+            IngestInput(
                 source=source,
                 device_id=device,
                 monitoring_site_id=monitoring_site,

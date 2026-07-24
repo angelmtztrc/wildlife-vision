@@ -11,6 +11,8 @@ from wv.core.images import get_image_datetime
 from wv.core.logger import get_logger, get_progress
 from wv.core.session import get_init_path, require_session_component
 from wv.persistence.repositories import DeviceRepository, MonitoringSiteRepository
+from wv.persistence.session import session_scope
+from wv.workspace.workspace_config import require_workspace_database_path, require_workspace_path
 
 logger = get_logger(__name__)
 
@@ -36,7 +38,7 @@ class IngestResult:
     dry_run: bool = False
 
 
-def validate_ingest_identity(
+def _validate_ingest_identity(
     session: Session, device_id: str, monitoring_site_id: str
 ) -> None:
     DeviceRepository(session).get(device_id)
@@ -86,9 +88,15 @@ def _get_session_path(workspace_path: Path, device_id: str, dry_run: bool) -> Pa
         timestamp += timedelta(seconds=1)
 
 
-def run(input_data: IngestInput, workspace_path: Path) -> IngestResult:
+def run(input_data: IngestInput) -> IngestResult:
     if input_data.mode not in {"drain", "copy"}:
         raise ValueError(f"Unknown ingest mode: {input_data.mode}")
+
+    workspace_path = require_workspace_path()
+    with session_scope(require_workspace_database_path(workspace_path)) as session:
+        _validate_ingest_identity(
+            session, input_data.device_id, input_data.monitoring_site_id
+        )
 
     ensure_directory(input_data.source)
     device_id = require_session_component(input_data.device_id, "Device ID")
@@ -97,9 +105,7 @@ def run(input_data: IngestInput, workspace_path: Path) -> IngestResult:
     )
 
     result = IngestResult(dry_run=input_data.dry_run)
-    session_path = _get_session_path(
-        workspace_path, device_id, input_data.dry_run
-    )
+    session_path = _get_session_path(workspace_path, device_id, input_data.dry_run)
     destination_path = get_init_path(session_path)
     if not input_data.dry_run:
         destination_path.mkdir(exist_ok=True)

@@ -3,8 +3,18 @@ from pathlib import Path
 import pytest
 
 from wv.cli.commands import ingest
-from wv.use_cases.ingest.common import IngestResult
-from wv.use_cases.sd import SdError
+from wv.use_cases.ingest import IngestResult
+from wv.use_cases.sd import SdConfigRecord
+from wv.workspace.common import WorkspaceError
+
+
+def _sd_config() -> SdConfigRecord:
+    return SdConfigRecord(
+        device_id="HNT001",
+        monitoring_site_id="SITE001",
+        created_at="2026-07-21T10:00:00+00:00",
+        updated_at="2026-07-21T10:00:00+00:00",
+    )
 
 
 def test_ingest_sd_prints_summary_for_success(
@@ -18,7 +28,12 @@ def test_ingest_sd_prints_summary_for_success(
 
     monkeypatch.setattr(
         ingest,
-        "run_ingest_sd",
+        "read_config",
+        lambda source: _sd_config(),
+    )
+    monkeypatch.setattr(
+        ingest,
+        "run_ingest",
         lambda input_data: IngestResult(
             files_discovered=4,
             files_copied=3,
@@ -66,7 +81,12 @@ def test_ingest_sd_exits_with_code_one_when_use_case_reports_failures(
 
     monkeypatch.setattr(
         ingest,
-        "run_ingest_sd",
+        "read_config",
+        lambda source: _sd_config(),
+    )
+    monkeypatch.setattr(
+        ingest,
+        "run_ingest",
         lambda input_data: IngestResult(
             files_discovered=1,
             files_failed=1,
@@ -95,7 +115,7 @@ def test_ingest_folder_forwards_option_identity(
         captured_input = input_data
         return IngestResult(destination=tmp_path / "destination")
 
-    monkeypatch.setattr(ingest, "run_ingest_folder", fake_run)
+    monkeypatch.setattr(ingest, "run_ingest", fake_run)
 
     result = cli_runner.invoke(
         ingest.app,
@@ -126,3 +146,71 @@ def test_ingest_folder_requires_identity_options(cli_runner, tmp_path: Path):
 
     assert result.exit_code != 0
     assert "Missing option" in result.output
+
+
+def test_ingest_sd_forwards_config_identity(
+    cli_runner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    captured_input = None
+
+    def fake_run(input_data):
+        nonlocal captured_input
+        captured_input = input_data
+        return IngestResult(destination=tmp_path / "destination")
+
+    monkeypatch.setattr(ingest, "read_config", lambda source: _sd_config())
+    monkeypatch.setattr(ingest, "run_ingest", fake_run)
+
+    result = cli_runner.invoke(ingest.app, ["sd", str(source), "--mode", "copy"])
+
+    assert result.exit_code == 0
+    assert captured_input.device_id == "HNT001"
+    assert captured_input.monitoring_site_id == "SITE001"
+    assert captured_input.mode == "copy"
+
+
+def test_complete_device_matches_registered_ids(monkeypatch: pytest.MonkeyPatch):
+    class Device:
+        def __init__(self, device_id: str):
+            self.id = device_id
+
+    monkeypatch.setattr(
+        ingest,
+        "run_list_devices",
+        lambda: [Device("HNT001"), Device("CAM001")],
+    )
+
+    assert ingest._complete_device("HNT") == ["HNT001"]
+
+
+def test_complete_monitoring_site_matches_registered_ids(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class MonitoringSite:
+        def __init__(self, site_id: str):
+            self.id = site_id
+
+    monkeypatch.setattr(
+        ingest,
+        "run_list_monitoring_sites",
+        lambda: [MonitoringSite("SITE001"), MonitoringSite("PARK001")],
+    )
+
+    assert ingest._complete_monitoring_site("SITE") == ["SITE001"]
+
+
+def test_completion_returns_no_suggestions_without_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def raise_workspace_error():
+        raise WorkspaceError("No workspace configured")
+
+    monkeypatch.setattr(ingest, "run_list_devices", raise_workspace_error)
+    monkeypatch.setattr(ingest, "run_list_monitoring_sites", raise_workspace_error)
+
+    assert ingest._complete_device("") == []
+    assert ingest._complete_monitoring_site("") == []
