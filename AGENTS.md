@@ -57,6 +57,15 @@ When you're giving the order to define a plan, always ask for whatever informati
 - Keep `initialize_database(...)` as the application bootstrap entrypoint, but have it apply Alembic migrations programmatically.
 - Use standard Alembic version tracking.
 
+# Use-cases
+
+Use cases are composed the following way:
+
+- Input dataclass.
+- Result dataclass.
+- run() function that executes the implementation of the use_case.
+- any private function used internally for the use-case must have the prefix "\_" to stablish that is private.
+
 ## Implementation Notes
 
 - Preserve clear separation:
