@@ -3,7 +3,7 @@ from pathlib import Path
 import platformdirs
 import pytest
 
-from wv.persistence.repositories import DeploymentRepository
+from wv.persistence.repositories import DeploymentRepository, DeviceRepository
 from wv.persistence.sql_session import sql_session_scope
 from wv.use_cases.device import DeviceInput, run_create as run_create_device, run_show as run_show_device
 from wv.use_cases.monitoring_site import MonitoringSiteInput, run_create as run_create_monitoring_site
@@ -12,10 +12,12 @@ from wv.use_cases.sd import (
     SdClearInput,
     SdError,
     SdInitInput,
+    SdSyncInput,
     SdUpdateInput,
     run_clear,
     run_init,
     run_show,
+    run_sync,
     run_update,
 )
 from wv.use_cases.workspace import WorkspaceInitInput, run_init as run_workspace_init
@@ -26,6 +28,15 @@ from wv.workspace.workspace_config import get_workspace_database_path
 def _list_deployments_for_device(database_path: Path, device_id: str):
     with sql_session_scope(database_path) as sql_session:
         return DeploymentRepository(sql_session).list_for_device(device_id)
+
+
+def _set_device_monitoring_site(
+    database_path: Path, device_id: str, monitoring_site_id: str | None
+) -> None:
+    with sql_session_scope(database_path) as sql_session:
+        DeviceRepository(sql_session).update(
+            device_id, {"monitoring_site_id": monitoring_site_id}
+        )
 
 
 @pytest.fixture
@@ -207,3 +218,148 @@ def test_run_init_rejects_unknown_records(configured_workspace: Path, tmp_path: 
 
     with pytest.raises(RecordNotFoundError):
         run_init(SdInitInput(path=sd_path, device_id="UNKNOWN", monitoring_site_id="SITE001"))
+
+    assert not (sd_path / ".wv" / "config.yml").exists()
+
+
+def test_run_init_removes_config_when_database_update_fails(
+    configured_workspace: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    monkeypatch.setattr(
+        "wv.use_cases.sd._record_deployment",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="database failure"):
+        run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
+
+    assert not (sd_path / ".wv" / "config.yml").exists()
+    assert run_show_device("HNT001").monitoring_site_id is None
+
+
+def test_run_update_restores_config_when_database_update_fails(
+    configured_workspace: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
+    monkeypatch.setattr(
+        "wv.use_cases.sd._record_deployment",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="database failure"):
+        run_update(SdUpdateInput(path=sd_path, monitoring_site_id="SITE002"))
+
+    assert run_show(sd_path).config.monitoring_site_id == "SITE001"
+    assert run_show_device("HNT001").monitoring_site_id == "SITE001"
+
+
+def test_run_update_rejects_database_mismatch(
+    configured_workspace: Path,
+    tmp_path: Path,
+):
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
+    database_path = get_workspace_database_path(configured_workspace)
+    _set_device_monitoring_site(database_path, "HNT001", "SITE002")
+
+    with pytest.raises(SdError, match="wv sd sync"):
+        run_update(SdUpdateInput(path=sd_path, monitoring_site_id="SITE002"))
+
+    assert run_show(sd_path).config.monitoring_site_id == "SITE001"
+
+
+def test_run_update_rejects_identity_noop(
+    configured_workspace: Path,
+    tmp_path: Path,
+):
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
+    database_path = get_workspace_database_path(configured_workspace)
+
+    with pytest.raises(SdError, match="already matches"):
+        run_update(SdUpdateInput(path=sd_path, monitoring_site_id="SITE001"))
+
+    assert len(_list_deployments_for_device(database_path, "HNT001")) == 1
+
+
+def test_run_clear_rejects_database_mismatch(
+    configured_workspace: Path,
+    tmp_path: Path,
+):
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
+    database_path = get_workspace_database_path(configured_workspace)
+    _set_device_monitoring_site(database_path, "HNT001", "SITE002")
+
+    with pytest.raises(SdError, match="wv sd sync"):
+        run_clear(SdClearInput(path=sd_path))
+
+    assert (sd_path / ".wv" / "config.yml").exists()
+
+
+def test_run_clear_restores_assignment_when_config_removal_fails(
+    configured_workspace: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
+    monkeypatch.setattr(
+        "wv.use_cases.sd._remove_sd_config",
+        lambda path: (_ for _ in ()).throw(OSError("card is read-only")),
+    )
+
+    with pytest.raises(SdError, match="database assignment was restored"):
+        run_clear(SdClearInput(path=sd_path))
+
+    assert (sd_path / ".wv" / "config.yml").exists()
+    assert run_show_device("HNT001").monitoring_site_id == "SITE001"
+
+
+def test_run_sync_reconciles_database_once(
+    configured_workspace: Path,
+    tmp_path: Path,
+):
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
+    database_path = get_workspace_database_path(configured_workspace)
+    _set_device_monitoring_site(database_path, "HNT001", "SITE002")
+
+    result = run_sync(SdSyncInput(path=sd_path))
+
+    assert result.database_updated is True
+    assert result.deployment_recorded is True
+    assert run_show_device("HNT001").monitoring_site_id == "SITE001"
+    assert len(_list_deployments_for_device(database_path, "HNT001")) == 2
+
+    result = run_sync(SdSyncInput(path=sd_path))
+
+    assert result.database_updated is False
+    assert result.deployment_recorded is False
+    assert len(_list_deployments_for_device(database_path, "HNT001")) == 2
+
+
+def test_run_sync_reports_malformed_card_config(
+    configured_workspace: Path,
+    tmp_path: Path,
+):
+    sd_path = tmp_path / "sd-card"
+    config_path = sd_path / ".wv" / "config.yml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("[")
+
+    with pytest.raises(SdError, match="Could not read SD config"):
+        run_sync(SdSyncInput(path=sd_path))

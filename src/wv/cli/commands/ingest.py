@@ -7,10 +7,11 @@ from wv.core.display import display_path
 from wv.core.logger import get_logger
 from wv.persistence.common import RecordNotFoundError
 from wv.use_cases.device import run_list as run_list_devices
-from wv.use_cases.ingest import IngestInput, IngestResult
+from wv.use_cases.ingest import IngestInput, IngestResult, SdIngestInput
 from wv.use_cases.ingest import run as run_ingest
+from wv.use_cases.ingest import run_sd as run_sd_ingest
 from wv.use_cases.monitoring_site import run_list as run_list_monitoring_sites
-from wv.use_cases.sd import SdError, read_config
+from wv.use_cases.sd import SdError
 from wv.workspace.common import WorkspaceError
 
 app = typer.Typer(help="Ingest photos from SD cards and other source locations.")
@@ -85,12 +86,9 @@ def ingest_sd(
     )
 
     try:
-        config = read_config(source)
-        result = run_ingest(
-            IngestInput(
+        result = run_sd_ingest(
+            SdIngestInput(
                 source=source,
-                device_id=config.device_id,
-                monitoring_site_id=config.monitoring_site_id,
                 mode=mode,
                 dry_run=dry_run,
             )

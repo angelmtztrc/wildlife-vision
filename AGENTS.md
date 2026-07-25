@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Introduction
+
+This project contains a CLI set of tools built in Python to help organise, clean, auto-detect images files from trail cameras.
+
 ## While implementing
 
 When developing or implemeting features, always make sure to review the codebase to align with the way the project is writen or structured. Don't duplicate code, always review what does exist in the /core folder. If something is used in several places maybe it can worth moving it to the core.

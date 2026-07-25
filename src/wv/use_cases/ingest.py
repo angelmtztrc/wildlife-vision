@@ -12,6 +12,7 @@ from wv.core.logger import get_logger, get_progress
 from wv.core.session import get_init_path, require_session_component
 from wv.persistence.repositories import DeviceRepository, MonitoringSiteRepository
 from wv.persistence.sql_session import sql_session_scope
+from wv.use_cases.sd import SdError, read_config
 from wv.workspace.workspace_config import require_workspace_database_path, require_workspace_path
 
 logger = get_logger(__name__)
@@ -22,6 +23,13 @@ class IngestInput:
     source: Path
     device_id: str
     monitoring_site_id: str
+    mode: str
+    dry_run: bool = False
+
+
+@dataclass(frozen=True)
+class SdIngestInput:
+    source: Path
     mode: str
     dry_run: bool = False
 
@@ -43,6 +51,21 @@ def _validate_ingest_identity(
 ) -> None:
     DeviceRepository(sql_session).get(device_id)
     MonitoringSiteRepository(sql_session).get(monitoring_site_id)
+
+
+def _validate_sd_ingest_identity(
+    sql_session: SqlSession,
+    source: Path,
+    device_id: str,
+    monitoring_site_id: str,
+) -> None:
+    device = DeviceRepository(sql_session).get(device_id)
+    MonitoringSiteRepository(sql_session).get(monitoring_site_id)
+    if device.monitoring_site_id != monitoring_site_id:
+        raise SdError(
+            "SD card deployment does not match the workspace database. "
+            f"Run 'wv sd sync {source.resolve()}' to synchronize the workspace from this SD card."
+        )
 
 
 def _verify_copy(source_file_id: str, copied_file: Path) -> bool:
@@ -192,3 +215,25 @@ def run(input_data: IngestInput) -> IngestResult:
                 progress.update(process, advance=1)
 
     return result
+
+
+def run_sd(input_data: SdIngestInput) -> IngestResult:
+    config = read_config(input_data.source)
+    workspace_path = require_workspace_path()
+    with sql_session_scope(require_workspace_database_path(workspace_path)) as sql_session:
+        _validate_sd_ingest_identity(
+            sql_session,
+            input_data.source,
+            config.device_id,
+            config.monitoring_site_id,
+        )
+
+    return run(
+        IngestInput(
+            source=input_data.source,
+            device_id=config.device_id,
+            monitoring_site_id=config.monitoring_site_id,
+            mode=input_data.mode,
+            dry_run=input_data.dry_run,
+        )
+    )

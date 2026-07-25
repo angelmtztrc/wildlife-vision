@@ -10,10 +10,12 @@ from wv.use_cases.sd import (
     SdClearInput,
     SdError,
     SdInitInput,
+    SdSyncInput,
     SdUpdateInput,
     run_clear,
     run_init,
     run_show,
+    run_sync,
     run_update,
 )
 from wv.workspace.common import WorkspaceError
@@ -90,6 +92,41 @@ def show_sd(
     typer.echo(f"monitoring_site_id: {result.config.monitoring_site_id}")
     typer.echo(f"created_at: {result.config.created_at}")
     typer.echo(f"updated_at: {result.config.updated_at}")
+    return None
+
+
+@app.command("sync")
+def sync_sd(
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help="Mounted SD card path whose config should synchronize the workspace database.",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+            resolve_path=True,
+        ),
+    ],
+):
+    try:
+        result = run_sync(SdSyncInput(path=path))
+    except (WorkspaceError, RecordNotFoundError, SdError) as exc:
+        logger.error("SD synchronization failed: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    if result.database_updated:
+        logger.done(
+            "Synchronized workspace database from SD config at %s (device=%s, monitoring_site=%s)",
+            display_path(result.path),
+            result.config.device_id,
+            result.config.monitoring_site_id,
+        )
+    else:
+        logger.done(
+            "Workspace database already matches SD config at %s",
+            display_path(result.path),
+        )
     return None
 
 

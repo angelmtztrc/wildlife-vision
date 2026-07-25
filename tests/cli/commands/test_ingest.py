@@ -4,17 +4,7 @@ import pytest
 
 from wv.cli.commands import ingest
 from wv.use_cases.ingest import IngestResult
-from wv.use_cases.sd import SdConfigRecord
 from wv.workspace.common import WorkspaceError
-
-
-def _sd_config() -> SdConfigRecord:
-    return SdConfigRecord(
-        device_id="HNT001",
-        monitoring_site_id="SITE001",
-        created_at="2026-07-21T10:00:00+00:00",
-        updated_at="2026-07-21T10:00:00+00:00",
-    )
 
 
 def test_ingest_sd_prints_summary_for_success(
@@ -28,12 +18,7 @@ def test_ingest_sd_prints_summary_for_success(
 
     monkeypatch.setattr(
         ingest,
-        "read_config",
-        lambda source: _sd_config(),
-    )
-    monkeypatch.setattr(
-        ingest,
-        "run_ingest",
+        "run_sd_ingest",
         lambda input_data: IngestResult(
             files_discovered=4,
             files_copied=3,
@@ -81,12 +66,7 @@ def test_ingest_sd_exits_with_code_one_when_use_case_reports_failures(
 
     monkeypatch.setattr(
         ingest,
-        "read_config",
-        lambda source: _sd_config(),
-    )
-    monkeypatch.setattr(
-        ingest,
-        "run_ingest",
+        "run_sd_ingest",
         lambda input_data: IngestResult(
             files_discovered=1,
             files_failed=1,
@@ -148,7 +128,7 @@ def test_ingest_folder_requires_identity_options(cli_runner, tmp_path: Path):
     assert "Missing option" in result.output
 
 
-def test_ingest_sd_forwards_config_identity(
+def test_ingest_sd_forwards_options_to_use_case(
     cli_runner,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -162,14 +142,11 @@ def test_ingest_sd_forwards_config_identity(
         captured_input = input_data
         return IngestResult(destination=tmp_path / "destination")
 
-    monkeypatch.setattr(ingest, "read_config", lambda source: _sd_config())
-    monkeypatch.setattr(ingest, "run_ingest", fake_run)
+    monkeypatch.setattr(ingest, "run_sd_ingest", fake_run)
 
     result = cli_runner.invoke(ingest.app, ["sd", str(source), "--mode", "copy"])
 
     assert result.exit_code == 0
-    assert captured_input.device_id == "HNT001"
-    assert captured_input.monitoring_site_id == "SITE001"
     assert captured_input.mode == "copy"
 
 

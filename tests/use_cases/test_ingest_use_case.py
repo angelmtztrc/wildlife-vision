@@ -5,6 +5,10 @@ import pytest
 
 import wv.use_cases.ingest as ingest
 from wv.persistence.common import RecordNotFoundError
+from wv.persistence.repositories import DeviceRepository
+from wv.persistence.sql_session import sql_session_scope
+from wv.use_cases.sd import SdError, SdInitInput, run_init
+from wv.workspace.workspace_config import get_workspace_database_path
 
 
 class FrozenDateTime:
@@ -156,3 +160,20 @@ def test_run_creates_init_route_for_unsupported_only_source(
     assert result.files_copied == 0
     assert result.files_ignored == 1
     assert result.destination.is_dir()
+
+
+def test_run_sd_rejects_database_assignment_mismatch(
+    configured_workspace: Path,
+    tmp_path: Path,
+):
+    source = tmp_path / "sd-card"
+    source.mkdir()
+    run_init(SdInitInput(path=source, device_id="HNT001", monitoring_site_id="SITE001"))
+
+    with sql_session_scope(get_workspace_database_path(configured_workspace)) as sql_session:
+        DeviceRepository(sql_session).update(
+            "HNT001", {"monitoring_site_id": "SITE002"}
+        )
+
+    with pytest.raises(SdError, match="wv sd sync"):
+        ingest.run_sd(ingest.SdIngestInput(source=source, mode="copy"))

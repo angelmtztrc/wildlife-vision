@@ -101,3 +101,18 @@ def test_sd_clear_removes_config(cli_runner, tmp_path: Path, monkeypatch):
     assert result.exit_code == 0
     assert "SD cleared" in result.output
     assert not (sd_path / ".wv" / "config.yml").exists()
+
+
+def test_sd_sync_reports_already_synchronized_card(cli_runner, tmp_path: Path, monkeypatch):
+    _setup_workspace(cli_runner, tmp_path, monkeypatch)
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    cli_runner.invoke(
+        sd.app,
+        ["init", str(sd_path), "--device", "HNT001", "--monitoring-site", "SITE001"],
+    )
+
+    result = cli_runner.invoke(sd.app, ["sync", str(sd_path)])
+
+    assert result.exit_code == 0
+    assert "already matches SD config" in result.output
