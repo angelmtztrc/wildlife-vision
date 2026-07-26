@@ -4,7 +4,13 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from wv.persistence.base import Base
-from wv.persistence.models import DeploymentModel, DeviceModel, MonitoringSiteModel
+from wv.persistence.models import (
+    DeploymentModel,
+    DeviceModel,
+    MonitoringSiteModel,
+    SessionImageModel,
+    SessionModel,
+)
 
 config = context.config
 

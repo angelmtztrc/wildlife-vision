@@ -40,6 +40,32 @@ def ensure_directory(path: Path) -> None:
         raise NotADirectoryError(path)
 
 
+def get_content_digest(file_path: Path) -> str:
+    """Return a stable Base32 BLAKE2b digest derived from file content.
+
+    The digest is intended for durable persistence and duplicate
+    investigation. It uses the same 20-byte BLAKE2b source digest as
+    ``get_file_id()``, but returns the full Base32 value instead of the short
+    filename prefix.
+
+    Args:
+        file_path: File whose bytes will be hashed.
+
+    Returns:
+        An uppercase Base32-encoded digest string.
+
+    Raises:
+        OSError: If the file cannot be opened or read.
+    """
+    hasher = hashlib.blake2b(digest_size=20)
+
+    with file_path.open("rb") as file_handle:
+        while chunk := file_handle.read(8192):
+            hasher.update(chunk)
+
+    return base64.b32encode(hasher.digest()).decode("ascii")
+
+
 def get_file_id(file_path: Path) -> str:
     """Return a stable six-character ID derived from file content.
 
@@ -56,13 +82,7 @@ def get_file_id(file_path: Path) -> str:
     Raises:
         OSError: If the file cannot be opened or read.
     """
-    hasher = hashlib.blake2b(digest_size=20)
-
-    with file_path.open("rb") as file_handle:
-        while chunk := file_handle.read(8192):
-            hasher.update(chunk)
-
-    return base64.b32encode(hasher.digest()).decode("ascii")[:6]
+    return get_content_digest(file_path)[:6]
 
 
 def parse_ingested_image_filename(file_path: Path) -> dict[str, str] | None:

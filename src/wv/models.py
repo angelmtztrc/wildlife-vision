@@ -30,3 +30,37 @@ class Deployment:
     sd_card_path: str
     created_at: str
     updated_at: str
+
+
+@dataclass(frozen=True)
+class IngestSession:
+    id: str
+    device_id: str
+    monitoring_site_id: str
+    source_path: str
+    mode: str
+    recursive: bool
+    started_at: str
+    completed_at: str | None = None
+    ingest_status: str = "in_progress"
+    failure_message: str | None = None
+    files_discovered: int = 0
+    files_copied: int = 0
+    files_deleted: int = 0
+    files_ignored: int = 0
+    files_failed: int = 0
+    files_replaced: int = 0
+
+
+@dataclass(frozen=True)
+class SessionImage:
+    id: str
+    session_id: str
+    source_relative_path: str
+    initial_relative_path: str
+    current_relative_path: str
+    state: str
+    content_digest: str
+    content_size_bytes: int
+    captured_at: str
+    ingested_at: str

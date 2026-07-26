@@ -25,6 +25,8 @@ def test_initialize_database_applies_initial_schema(tmp_path: Path):
         "monitoring_sites",
         "devices",
         "deployments",
+        "sessions",
+        "session_images",
     }
 
 
@@ -35,7 +37,7 @@ def test_initialize_database_records_applied_migration(tmp_path: Path):
     with sqlite3.connect(database_path) as connection:
         version = connection.execute("SELECT version_num FROM alembic_version").fetchone()
 
-    assert version == ("0001_initial_schema",)
+    assert version == ("0002_session_inventory",)
 
 
 def test_initialize_database_is_idempotent(tmp_path: Path):
