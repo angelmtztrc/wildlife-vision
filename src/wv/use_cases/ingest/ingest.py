@@ -8,8 +8,14 @@ from wv.core.logger import get_logger, get_progress
 from wv.core.sd_config import SdConfigError, read_sd_config
 from wv.core.session import get_init_path, require_session_component
 from wv.persistence.sql_session import sql_session_scope
-from . import _shared as shared
-from ._shared import IngestError, ResolvedIngestIdentity
+from ._shared import (
+    IngestError,
+    ResolvedIngestIdentity,
+    get_session_path,
+    replace_destination_with_verified_copy,
+    validate_explicit_identity,
+    validate_sd_identity,
+)
 from wv.workspace.workspace_config import require_workspace_database_path, require_workspace_path
 
 logger = get_logger(__name__)
@@ -52,7 +58,7 @@ def _resolve_identity(input_data: IngestInput) -> ResolvedIngestIdentity:
 
     if isinstance(input_data.identity, ExplicitIngestIdentity):
         with sql_session_scope(database_path) as sql_session:
-            return shared.validate_explicit_identity(
+            return validate_explicit_identity(
                 sql_session,
                 input_data.identity.device_id,
                 input_data.identity.monitoring_site_id,
@@ -64,7 +70,7 @@ def _resolve_identity(input_data: IngestInput) -> ResolvedIngestIdentity:
         raise IngestError(str(exc)) from exc
 
     with sql_session_scope(database_path) as sql_session:
-        return shared.validate_sd_identity(
+        return validate_sd_identity(
             sql_session,
             input_data.source,
             sd_config.device_id,
@@ -86,7 +92,7 @@ def run(input_data: IngestInput) -> IngestResult:
     )
 
     result = IngestResult(dry_run=input_data.dry_run)
-    session_path = shared.get_session_path(workspace_path, device_id, input_data.dry_run)
+    session_path = get_session_path(workspace_path, device_id, input_data.dry_run)
     destination_path = get_init_path(session_path)
     if not input_data.dry_run:
         destination_path.mkdir(exist_ok=True)
@@ -146,7 +152,7 @@ def run(input_data: IngestInput) -> IngestResult:
                     progress.update(process, advance=1)
                     continue
 
-                copied, replaced_existing = shared.replace_destination_with_verified_copy(
+                copied, replaced_existing = replace_destination_with_verified_copy(
                     source=file,
                     destination=destination,
                     source_file_id=file_id,
