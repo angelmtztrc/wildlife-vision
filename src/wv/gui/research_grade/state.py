@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from wv.use_cases.research_grade import ResearchGradeItem
+from wv.use_cases.research_grade.load import ResearchGradeItem
 
 
 @dataclass

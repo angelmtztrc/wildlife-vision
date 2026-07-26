@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from wv.use_cases.review import ReviewItem
+from wv.use_cases.review.load import ReviewItem
 
 
 @dataclass

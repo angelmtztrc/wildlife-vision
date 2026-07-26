@@ -69,7 +69,8 @@ one module inside its group and represents exactly one application operation.
 - A use-case group is a package, for example `src/wv/use_cases/device/`.
 - A use-case module exposes one public operation entry point named `run()`.
 - Each operation must define an input dataclass and an explicit result dataclass.
-- Use cases must not call another use case, including use cases in the same group.
+- Use cases must not call another use case for implementation reuse, including use cases in the same group.
+- Workflow use cases may orchestrate lower-level use cases when that workflow is an application requirement. `src/wv/use_cases/pipeline/preprocess.py` is the approved example: it owns one `run()` workflow and preserves the required clean/detect ordering.
 - Use-case-private helpers must use a leading `_` prefix and stay in the same module.
 - Logic shared by multiple use cases in the same group belongs in that group's private `_shared.py` module.
 - Logic shared across use-case groups belongs in `src/wv/core/` only when it is genuinely reusable and has a stable responsibility.

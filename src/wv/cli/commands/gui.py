@@ -5,7 +5,7 @@ import typer
 
 from wv.gui.research_grade.app import launch_research_grade_app
 from wv.gui.review.app import launch_review_app
-from wv.use_cases.review import REVIEW_LABELS, normalize_review_label
+from wv.core.session import DETECTION_LABELS, normalize_detection_label
 
 app = typer.Typer(help="Launch interactive GUI review tools.")
 
@@ -40,10 +40,10 @@ def review(
 ):
     """Launch the interactive reviewer for one detection bucket."""
     try:
-        normalized_detection = normalize_review_label(detection)
+        normalized_detection = normalize_detection_label(detection)
     except ValueError as exc:
         raise typer.BadParameter(
-            f"Unknown detection label '{detection}'. Expected one of: {', '.join(REVIEW_LABELS)}."
+            f"Unknown detection label '{detection}'. Expected one of: {', '.join(DETECTION_LABELS)}."
         ) from exc
 
     launch_review_app(

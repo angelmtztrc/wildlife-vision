@@ -5,7 +5,10 @@ from pathlib import Path
 import platformdirs
 import pytest
 
-from wv.use_cases.workspace import WorkspaceError, WorkspaceInitInput, get_status, run_init, validate
+from wv.use_cases.workspace.initialize import WorkspaceInitializeInput, run as run_initialize
+from wv.use_cases.workspace.show import WorkspaceShowInput, run as run_show
+from wv.use_cases.workspace.validate import WorkspaceValidateInput, run as run_validate
+from wv.workspace.common import WorkspaceError
 
 
 def _get_table_names(database_path: Path) -> set[str]:
@@ -23,7 +26,7 @@ def test_run_init_creates_workspace_structure(tmp_path: Path, monkeypatch):
     workspace_path.mkdir()
     monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
 
-    result = run_init(WorkspaceInitInput(path=workspace_path))
+    result = run_initialize(WorkspaceInitializeInput(path=workspace_path))
 
     assert result.workspace_path == workspace_path.resolve()
     assert (workspace_path / "sessions").is_dir()
@@ -44,7 +47,7 @@ def test_run_init_creates_workspace_structure(tmp_path: Path, monkeypatch):
 
 def test_run_init_rejects_missing_path(tmp_path: Path):
     with pytest.raises(WorkspaceError, match="does not exist"):
-        run_init(WorkspaceInitInput(path=tmp_path / "missing"))
+        run_initialize(WorkspaceInitializeInput(path=tmp_path / "missing"))
 
 
 def test_run_init_rejects_non_directory(tmp_path: Path):
@@ -52,7 +55,7 @@ def test_run_init_rejects_non_directory(tmp_path: Path):
     file_path.write_text("not a directory")
 
     with pytest.raises(WorkspaceError, match="not a directory"):
-        run_init(WorkspaceInitInput(path=file_path))
+        run_initialize(WorkspaceInitializeInput(path=file_path))
 
 
 def test_run_init_rejects_unwritable_path(tmp_path: Path):
@@ -62,7 +65,7 @@ def test_run_init_rejects_unwritable_path(tmp_path: Path):
 
     try:
         with pytest.raises(WorkspaceError, match="not writable"):
-            run_init(WorkspaceInitInput(path=workspace_path))
+            run_initialize(WorkspaceInitializeInput(path=workspace_path))
     finally:
         workspace_path.chmod(stat.S_IRWXU)
 
@@ -72,7 +75,7 @@ def test_run_init_rejects_existing_workspace(tmp_path: Path):
     (workspace_path / ".wv").mkdir(parents=True)
 
     with pytest.raises(WorkspaceError, match="already exists"):
-        run_init(WorkspaceInitInput(path=workspace_path))
+        run_initialize(WorkspaceInitializeInput(path=workspace_path))
 
 
 def test_get_status_returns_not_configured_when_global_config_missing(
@@ -81,7 +84,7 @@ def test_get_status_returns_not_configured_when_global_config_missing(
     config_dir = tmp_path / "user-config"
     monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
 
-    status = get_status()
+    status = run_show(WorkspaceShowInput()).status
 
     assert status.workspace_path is None
     assert status.exists is False
@@ -93,9 +96,9 @@ def test_validate_accepts_complete_workspace(tmp_path: Path, monkeypatch):
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
     monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
-    run_init(WorkspaceInitInput(path=workspace_path))
+    run_initialize(WorkspaceInitializeInput(path=workspace_path))
 
-    status = validate()
+    status = run_validate(WorkspaceValidateInput()).status
 
     assert status.workspace_path == workspace_path.resolve()
     assert status.database_exists is True
@@ -106,8 +109,8 @@ def test_validate_rejects_missing_workspace_parts(tmp_path: Path, monkeypatch):
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
     monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
-    run_init(WorkspaceInitInput(path=workspace_path))
+    run_initialize(WorkspaceInitializeInput(path=workspace_path))
     (workspace_path / "models").rmdir()
 
     with pytest.raises(WorkspaceError, match="models"):
-        validate()
+        run_validate(WorkspaceValidateInput())

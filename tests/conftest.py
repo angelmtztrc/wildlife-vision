@@ -11,12 +11,15 @@ from typer.testing import CliRunner
 
 import wv.config as config
 from wv.core.logger import reset_logging
-from wv.use_cases.device import DeviceInput, run_create as run_create_device
-from wv.use_cases.monitoring_site import (
-    MonitoringSiteInput,
-    run_create as run_create_monitoring_site,
+from wv.use_cases.device.create import CreateDeviceInput, run as run_create_device
+from wv.use_cases.monitoring_site.create import (
+    CreateMonitoringSiteInput,
+    run as run_create_monitoring_site,
 )
-from wv.use_cases.workspace import WorkspaceInitInput, run_init as run_workspace_init
+from wv.use_cases.workspace.initialize import (
+    WorkspaceInitializeInput,
+    run as run_workspace_initialize,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -41,9 +44,11 @@ def configured_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pat
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
     monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
-    run_workspace_init(WorkspaceInitInput(path=workspace_path))
-    run_create_device(DeviceInput(id="HNT001", name="North Camera"))
-    run_create_monitoring_site(MonitoringSiteInput(id="SITE001", name="North Ridge"))
+    run_workspace_initialize(WorkspaceInitializeInput(path=workspace_path))
+    run_create_device(CreateDeviceInput(id="HNT001", name="North Camera"))
+    run_create_monitoring_site(
+        CreateMonitoringSiteInput(id="SITE001", name="North Ridge")
+    )
     return workspace_path
 
 

@@ -1,7 +1,8 @@
 from pathlib import Path
 
 from wv.gui.review.controller import build_controller
-from wv.use_cases.review import ApplyReviewItemResult, ApplyReviewResult, ReviewItem
+from wv.use_cases.review.apply import ApplyReviewItemResult, ApplyReviewResult
+from wv.use_cases.review.load import ReviewItem
 import wv.gui.review.controller as controller_module
 
 

@@ -5,9 +5,16 @@ import typer
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
-from wv.use_cases.workspace import WorkspaceError, WorkspaceInitInput
-from wv.use_cases.workspace import get_status as get_workspace_status
-from wv.use_cases.workspace import run_init, validate as validate_workspace
+from wv.use_cases.workspace.initialize import (
+    WorkspaceInitializeInput,
+    run as run_initialize_workspace,
+)
+from wv.use_cases.workspace.show import WorkspaceShowInput, run as run_show_workspace
+from wv.use_cases.workspace.validate import (
+    WorkspaceValidateInput,
+    run as run_validate_workspace,
+)
+from wv.workspace.common import WorkspaceError
 
 app = typer.Typer(help="Manage workspace initialization and validation.")
 
@@ -32,7 +39,7 @@ def init_workspace(
     logger.info("Initializing workspace at %s", display_path(path))
 
     try:
-        result = run_init(WorkspaceInitInput(path=path))
+        result = run_initialize_workspace(WorkspaceInitializeInput(path=path))
     except WorkspaceError as exc:
         logger.error("Workspace initialization failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -49,7 +56,7 @@ def init_workspace(
 
 @app.command("show")
 def show_workspace():
-    status = get_workspace_status()
+    status = run_show_workspace(WorkspaceShowInput()).status
 
     typer.echo(f"global_config: {status.global_config_file}")
     typer.echo(
@@ -74,7 +81,7 @@ def show_workspace():
 @app.command("validate")
 def validate_workspace_command():
     try:
-        status = validate_workspace()
+        status = run_validate_workspace(WorkspaceValidateInput()).status
     except WorkspaceError as exc:
         logger.error("Workspace validation failed: %s", exc)
         raise typer.Exit(code=1) from exc

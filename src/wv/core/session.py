@@ -10,6 +10,25 @@ DETECTION_LABELS = ("animal", "vehicle", "human", "other", "empty")
 _SESSION_COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 
 
+def normalize_detection_label(label: str) -> str:
+    """Normalize and validate a detection label.
+
+    Args:
+        label: User- or workflow-provided detection label.
+
+    Returns:
+        Lowercase detection label when it is supported.
+
+    Raises:
+        ValueError: If ``label`` is not one of ``DETECTION_LABELS`` after
+            stripping whitespace and lowercasing.
+    """
+    normalized = label.strip().lower()
+    if normalized not in DETECTION_LABELS:
+        raise ValueError(f"Unknown detection label: {label}")
+    return normalized
+
+
 def require_session_component(value: str, field: str) -> str:
     """Validate a value used as a session path component.
 

@@ -8,10 +8,10 @@ from wv.core.display import display_path
 from wv.core.logger import get_logger
 from wv.gui.research_grade.bindings import register_bindings
 from wv.gui.research_grade.controller import ResearchGradeController, build_controller
-from wv.use_cases.research_grade import (
-    ApplyResearchGradeResult,
+from wv.use_cases.research_grade.apply import ApplyResearchGradeResult
+from wv.use_cases.research_grade.load import (
     LoadResearchGradeSessionInput,
-    load_research_grade_session,
+    run as load_research_grade_session,
 )
 
 logger = get_logger(__name__)

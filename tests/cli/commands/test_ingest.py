@@ -3,11 +3,13 @@ from pathlib import Path
 import pytest
 
 from wv.cli.commands import ingest
+from wv.use_cases.device.list import ListDevicesResult
 from wv.use_cases.ingest.ingest import (
     ExplicitIngestIdentity,
     IngestResult,
     SdCardIngestIdentity,
 )
+from wv.use_cases.monitoring_site.list import ListMonitoringSitesResult
 from wv.workspace.common import WorkspaceError
 
 
@@ -164,7 +166,7 @@ def test_complete_device_matches_registered_ids(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(
         ingest,
         "run_list_devices",
-        lambda: [Device("HNT001"), Device("CAM001")],
+        lambda input_data: ListDevicesResult(items=[Device("HNT001"), Device("CAM001")]),
     )
 
     assert ingest._complete_device("HNT") == ["HNT001"]
@@ -180,7 +182,9 @@ def test_complete_monitoring_site_matches_registered_ids(
     monkeypatch.setattr(
         ingest,
         "run_list_monitoring_sites",
-        lambda: [MonitoringSite("SITE001"), MonitoringSite("PARK001")],
+        lambda input_data: ListMonitoringSitesResult(
+            items=[MonitoringSite("SITE001"), MonitoringSite("PARK001")]
+        ),
     )
 
     assert ingest._complete_monitoring_site("SITE") == ["SITE001"]
@@ -189,7 +193,7 @@ def test_complete_monitoring_site_matches_registered_ids(
 def test_completion_returns_no_suggestions_without_workspace(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    def raise_workspace_error():
+    def raise_workspace_error(input_data):
         raise WorkspaceError("No workspace configured")
 
     monkeypatch.setattr(ingest, "run_list_devices", raise_workspace_error)

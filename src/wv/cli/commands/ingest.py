@@ -5,7 +5,7 @@ import typer
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
-from wv.use_cases.device import run_list as run_list_devices
+from wv.use_cases.device.list import ListDevicesInput, run as run_list_devices
 from wv.use_cases.ingest.ingest import (
     ExplicitIngestIdentity,
     IngestInput,
@@ -14,7 +14,10 @@ from wv.use_cases.ingest.ingest import (
     run as run_ingest,
 )
 from wv.use_cases.ingest._shared import IngestError
-from wv.use_cases.monitoring_site import run_list as run_list_monitoring_sites
+from wv.use_cases.monitoring_site.list import (
+    ListMonitoringSitesInput,
+    run as run_list_monitoring_sites,
+)
 from wv.workspace.common import WorkspaceError
 
 app = typer.Typer(help="Ingest photos from SD cards and other source locations.")
@@ -24,7 +27,11 @@ logger = get_logger(__name__)
 
 def _complete_device(incomplete: str) -> list[str]:
     try:
-        return [device.id for device in run_list_devices() if device.id.startswith(incomplete)]
+        return [
+            device.id
+            for device in run_list_devices(ListDevicesInput()).items
+            if device.id.startswith(incomplete)
+        ]
     except WorkspaceError:
         return []
 
@@ -33,7 +40,7 @@ def _complete_monitoring_site(incomplete: str) -> list[str]:
     try:
         return [
             site.id
-            for site in run_list_monitoring_sites()
+            for site in run_list_monitoring_sites(ListMonitoringSitesInput()).items
             if site.id.startswith(incomplete)
         ]
     except WorkspaceError:

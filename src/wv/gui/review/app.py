@@ -8,7 +8,8 @@ from wv.core.display import display_path
 from wv.core.logger import get_logger
 from wv.gui.review.bindings import register_bindings
 from wv.gui.review.controller import ReviewController, build_controller
-from wv.use_cases.review import ApplyReviewResult, LoadReviewSessionInput, load_review_session
+from wv.use_cases.review.apply import ApplyReviewResult
+from wv.use_cases.review.load import LoadReviewSessionInput, run as load_review_session
 
 logger = get_logger(__name__)
 

@@ -2,11 +2,11 @@ from pathlib import Path
 
 import wv.gui.research_grade.controller as controller_module
 from wv.gui.research_grade.controller import build_controller
-from wv.use_cases.research_grade import (
+from wv.use_cases.research_grade.apply import (
     ApplyResearchGradeItemResult,
     ApplyResearchGradeResult,
-    ResearchGradeItem,
 )
+from wv.use_cases.research_grade.load import ResearchGradeItem
 
 
 def _item(path: Path, research_grade: bool | None = None) -> ResearchGradeItem:

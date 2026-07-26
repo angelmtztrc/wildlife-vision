@@ -2,14 +2,16 @@ from pathlib import Path
 
 import pytest
 
-import wv.use_cases.research_grade as research_grade
+import wv.use_cases.research_grade.apply as research_grade_apply
 from wv.core.exif import read_exif
-from wv.use_cases.research_grade import (
+from wv.use_cases.research_grade.apply import (
     ApplyResearchGradeDecision,
     ApplyResearchGradeInput,
+    run as apply_research_grade,
+)
+from wv.use_cases.research_grade.load import (
     LoadResearchGradeSessionInput,
-    apply_research_grade,
-    load_research_grade_session,
+    run as load_research_grade_session,
 )
 
 
@@ -83,7 +85,7 @@ def test_apply_research_grade_reports_metadata_failures(
     image_path = make_image(animal_path / "animal.jpg")
 
     monkeypatch.setattr(
-        research_grade,
+        research_grade_apply,
         "write_exif_image_description",
         lambda file_path, data: (_ for _ in ()).throw(OSError("metadata write failed")),
     )

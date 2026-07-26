@@ -2,32 +2,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from wv.core.exif import read_exif, write_exif_image_description
-from wv.core.files import ensure_directory, is_allowed_image_file, move_file_with_staged_copy
-from wv.core.metadata import parse_image_description, upsert_image_description_properties
-from wv.core.session import DETECTION_LABELS, get_detection_path
+from wv.core.files import ensure_directory, move_file_with_staged_copy
+from wv.core.metadata import upsert_image_description_properties
 
-REVIEW_LABELS = DETECTION_LABELS
-
-
-@dataclass
-class ReviewItem:
-    file_path: Path
-    original_label: str
-    reviewed: bool
-
-
-@dataclass(frozen=True)
-class LoadReviewSessionInput:
-    session_path: Path
-    detection_label: str
-    pending_only: bool = False
-
-
-@dataclass
-class LoadReviewSessionResult:
-    source_directory: Path
-    items: list[ReviewItem] = field(default_factory=list)
-    files_ignored: int = 0
+from . import _shared as shared
 
 
 @dataclass(frozen=True)
@@ -65,62 +43,14 @@ class ApplyReviewResult:
     item_results: list[ApplyReviewItemResult] = field(default_factory=list)
 
 
-def normalize_review_label(label: str) -> str:
-    normalized = label.strip().lower()
-    if normalized not in REVIEW_LABELS:
-        raise ValueError(f"Unsupported review label: {label}")
-    return normalized
-
-
-def _review_metadata(file_path: Path) -> dict[str, str]:
-    return parse_image_description(read_exif(file_path, "ImageDescription"))
-
-
-def _is_reviewed(file_path: Path) -> bool:
-    return _review_metadata(file_path).get("Reviewed", "").lower() == "true"
-
-
-def _detection_directory(session_path: Path, detection_label: str) -> Path:
-    return get_detection_path(session_path, detection_label)
-
-
-def load_review_session(input_data: LoadReviewSessionInput) -> LoadReviewSessionResult:
-    detection_label = normalize_review_label(input_data.detection_label)
-    ensure_directory(input_data.session_path)
-
-    source_directory = _detection_directory(input_data.session_path, detection_label)
-    ensure_directory(source_directory)
-
-    result = LoadReviewSessionResult(source_directory=source_directory)
-
-    for file_path in sorted(source_directory.iterdir(), key=lambda path: path.name.lower()):
-        if not file_path.is_file() or not is_allowed_image_file(file_path):
-            result.files_ignored += 1
-            continue
-
-        reviewed = _is_reviewed(file_path)
-        if input_data.pending_only and reviewed:
-            continue
-
-        result.items.append(
-            ReviewItem(
-                file_path=file_path,
-                original_label=detection_label,
-                reviewed=reviewed,
-            )
-        )
-
-    return result
-
-
-def apply_review(input_data: ApplyReviewInput) -> ApplyReviewResult:
+def run(input_data: ApplyReviewInput) -> ApplyReviewResult:
     ensure_directory(input_data.session_path)
     result = ApplyReviewResult()
 
     for decision in input_data.decisions:
-        source_label = normalize_review_label(decision.source_label)
-        target_label = normalize_review_label(decision.target_label)
-        final_path = _detection_directory(input_data.session_path, target_label) / decision.file_path.name
+        source_label = shared.normalize_review_label(decision.source_label)
+        target_label = shared.normalize_review_label(decision.target_label)
+        final_path = shared.detection_directory(input_data.session_path, target_label) / decision.file_path.name
 
         try:
             updated_description = upsert_image_description_properties(

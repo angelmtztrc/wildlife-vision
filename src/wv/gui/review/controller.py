@@ -2,13 +2,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from wv.gui.review.state import ReviewSessionState, StagedDecision
-from wv.use_cases.review import (
+from wv.use_cases.review.apply import (
     ApplyReviewDecision,
     ApplyReviewInput,
     ApplyReviewResult,
-    ReviewItem,
-    apply_review,
+    run as apply_review,
 )
+from wv.use_cases.review.load import ReviewItem
 
 
 @dataclass(frozen=True)

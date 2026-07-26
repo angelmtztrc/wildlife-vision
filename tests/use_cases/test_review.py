@@ -2,14 +2,16 @@ from pathlib import Path
 
 import pytest
 
-import wv.use_cases.review as review
+import wv.use_cases.review.apply as review_apply
 from wv.core.exif import read_exif
-from wv.use_cases.review import (
+from wv.use_cases.review.apply import (
     ApplyReviewDecision,
     ApplyReviewInput,
+    run as apply_review,
+)
+from wv.use_cases.review.load import (
     LoadReviewSessionInput,
-    apply_review,
-    load_review_session,
+    run as load_review_session,
 )
 
 
@@ -129,7 +131,7 @@ def test_apply_review_reports_metadata_failures(make_image, tmp_path: Path, monk
     image_path = make_image(animal_path / "animal.jpg")
 
     monkeypatch.setattr(
-        review,
+        review_apply,
         "write_exif_image_description",
         lambda file_path, data: (_ for _ in ()).throw(OSError("metadata write failed")),
     )

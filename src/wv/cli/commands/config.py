@@ -4,7 +4,12 @@ import typer
 import yaml
 
 from wv.core.logger import get_logger
-from wv.use_cases.config import run_get, run_init, run_path, run_reset, run_set, run_validate
+from wv.use_cases.config.get_value import GetConfigValueInput, run as run_get_config_value
+from wv.use_cases.config.initialize import ConfigInitializeInput, run as run_initialize_config
+from wv.use_cases.config.reset_value import ResetConfigValueInput, run as run_reset_config_value
+from wv.use_cases.config.set_value import SetConfigValueInput, run as run_set_config_value
+from wv.use_cases.config.show_path import ShowConfigPathInput, run as run_show_config_path
+from wv.use_cases.config.validate import ValidateConfigInput, run as run_validate_config
 from wv.workspace.common import WorkspaceError
 from wv.workspace.schema import get_known_keys
 
@@ -26,7 +31,7 @@ def _render_value(value: Any) -> str:
 @app.command("init")
 def init_config():
     try:
-        result = run_init()
+        result = run_initialize_config(ConfigInitializeInput())
     except WorkspaceError as exc:
         logger.error("Config initialization failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -43,7 +48,7 @@ def get_config(
     ],
 ):
     try:
-        result = run_get(key)
+        result = run_get_config_value(GetConfigValueInput(key=key))
     except WorkspaceError as exc:
         logger.error("Config get failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -61,7 +66,7 @@ def set_config(
     value: Annotated[str, typer.Argument(help="Value to assign to the config key.")],
 ):
     try:
-        result = run_set(key, value)
+        result = run_set_config_value(SetConfigValueInput(key=key, raw_value=value))
     except WorkspaceError as exc:
         logger.error("Config set failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -78,7 +83,7 @@ def reset_config(
     ],
 ):
     try:
-        result = run_reset(key)
+        result = run_reset_config_value(ResetConfigValueInput(key=key))
     except WorkspaceError as exc:
         logger.error("Config reset failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -90,7 +95,7 @@ def reset_config(
 @app.command("validate")
 def validate_config():
     try:
-        result = run_validate()
+        result = run_validate_config(ValidateConfigInput())
     except WorkspaceError as exc:
         logger.error("Config validation failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -102,7 +107,7 @@ def validate_config():
 @app.command("path")
 def config_path():
     try:
-        result = run_path()
+        result = run_show_config_path(ShowConfigPathInput())
     except WorkspaceError as exc:
         logger.error("Config path failed: %s", exc)
         raise typer.Exit(code=1) from exc

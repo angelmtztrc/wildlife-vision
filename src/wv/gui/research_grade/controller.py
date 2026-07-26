@@ -5,13 +5,13 @@ from wv.gui.research_grade.state import (
     ResearchGradeSessionState,
     StagedResearchGradeDecision,
 )
-from wv.use_cases.research_grade import (
+from wv.use_cases.research_grade.apply import (
     ApplyResearchGradeDecision,
     ApplyResearchGradeInput,
     ApplyResearchGradeResult,
-    ResearchGradeItem,
-    apply_research_grade,
+    run as apply_research_grade,
 )
+from wv.use_cases.research_grade.load import ResearchGradeItem
 
 
 @dataclass(frozen=True)

@@ -5,8 +5,12 @@ import pytest
 
 from wv.persistence.repositories import DeploymentRepository, DeviceRepository
 from wv.persistence.sql_session import sql_session_scope
-from wv.use_cases.device import DeviceInput, run_create as run_create_device, run_show as run_show_device
-from wv.use_cases.monitoring_site import MonitoringSiteInput, run_create as run_create_monitoring_site
+from wv.use_cases.device.create import CreateDeviceInput, run as _run_create_device
+from wv.use_cases.device.show import ShowDeviceInput, run as _run_show_device
+from wv.use_cases.monitoring_site.create import (
+    CreateMonitoringSiteInput,
+    run as run_create_monitoring_site,
+)
 from wv.use_cases.sd._shared import SdError
 from wv.use_cases.sd.clear import SdClearInput, run as run_clear
 from wv.use_cases.sd.initialize import SdInitializeInput as SdInitInput
@@ -14,7 +18,10 @@ from wv.use_cases.sd.initialize import run as run_init
 from wv.use_cases.sd.show import SdShowInput, run as _run_show
 from wv.use_cases.sd.sync import SdSyncInput, run as run_sync
 from wv.use_cases.sd.update import SdUpdateInput, run as run_update
-from wv.use_cases.workspace import WorkspaceInitInput, run_init as run_workspace_init
+from wv.use_cases.workspace.initialize import (
+    WorkspaceInitializeInput,
+    run as run_workspace_initialize,
+)
 from wv.workspace.common import WorkspaceError
 from wv.workspace.workspace_config import get_workspace_database_path
 
@@ -33,6 +40,14 @@ def _set_device_monitoring_site(
         )
 
 
+def run_create_device(input_data: CreateDeviceInput) -> None:
+    _run_create_device(input_data)
+
+
+def run_show_device(device_id: str):
+    return _run_show_device(ShowDeviceInput(id=device_id)).device
+
+
 def run_show(path: Path):
     return _run_show(SdShowInput(path=path))
 
@@ -43,11 +58,11 @@ def configured_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pat
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
     monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
-    run_workspace_init(WorkspaceInitInput(path=workspace_path))
-    run_create_device(DeviceInput(id="HNT001", name="North Camera"))
-    run_create_device(DeviceInput(id="HNT002", name="South Camera"))
-    run_create_monitoring_site(MonitoringSiteInput(id="SITE001", name="North Ridge"))
-    run_create_monitoring_site(MonitoringSiteInput(id="SITE002", name="South Ridge"))
+    run_workspace_initialize(WorkspaceInitializeInput(path=workspace_path))
+    run_create_device(CreateDeviceInput(id="HNT001", name="North Camera"))
+    run_create_device(CreateDeviceInput(id="HNT002", name="South Camera"))
+    run_create_monitoring_site(CreateMonitoringSiteInput(id="SITE001", name="North Ridge"))
+    run_create_monitoring_site(CreateMonitoringSiteInput(id="SITE002", name="South Ridge"))
     return workspace_path
 
 

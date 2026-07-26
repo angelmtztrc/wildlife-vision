@@ -3,16 +3,11 @@ from typing import Annotated
 import typer
 
 from wv.core.logger import get_logger
-from wv.use_cases.device import (
-    DeviceInput,
-    DeviceUpdateInput,
-    RecordAlreadyExistsError,
-    RecordNotFoundError,
-    run_create,
-    run_list,
-    run_show,
-    run_update,
-)
+from wv.use_cases.device._shared import DeviceError
+from wv.use_cases.device.create import CreateDeviceInput, run as run_create_device
+from wv.use_cases.device.list import ListDevicesInput, run as run_list_devices
+from wv.use_cases.device.show import ShowDeviceInput, run as run_show_device
+from wv.use_cases.device.update import UpdateDeviceInput, run as run_update_device
 from wv.workspace.common import WorkspaceError
 
 app = typer.Typer(help="Manage devices.")
@@ -35,8 +30,8 @@ def create(
     notes: Annotated[str | None, typer.Option(help="Device notes.")] = None,
 ):
     try:
-        result = run_create(
-            DeviceInput(
+        result = run_create_device(
+            CreateDeviceInput(
                 id=device_id,
                 name=name,
                 manufacturer=manufacturer,
@@ -44,23 +39,23 @@ def create(
                 notes=notes,
             )
         )
-    except (WorkspaceError, RecordAlreadyExistsError) as exc:
+    except (WorkspaceError, DeviceError) as exc:
         logger.error("Device creation failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
-    logger.done("Device created: %s (%s)", result.id, result.name)
+    logger.done("Device created: %s (%s)", result.device.id, result.device.name)
     return None
 
 
 @app.command("list")
 def list_items():
     try:
-        result = run_list()
+        result = run_list_devices(ListDevicesInput())
     except WorkspaceError as exc:
         logger.error("Device list failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
-    for device in result:
+    for device in result.items:
         typer.echo(f"{device.id}\t{device.name}")
 
     return None
@@ -69,16 +64,16 @@ def list_items():
 @app.command("show")
 def show(device_id: Annotated[str, typer.Argument(help="Device ID.")]):
     try:
-        result = run_show(device_id)
-    except (WorkspaceError, RecordNotFoundError) as exc:
+        result = run_show_device(ShowDeviceInput(id=device_id))
+    except (WorkspaceError, DeviceError) as exc:
         logger.error("Device show failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
-    typer.echo(f"id: {result.id}")
-    typer.echo(f"name: {result.name}")
-    typer.echo(f"manufacturer: {_format_value(result.manufacturer)}")
-    typer.echo(f"serial_number: {_format_value(result.serial_number)}")
-    typer.echo(f"notes: {_format_value(result.notes)}")
+    typer.echo(f"id: {result.device.id}")
+    typer.echo(f"name: {result.device.name}")
+    typer.echo(f"manufacturer: {_format_value(result.device.manufacturer)}")
+    typer.echo(f"serial_number: {_format_value(result.device.serial_number)}")
+    typer.echo(f"notes: {_format_value(result.device.notes)}")
     return None
 
 
@@ -93,8 +88,8 @@ def update(
     notes: Annotated[str | None, typer.Option(help="Device notes.")] = None,
 ):
     try:
-        result = run_update(
-            DeviceUpdateInput(
+        result = run_update_device(
+            UpdateDeviceInput(
                 id=device_id,
                 name=name,
                 manufacturer=manufacturer,
@@ -102,9 +97,9 @@ def update(
                 notes=notes,
             )
         )
-    except (WorkspaceError, RecordNotFoundError) as exc:
+    except (WorkspaceError, DeviceError) as exc:
         logger.error("Device update failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
-    logger.done("Device updated: %s (%s)", result.id, result.name)
+    logger.done("Device updated: %s (%s)", result.device.id, result.device.name)
     return None
