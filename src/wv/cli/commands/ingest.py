@@ -5,13 +5,16 @@ import typer
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
-from wv.persistence.common import RecordNotFoundError
 from wv.use_cases.device import run_list as run_list_devices
-from wv.use_cases.ingest import IngestInput, IngestResult, SdIngestInput
-from wv.use_cases.ingest import run as run_ingest
-from wv.use_cases.ingest import run_sd as run_sd_ingest
+from wv.use_cases.ingest.ingest import (
+    ExplicitIngestIdentity,
+    IngestInput,
+    IngestResult,
+    SdCardIngestIdentity,
+    run as run_ingest,
+)
+from wv.use_cases.ingest._shared import IngestError
 from wv.use_cases.monitoring_site import run_list as run_list_monitoring_sites
-from wv.use_cases.sd import SdError
 from wv.workspace.common import WorkspaceError
 
 app = typer.Typer(help="Ingest photos from SD cards and other source locations.")
@@ -86,14 +89,15 @@ def ingest_sd(
     )
 
     try:
-        result = run_sd_ingest(
-            SdIngestInput(
+        result = run_ingest(
+            IngestInput(
                 source=source,
                 mode=mode,
+                identity=SdCardIngestIdentity(),
                 dry_run=dry_run,
             )
         )
-    except (WorkspaceError, RecordNotFoundError, SdError, ValueError) as exc:
+    except (WorkspaceError, IngestError, ValueError) as exc:
         logger.error("SD ingest failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
@@ -155,13 +159,15 @@ def ingest_folder(
         result = run_ingest(
             IngestInput(
                 source=source,
-                device_id=device,
-                monitoring_site_id=monitoring_site,
                 mode=mode,
+                identity=ExplicitIngestIdentity(
+                    device_id=device,
+                    monitoring_site_id=monitoring_site,
+                ),
                 dry_run=dry_run,
             )
         )
-    except (WorkspaceError, RecordNotFoundError, ValueError) as exc:
+    except (WorkspaceError, IngestError, ValueError) as exc:
         logger.error("Folder ingest failed: %s", exc)
         raise typer.Exit(code=1) from exc
 

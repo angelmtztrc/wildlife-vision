@@ -1,10 +1,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-import shutil
-from uuid import uuid4
 
 from wv.core.exif import read_exif, write_exif_image_description
-from wv.core.files import ensure_directory, is_allowed_image_file
+from wv.core.files import ensure_directory, is_allowed_image_file, move_file_with_staged_copy
 from wv.core.metadata import parse_image_description, upsert_image_description_properties
 from wv.core.session import DETECTION_LABELS, get_detection_path
 
@@ -86,21 +84,6 @@ def _detection_directory(session_path: Path, detection_label: str) -> Path:
     return get_detection_path(session_path, detection_label)
 
 
-def _move_source_to_destination(source: Path, destination: Path) -> tuple[bool, bool]:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-
-    replaced_existing = destination.exists()
-    temp_destination = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
-
-    try:
-        shutil.move(str(source), temp_destination)
-        temp_destination.replace(destination)
-        return True, replaced_existing
-    finally:
-        if temp_destination.exists():
-            temp_destination.unlink()
-
-
 def load_review_session(input_data: LoadReviewSessionInput) -> LoadReviewSessionResult:
     detection_label = normalize_review_label(input_data.detection_label)
     ensure_directory(input_data.session_path)
@@ -147,17 +130,21 @@ def apply_review(input_data: ApplyReviewInput) -> ApplyReviewResult:
                     "Reviewed": "true",
                 },
             )
-            write_exif_image_description(decision.file_path, updated_description)
-
             moved = False
             replaced_existing = False
             committed_path = decision.file_path
             if target_label != source_label:
-                moved, replaced_existing = _move_source_to_destination(
+                def _write_review_metadata(staged_file: Path) -> None:
+                    write_exif_image_description(staged_file, updated_description)
+
+                moved, replaced_existing = move_file_with_staged_copy(
                     source=decision.file_path,
                     destination=final_path,
+                    transform=_write_review_metadata,
                 )
                 committed_path = final_path
+            else:
+                write_exif_image_description(decision.file_path, updated_description)
 
             result.files_reviewed += 1
             if target_label != source_label:

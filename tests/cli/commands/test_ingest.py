@@ -3,7 +3,11 @@ from pathlib import Path
 import pytest
 
 from wv.cli.commands import ingest
-from wv.use_cases.ingest import IngestResult
+from wv.use_cases.ingest.ingest import (
+    ExplicitIngestIdentity,
+    IngestResult,
+    SdCardIngestIdentity,
+)
 from wv.workspace.common import WorkspaceError
 
 
@@ -18,7 +22,7 @@ def test_ingest_sd_prints_summary_for_success(
 
     monkeypatch.setattr(
         ingest,
-        "run_sd_ingest",
+        "run_ingest",
         lambda input_data: IngestResult(
             files_discovered=4,
             files_copied=3,
@@ -66,7 +70,7 @@ def test_ingest_sd_exits_with_code_one_when_use_case_reports_failures(
 
     monkeypatch.setattr(
         ingest,
-        "run_sd_ingest",
+        "run_ingest",
         lambda input_data: IngestResult(
             files_discovered=1,
             files_failed=1,
@@ -112,8 +116,9 @@ def test_ingest_folder_forwards_option_identity(
     )
 
     assert result.exit_code == 0
-    assert captured_input.device_id == "HNT001"
-    assert captured_input.monitoring_site_id == "SITE001"
+    assert isinstance(captured_input.identity, ExplicitIngestIdentity)
+    assert captured_input.identity.device_id == "HNT001"
+    assert captured_input.identity.monitoring_site_id == "SITE001"
     assert captured_input.mode == "copy"
     assert "Finished folder ingest" in result.output
 
@@ -142,12 +147,13 @@ def test_ingest_sd_forwards_options_to_use_case(
         captured_input = input_data
         return IngestResult(destination=tmp_path / "destination")
 
-    monkeypatch.setattr(ingest, "run_sd_ingest", fake_run)
+    monkeypatch.setattr(ingest, "run_ingest", fake_run)
 
     result = cli_runner.invoke(ingest.app, ["sd", str(source), "--mode", "copy"])
 
     assert result.exit_code == 0
     assert captured_input.mode == "copy"
+    assert isinstance(captured_input.identity, SdCardIngestIdentity)
 
 
 def test_complete_device_matches_registered_ids(monkeypatch: pytest.MonkeyPatch):

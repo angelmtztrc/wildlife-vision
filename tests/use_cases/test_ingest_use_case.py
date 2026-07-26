@@ -3,11 +3,12 @@ from pathlib import Path
 
 import pytest
 
-import wv.use_cases.ingest as ingest
-from wv.persistence.common import RecordNotFoundError
+import wv.use_cases.ingest.ingest as ingest
+import wv.use_cases.ingest._shared as ingest_shared
 from wv.persistence.repositories import DeviceRepository
 from wv.persistence.sql_session import sql_session_scope
-from wv.use_cases.sd import SdError, SdInitInput, run_init
+from wv.use_cases.ingest._shared import IngestError
+from wv.use_cases.sd.initialize import SdInitializeInput, run as run_initialize_sd
 from wv.workspace.workspace_config import get_workspace_database_path
 
 
@@ -18,7 +19,7 @@ class FrozenDateTime:
 
 
 def _freeze_ingest_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ingest, "datetime", FrozenDateTime)
+    monkeypatch.setattr(ingest_shared, "datetime", FrozenDateTime)
     monkeypatch.setattr(
         ingest,
         "get_image_datetime",
@@ -42,9 +43,11 @@ def test_run_dry_copy_uses_identity_and_workspace_session(
     result = ingest.run(
         ingest.IngestInput(
             source=source,
-            device_id="HNT001",
-            monitoring_site_id="SITE001",
             mode="copy",
+            identity=ingest.ExplicitIngestIdentity(
+                device_id="HNT001",
+                monitoring_site_id="SITE001",
+            ),
             dry_run=True,
         )
     )
@@ -77,9 +80,11 @@ def test_run_drain_writes_expected_file_and_deletes_source(
     result = ingest.run(
         ingest.IngestInput(
             source=source,
-            device_id="HNT001",
-            monitoring_site_id="SITE001",
             mode="drain",
+            identity=ingest.ExplicitIngestIdentity(
+                device_id="HNT001",
+                monitoring_site_id="SITE001",
+            ),
         )
     )
     expected_destination = (
@@ -101,13 +106,15 @@ def test_run_rejects_unregistered_identity(configured_workspace: Path, tmp_path:
     source = tmp_path / "source"
     source.mkdir()
 
-    with pytest.raises(RecordNotFoundError, match="Monitoring site not found: UNKNOWN"):
+    with pytest.raises(IngestError, match="Monitoring site not found: UNKNOWN"):
         ingest.run(
             ingest.IngestInput(
                 source=source,
-                device_id="HNT001",
-                monitoring_site_id="UNKNOWN",
                 mode="copy",
+                identity=ingest.ExplicitIngestIdentity(
+                    device_id="HNT001",
+                    monitoring_site_id="UNKNOWN",
+                ),
             )
         )
 
@@ -127,9 +134,11 @@ def test_run_uses_next_timestamp_when_session_already_exists(
     result = ingest.run(
         ingest.IngestInput(
             source=source,
-            device_id="HNT001",
-            monitoring_site_id="SITE001",
             mode="copy",
+            identity=ingest.ExplicitIngestIdentity(
+                device_id="HNT001",
+                monitoring_site_id="SITE001",
+            ),
         )
     )
 
@@ -146,14 +155,16 @@ def test_run_creates_init_route_for_unsupported_only_source(
     source = tmp_path / "source"
     source.mkdir()
     (source / "notes.txt").write_text("ignore me")
-    monkeypatch.setattr(ingest, "datetime", FrozenDateTime)
+    monkeypatch.setattr(ingest_shared, "datetime", FrozenDateTime)
 
     result = ingest.run(
         ingest.IngestInput(
             source=source,
-            device_id="HNT001",
-            monitoring_site_id="SITE001",
             mode="copy",
+            identity=ingest.ExplicitIngestIdentity(
+                device_id="HNT001",
+                monitoring_site_id="SITE001",
+            ),
         )
     )
 
@@ -168,12 +179,20 @@ def test_run_sd_rejects_database_assignment_mismatch(
 ):
     source = tmp_path / "sd-card"
     source.mkdir()
-    run_init(SdInitInput(path=source, device_id="HNT001", monitoring_site_id="SITE001"))
+    run_initialize_sd(
+        SdInitializeInput(path=source, device_id="HNT001", monitoring_site_id="SITE001")
+    )
 
     with sql_session_scope(get_workspace_database_path(configured_workspace)) as sql_session:
         DeviceRepository(sql_session).update(
             "HNT001", {"monitoring_site_id": "SITE002"}
         )
 
-    with pytest.raises(SdError, match="wv sd sync"):
-        ingest.run_sd(ingest.SdIngestInput(source=source, mode="copy"))
+    with pytest.raises(IngestError, match="wv sd sync"):
+        ingest.run(
+            ingest.IngestInput(
+                source=source,
+                mode="copy",
+                identity=ingest.SdCardIngestIdentity(),
+            )
+        )

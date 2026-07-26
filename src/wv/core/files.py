@@ -2,8 +2,10 @@ import base64
 import hashlib
 import re
 import shutil
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 allowed_image_exts = {".jpg", ".jpeg"}
 
@@ -129,4 +131,69 @@ def copy_file_preserving_metadata(source: Path, destination: Path) -> Path:
     shutil.copy2(source, destination)
 
     return destination
-"""Shared filesystem helpers for image ingestion and processing."""
+
+
+def move_file_with_staged_copy(
+    source: Path,
+    destination: Path,
+    *,
+    transform: Callable[[Path], None] | None = None,
+    verify: Callable[[Path], bool] | None = None,
+) -> tuple[bool, bool]:
+    """Move a file by staging a verified copy before replacing the destination.
+
+    The source is copied to a temporary file in the destination directory, then
+    optionally transformed and verified. Only after those steps succeed is the
+    temporary file atomically moved into place and the original source removed.
+    If copying, transformation, verification, or replacement fails, the original
+    source remains in place and the temporary file is removed when possible.
+
+    Args:
+        source: Existing file to move.
+        destination: Full destination file path.
+        transform: Optional callback used to mutate the staged temporary file
+            before it is committed. The callback must raise on failure.
+        verify: Optional callback used to validate the staged temporary file
+            before it is committed. It must return ``True`` for success.
+
+    Returns:
+        A tuple ``(moved, replaced_existing)``. ``moved`` is always ``True`` if
+        the function returns successfully. ``replaced_existing`` is ``True`` when
+        a file already existed at ``destination`` before replacement.
+
+    Raises:
+        FileNotFoundError: If ``source`` does not exist.
+        IsADirectoryError: If ``source`` is not a file or ``destination`` is a directory.
+        NotADirectoryError: If ``destination.parent`` exists but is not a directory.
+        ValueError: If ``verify`` returns ``False``.
+        OSError: If copying, replacing, deleting, or temporary cleanup fails.
+
+    Side Effects:
+        Creates ``destination.parent`` when needed, writes a temporary file next
+        to ``destination``, replaces ``destination``, and deletes ``source`` only
+        after the replacement succeeds.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if not destination.parent.is_dir():
+        raise NotADirectoryError(destination.parent)
+    if destination.exists() and destination.is_dir():
+        raise IsADirectoryError(destination)
+
+    replaced_existing = destination.exists()
+    temporary_destination = destination.with_name(
+        f".{destination.stem}.{uuid4().hex}{destination.suffix}"
+    )
+
+    try:
+        copy_file_preserving_metadata(source, temporary_destination)
+        if transform is not None:
+            transform(temporary_destination)
+        if verify is not None and not verify(temporary_destination):
+            raise ValueError(f"Staged file verification failed for: {source}")
+
+        temporary_destination.replace(destination)
+        source.unlink()
+        return True, replaced_existing
+    finally:
+        if temporary_destination.exists():
+            temporary_destination.unlink()

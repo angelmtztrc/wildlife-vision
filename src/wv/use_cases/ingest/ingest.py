@@ -1,36 +1,36 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from pathlib import Path
-from uuid import uuid4
-
-from sqlalchemy.orm import Session as SqlSession
 
 from wv.core.display import display_file, display_path
-from wv.core.files import copy_file_preserving_metadata, ensure_directory, get_file_id, is_allowed_image_file
+from wv.core.files import ensure_directory, get_file_id, is_allowed_image_file
 from wv.core.images import get_image_datetime
 from wv.core.logger import get_logger, get_progress
+from wv.core.sd_config import SdConfigError, read_sd_config
 from wv.core.session import get_init_path, require_session_component
-from wv.persistence.repositories import DeviceRepository, MonitoringSiteRepository
 from wv.persistence.sql_session import sql_session_scope
-from wv.use_cases.sd import SdError, read_config
+from . import _shared as shared
+from ._shared import IngestError, ResolvedIngestIdentity
 from wv.workspace.workspace_config import require_workspace_database_path, require_workspace_path
 
 logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
-class IngestInput:
-    source: Path
+class ExplicitIngestIdentity:
     device_id: str
     monitoring_site_id: str
-    mode: str
-    dry_run: bool = False
 
 
 @dataclass(frozen=True)
-class SdIngestInput:
+class SdCardIngestIdentity:
+    pass
+
+
+@dataclass(frozen=True)
+class IngestInput:
     source: Path
     mode: str
+    identity: ExplicitIngestIdentity | SdCardIngestIdentity
     dry_run: bool = False
 
 
@@ -46,69 +46,30 @@ class IngestResult:
     dry_run: bool = False
 
 
-def _validate_ingest_identity(
-    sql_session: SqlSession, device_id: str, monitoring_site_id: str
-) -> None:
-    DeviceRepository(sql_session).get(device_id)
-    MonitoringSiteRepository(sql_session).get(monitoring_site_id)
+def _resolve_identity(input_data: IngestInput) -> ResolvedIngestIdentity:
+    workspace_path = require_workspace_path()
+    database_path = require_workspace_database_path(workspace_path)
 
-
-def _validate_sd_ingest_identity(
-    sql_session: SqlSession,
-    source: Path,
-    device_id: str,
-    monitoring_site_id: str,
-) -> None:
-    device = DeviceRepository(sql_session).get(device_id)
-    MonitoringSiteRepository(sql_session).get(monitoring_site_id)
-    if device.monitoring_site_id != monitoring_site_id:
-        raise SdError(
-            "SD card deployment does not match the workspace database. "
-            f"Run 'wv sd sync {source.resolve()}' to synchronize the workspace from this SD card."
-        )
-
-
-def _verify_copy(source_file_id: str, copied_file: Path) -> bool:
-    return get_file_id(copied_file) == source_file_id
-
-
-def _replace_destination_with_verified_copy(
-    source: Path, destination: Path, source_file_id: str
-) -> tuple[bool, bool]:
-    temp_destination = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
+    if isinstance(input_data.identity, ExplicitIngestIdentity):
+        with sql_session_scope(database_path) as sql_session:
+            return shared.validate_explicit_identity(
+                sql_session,
+                input_data.identity.device_id,
+                input_data.identity.monitoring_site_id,
+            )
 
     try:
-        copy_file_preserving_metadata(source, temp_destination)
+        sd_config = read_sd_config(input_data.source)
+    except SdConfigError as exc:
+        raise IngestError(str(exc)) from exc
 
-        if not _verify_copy(source_file_id, temp_destination):
-            raise ValueError(f"Copied file verification failed for: {source}")
-
-        replaced_existing = destination.exists()
-        temp_destination.replace(destination)
-        return True, replaced_existing
-    finally:
-        if temp_destination.exists():
-            temp_destination.unlink()
-
-
-def _get_session_path(workspace_path: Path, device_id: str, dry_run: bool) -> Path:
-    timestamp = datetime.now()
-
-    while True:
-        session_path = workspace_path / "sessions" / (
-            f"{timestamp.strftime('%Y%m%d_%H%M%S')}__{device_id}"
+    with sql_session_scope(database_path) as sql_session:
+        return shared.validate_sd_identity(
+            sql_session,
+            input_data.source,
+            sd_config.device_id,
+            sd_config.monitoring_site_id,
         )
-        if dry_run:
-            if not session_path.exists():
-                return session_path
-        else:
-            try:
-                session_path.mkdir(parents=True)
-                return session_path
-            except FileExistsError:
-                pass
-
-        timestamp += timedelta(seconds=1)
 
 
 def run(input_data: IngestInput) -> IngestResult:
@@ -116,19 +77,16 @@ def run(input_data: IngestInput) -> IngestResult:
         raise ValueError(f"Unknown ingest mode: {input_data.mode}")
 
     workspace_path = require_workspace_path()
-    with sql_session_scope(require_workspace_database_path(workspace_path)) as sql_session:
-        _validate_ingest_identity(
-            sql_session, input_data.device_id, input_data.monitoring_site_id
-        )
+    resolved_identity = _resolve_identity(input_data)
 
     ensure_directory(input_data.source)
-    device_id = require_session_component(input_data.device_id, "Device ID")
+    device_id = require_session_component(resolved_identity.device_id, "Device ID")
     monitoring_site_id = require_session_component(
-        input_data.monitoring_site_id, "Monitoring site ID"
+        resolved_identity.monitoring_site_id, "Monitoring site ID"
     )
 
     result = IngestResult(dry_run=input_data.dry_run)
-    session_path = _get_session_path(workspace_path, device_id, input_data.dry_run)
+    session_path = shared.get_session_path(workspace_path, device_id, input_data.dry_run)
     destination_path = get_init_path(session_path)
     if not input_data.dry_run:
         destination_path.mkdir(exist_ok=True)
@@ -188,7 +146,7 @@ def run(input_data: IngestInput) -> IngestResult:
                     progress.update(process, advance=1)
                     continue
 
-                copied, replaced_existing = _replace_destination_with_verified_copy(
+                copied, replaced_existing = shared.replace_destination_with_verified_copy(
                     source=file,
                     destination=destination,
                     source_file_id=file_id,
@@ -215,25 +173,3 @@ def run(input_data: IngestInput) -> IngestResult:
                 progress.update(process, advance=1)
 
     return result
-
-
-def run_sd(input_data: SdIngestInput) -> IngestResult:
-    config = read_config(input_data.source)
-    workspace_path = require_workspace_path()
-    with sql_session_scope(require_workspace_database_path(workspace_path)) as sql_session:
-        _validate_sd_ingest_identity(
-            sql_session,
-            input_data.source,
-            config.device_id,
-            config.monitoring_site_id,
-        )
-
-    return run(
-        IngestInput(
-            source=input_data.source,
-            device_id=config.device_id,
-            monitoring_site_id=config.monitoring_site_id,
-            mode=input_data.mode,
-            dry_run=input_data.dry_run,
-        )
-    )

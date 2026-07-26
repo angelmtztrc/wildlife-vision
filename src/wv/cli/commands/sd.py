@@ -5,19 +5,12 @@ import typer
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
-from wv.use_cases.sd import (
-    RecordNotFoundError,
-    SdClearInput,
-    SdError,
-    SdInitInput,
-    SdSyncInput,
-    SdUpdateInput,
-    run_clear,
-    run_init,
-    run_show,
-    run_sync,
-    run_update,
-)
+from wv.use_cases.sd._shared import SdError
+from wv.use_cases.sd.clear import SdClearInput, run as run_clear
+from wv.use_cases.sd.initialize import SdInitializeInput, run as run_initialize
+from wv.use_cases.sd.show import SdShowInput, run as run_show
+from wv.use_cases.sd.sync import SdSyncInput, run as run_sync
+from wv.use_cases.sd.update import SdUpdateInput, run as run_update
 from wv.workspace.common import WorkspaceError
 
 app = typer.Typer(help="Manage SD card metadata and deployment assignment.")
@@ -46,14 +39,14 @@ def init_sd(
     ],
 ):
     try:
-        result = run_init(
-            SdInitInput(
+        result = run_initialize(
+            SdInitializeInput(
                 path=path,
                 device_id=device,
                 monitoring_site_id=monitoring_site,
             )
         )
-    except (WorkspaceError, RecordNotFoundError, SdError) as exc:
+    except (WorkspaceError, SdError) as exc:
         logger.error("SD initialization failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
@@ -81,7 +74,7 @@ def show_sd(
     ],
 ):
     try:
-        result = run_show(path)
+        result = run_show(SdShowInput(path=path))
     except SdError as exc:
         logger.error("SD show failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -111,7 +104,7 @@ def sync_sd(
 ):
     try:
         result = run_sync(SdSyncInput(path=path))
-    except (WorkspaceError, RecordNotFoundError, SdError) as exc:
+    except (WorkspaceError, SdError) as exc:
         logger.error("SD synchronization failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
@@ -158,7 +151,7 @@ def update_sd(
                 monitoring_site_id=monitoring_site,
             )
         )
-    except (WorkspaceError, RecordNotFoundError, SdError) as exc:
+    except (WorkspaceError, SdError) as exc:
         logger.error("SD update failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
@@ -188,7 +181,7 @@ def clear_sd(
 ):
     try:
         result = run_clear(SdClearInput(path=path))
-    except (WorkspaceError, RecordNotFoundError, SdError) as exc:
+    except (WorkspaceError, SdError) as exc:
         logger.error("SD clear failed: %s", exc)
         raise typer.Exit(code=1) from exc
 

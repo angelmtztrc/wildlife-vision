@@ -7,6 +7,7 @@ from wv.core.files import (
     ensure_directory,
     get_file_id,
     is_allowed_image_file,
+    move_file_with_staged_copy,
     parse_ingested_image_filename,
 )
 
@@ -141,3 +142,77 @@ def test_copy_file_preserving_metadata_raises_for_destination_directory(
 
     with pytest.raises(IsADirectoryError):
         copy_file_preserving_metadata(source, destination)
+
+
+def test_move_file_with_staged_copy_commits_transformed_copy(tmp_path: Path):
+    source = tmp_path / "source.jpg"
+    destination = tmp_path / "nested" / "destination.jpg"
+    source.write_bytes(b"source-bytes")
+    destination.parent.mkdir()
+    destination.write_bytes(b"old-bytes")
+
+    def transform(staged_file: Path) -> None:
+        staged_file.write_bytes(b"updated-bytes")
+
+    moved, replaced_existing = move_file_with_staged_copy(
+        source,
+        destination,
+        transform=transform,
+    )
+
+    assert moved is True
+    assert replaced_existing is True
+    assert not source.exists()
+    assert destination.read_bytes() == b"updated-bytes"
+
+
+def test_move_file_with_staged_copy_preserves_source_when_transform_fails(
+    tmp_path: Path,
+):
+    source = tmp_path / "source.jpg"
+    destination = tmp_path / "destination.jpg"
+    source.write_bytes(b"source-bytes")
+
+    def transform(staged_file: Path) -> None:
+        raise RuntimeError("metadata write failed")
+
+    with pytest.raises(RuntimeError, match="metadata write failed"):
+        move_file_with_staged_copy(source, destination, transform=transform)
+
+    assert source.read_bytes() == b"source-bytes"
+    assert not destination.exists()
+
+
+def test_move_file_with_staged_copy_preserves_source_when_verify_fails(
+    tmp_path: Path,
+):
+    source = tmp_path / "source.jpg"
+    destination = tmp_path / "destination.jpg"
+    source.write_bytes(b"source-bytes")
+
+    with pytest.raises(ValueError, match="verification failed"):
+        move_file_with_staged_copy(source, destination, verify=lambda staged: False)
+
+    assert source.read_bytes() == b"source-bytes"
+    assert not destination.exists()
+
+
+def test_move_file_with_staged_copy_preserves_source_when_replace_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = tmp_path / "source.jpg"
+    destination = tmp_path / "destination.jpg"
+    source.write_bytes(b"source-bytes")
+    destination.write_bytes(b"old-bytes")
+
+    def fail_replace(self: Path, target: Path) -> Path:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        move_file_with_staged_copy(source, destination)
+
+    assert source.read_bytes() == b"source-bytes"
+    assert destination.read_bytes() == b"old-bytes"

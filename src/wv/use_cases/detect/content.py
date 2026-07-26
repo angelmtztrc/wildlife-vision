@@ -1,11 +1,9 @@
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import uuid4
 
 from wv.core.display import display_file, display_path
 from wv.core.exif import read_exif, write_exif_image_description
-from wv.core.files import ensure_directory, is_allowed_image_file
+from wv.core.files import ensure_directory, is_allowed_image_file, move_file_with_staged_copy
 from wv.core.logger import get_logger, get_progress
 from wv.core.metadata import upsert_image_description_properties
 from wv.core.session import get_detection_path
@@ -108,21 +106,6 @@ def _read_existing_image_description(file_path: Path) -> str | None:
         return value.decode("utf-8", errors="ignore")
 
     return str(value)
-
-
-def _move_source_to_destination(source: Path, destination: Path) -> tuple[bool, bool]:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-
-    replaced_existing = destination.exists()
-    temp_destination = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
-
-    try:
-        shutil.move(str(source), temp_destination)
-        temp_destination.replace(destination)
-        return True, replaced_existing
-    finally:
-        if temp_destination.exists():
-            temp_destination.unlink()
 
 
 def run(input_data: DetectContentInput) -> DetectContentResult:
@@ -246,31 +229,28 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
                         ),
                     },
                 )
-                write_exif_image_description(file_path, updated_description)
+                destination = get_detection_path(input_data.output, decision.label) / file_path.name
 
-                moved, replaced_existing = _move_source_to_destination(
+                def _write_detection_metadata(staged_file: Path) -> None:
+                    write_exif_image_description(staged_file, updated_description)
+
+                moved, replaced_existing = move_file_with_staged_copy(
                     source=file_path,
-                    destination=get_detection_path(input_data.output, decision.label)
-                    / file_path.name,
+                    destination=destination,
+                    transform=_write_detection_metadata,
                 )
                 if moved:
                     result.files_moved += 1
                     logger.debug(
                         "Moved %s to %s",
                         display_file(file_path),
-                        display_file(
-                            get_detection_path(input_data.output, decision.label)
-                            / file_path.name
-                        ),
+                        display_file(destination),
                     )
                 if replaced_existing:
                     result.files_replaced += 1
                     logger.debug(
                         "Replaced existing detection destination at %s",
-                        display_file(
-                            get_detection_path(input_data.output, decision.label)
-                            / file_path.name
-                        ),
+                        display_file(destination),
                     )
             except Exception:
                 result.files_failed += 1

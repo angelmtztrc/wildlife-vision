@@ -63,12 +63,31 @@ When you're giving the order to define a plan, always ask for whatever informati
 
 # Use-cases
 
-Use cases are composed the following way:
+Use-case code is organized by feature group packages. Each concrete use case is
+one module inside its group and represents exactly one application operation.
 
-- Input dataclass.
-- Result dataclass.
-- run() function that executes the implementation of the use_case.
-- any private function used internally for the use-case must have the prefix "\_" to stablish that is private.
+- A use-case group is a package, for example `src/wv/use_cases/device/`.
+- A use-case module exposes one public operation entry point named `run()`.
+- Each operation must define an input dataclass and an explicit result dataclass.
+- Use cases must not call another use case, including use cases in the same group.
+- Use-case-private helpers must use a leading `_` prefix and stay in the same module.
+- Logic shared by multiple use cases in the same group belongs in that group's private `_shared.py` module.
+- Logic shared across use-case groups belongs in `src/wv/core/` only when it is genuinely reusable and has a stable responsibility.
+- `_shared.py` modules are private infrastructure: they must not expose `run()`, define CLI-facing APIs, or own independent SQL session lifecycles.
+- CLI and GUI code should import specific operation modules, not package-level compatibility re-exports.
+- Do not retain compatibility re-exports when splitting use cases; update internal callers and tests in the same change.
+- Any private function used internally for the use-case must have the prefix "\_" to establish that it is private.
+
+Example shape:
+
+```text
+src/wv/use_cases/device/
+  create.py
+  list.py
+  show.py
+  update.py
+  _shared.py
+```
 
 ## Implementation Notes
 

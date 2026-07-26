@@ -7,19 +7,13 @@ from wv.persistence.repositories import DeploymentRepository, DeviceRepository
 from wv.persistence.sql_session import sql_session_scope
 from wv.use_cases.device import DeviceInput, run_create as run_create_device, run_show as run_show_device
 from wv.use_cases.monitoring_site import MonitoringSiteInput, run_create as run_create_monitoring_site
-from wv.use_cases.sd import (
-    RecordNotFoundError,
-    SdClearInput,
-    SdError,
-    SdInitInput,
-    SdSyncInput,
-    SdUpdateInput,
-    run_clear,
-    run_init,
-    run_show,
-    run_sync,
-    run_update,
-)
+from wv.use_cases.sd._shared import SdError
+from wv.use_cases.sd.clear import SdClearInput, run as run_clear
+from wv.use_cases.sd.initialize import SdInitializeInput as SdInitInput
+from wv.use_cases.sd.initialize import run as run_init
+from wv.use_cases.sd.show import SdShowInput, run as _run_show
+from wv.use_cases.sd.sync import SdSyncInput, run as run_sync
+from wv.use_cases.sd.update import SdUpdateInput, run as run_update
 from wv.use_cases.workspace import WorkspaceInitInput, run_init as run_workspace_init
 from wv.workspace.common import WorkspaceError
 from wv.workspace.workspace_config import get_workspace_database_path
@@ -37,6 +31,10 @@ def _set_device_monitoring_site(
         DeviceRepository(sql_session).update(
             device_id, {"monitoring_site_id": monitoring_site_id}
         )
+
+
+def run_show(path: Path):
+    return _run_show(SdShowInput(path=path))
 
 
 @pytest.fixture
@@ -70,7 +68,7 @@ def test_run_init_writes_config_updates_device_and_records_deployment(
 ):
     sd_path = tmp_path / "sd-card"
     sd_path.mkdir()
-    monkeypatch.setattr("wv.use_cases.sd._now_iso", lambda: "2026-07-21T10:00:00+00:00")
+    monkeypatch.setattr("wv.use_cases.sd.initialize.now_iso", lambda: "2026-07-21T10:00:00+00:00")
 
     result = run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
 
@@ -139,7 +137,7 @@ def test_run_update_changes_monitoring_site_and_records_deployment(
     sd_path = tmp_path / "sd-card"
     sd_path.mkdir()
     run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
-    monkeypatch.setattr("wv.use_cases.sd._now_iso", lambda: "2026-07-21T11:00:00+00:00")
+    monkeypatch.setattr("wv.use_cases.sd.update.now_iso", lambda: "2026-07-21T11:00:00+00:00")
 
     result = run_update(SdUpdateInput(path=sd_path, monitoring_site_id="SITE002"))
 
@@ -216,7 +214,7 @@ def test_run_init_rejects_unknown_records(configured_workspace: Path, tmp_path: 
     sd_path = tmp_path / "sd-card"
     sd_path.mkdir()
 
-    with pytest.raises(RecordNotFoundError):
+    with pytest.raises(SdError, match="Device not found: UNKNOWN"):
         run_init(SdInitInput(path=sd_path, device_id="UNKNOWN", monitoring_site_id="SITE001"))
 
     assert not (sd_path / ".wv" / "config.yml").exists()
@@ -230,7 +228,7 @@ def test_run_init_removes_config_when_database_update_fails(
     sd_path = tmp_path / "sd-card"
     sd_path.mkdir()
     monkeypatch.setattr(
-        "wv.use_cases.sd._record_deployment",
+        "wv.use_cases.sd._shared.record_deployment",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database failure")),
     )
 
@@ -250,7 +248,7 @@ def test_run_update_restores_config_when_database_update_fails(
     sd_path.mkdir()
     run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
     monkeypatch.setattr(
-        "wv.use_cases.sd._record_deployment",
+        "wv.use_cases.sd._shared.record_deployment",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database failure")),
     )
 
@@ -317,7 +315,7 @@ def test_run_clear_restores_assignment_when_config_removal_fails(
     sd_path.mkdir()
     run_init(SdInitInput(path=sd_path, device_id="HNT001", monitoring_site_id="SITE001"))
     monkeypatch.setattr(
-        "wv.use_cases.sd._remove_sd_config",
+        "wv.use_cases.sd.clear.remove_sd_config",
         lambda path: (_ for _ in ()).throw(OSError("card is read-only")),
     )
 
