@@ -87,12 +87,20 @@ def ingest_sd(
             help="Preview the ingest operation without copying, moving, or deleting files.",
         ),
     ] = False,
+    recursive: Annotated[
+        bool,
+        typer.Option(
+            "--recursive",
+            help="Scan all nested folders under the source path, excluding .wv directories.",
+        ),
+    ] = False,
 ):
     logger.info(
-        "Starting SD ingest from %s (mode=%s, dry_run=%s)",
+        "Starting SD ingest from %s (mode=%s, dry_run=%s, recursive=%s)",
         display_path(source),
         mode,
         dry_run,
+        recursive,
     )
 
     try:
@@ -102,6 +110,7 @@ def ingest_sd(
                 mode=mode,
                 identity=SdCardIngestIdentity(),
                 dry_run=dry_run,
+                recursive=recursive,
             )
         )
     except (WorkspaceError, IngestError, ValueError) as exc:
@@ -152,14 +161,22 @@ def ingest_folder(
             help="Preview the ingest operation without copying, moving, or deleting files.",
         ),
     ] = False,
+    recursive: Annotated[
+        bool,
+        typer.Option(
+            "--recursive",
+            help="Scan all nested folders under the source path, excluding .wv directories.",
+        ),
+    ] = False,
 ):
     logger.info(
-        "Starting folder ingest from %s (device=%s, monitoring_site=%s, mode=%s, dry_run=%s)",
+        "Starting folder ingest from %s (device=%s, monitoring_site=%s, mode=%s, dry_run=%s, recursive=%s)",
         display_path(source),
         device,
         monitoring_site,
         mode,
         dry_run,
+        recursive,
     )
 
     try:
@@ -172,6 +189,7 @@ def ingest_folder(
                     monitoring_site_id=monitoring_site,
                 ),
                 dry_run=dry_run,
+                recursive=recursive,
             )
         )
     except (WorkspaceError, IngestError, ValueError) as exc:

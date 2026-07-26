@@ -114,6 +114,7 @@ def test_ingest_folder_forwards_option_identity(
             "SITE001",
             "--mode",
             "copy",
+            "--recursive",
         ],
     )
 
@@ -122,6 +123,7 @@ def test_ingest_folder_forwards_option_identity(
     assert captured_input.identity.device_id == "HNT001"
     assert captured_input.identity.monitoring_site_id == "SITE001"
     assert captured_input.mode == "copy"
+    assert captured_input.recursive is True
     assert "Finished folder ingest" in result.output
 
 
@@ -155,7 +157,30 @@ def test_ingest_sd_forwards_options_to_use_case(
 
     assert result.exit_code == 0
     assert captured_input.mode == "copy"
+    assert captured_input.recursive is False
     assert isinstance(captured_input.identity, SdCardIngestIdentity)
+
+
+def test_ingest_sd_forwards_recursive_option(
+    cli_runner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    captured_input = None
+
+    def fake_run(input_data):
+        nonlocal captured_input
+        captured_input = input_data
+        return IngestResult(destination=tmp_path / "destination")
+
+    monkeypatch.setattr(ingest, "run_ingest", fake_run)
+
+    result = cli_runner.invoke(ingest.app, ["sd", str(source), "--recursive"])
+
+    assert result.exit_code == 0
+    assert captured_input.recursive is True
 
 
 def test_complete_device_matches_registered_ids(monkeypatch: pytest.MonkeyPatch):

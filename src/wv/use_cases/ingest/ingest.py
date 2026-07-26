@@ -38,6 +38,7 @@ class IngestInput:
     mode: str
     identity: ExplicitIngestIdentity | SdCardIngestIdentity
     dry_run: bool = False
+    recursive: bool = False
 
 
 @dataclass
@@ -50,6 +51,21 @@ class IngestResult:
     files_replaced: int = 0
     destination: Path = Path()
     dry_run: bool = False
+
+
+def _collect_source_files(source: Path, recursive: bool) -> list[Path]:
+    if not recursive:
+        return [file for file in source.iterdir() if file.name != ".wv" and file.is_file()]
+
+    source_files: list[Path] = []
+    for directory, dirnames, filenames in source.walk():
+        dirnames[:] = [dirname for dirname in dirnames if dirname != ".wv"]
+        for filename in filenames:
+            file_path = directory / filename
+            if file_path.name != ".wv" and file_path.is_file():
+                source_files.append(file_path)
+
+    return source_files
 
 
 def _resolve_identity(input_data: IngestInput) -> ResolvedIngestIdentity:
@@ -96,13 +112,13 @@ def run(input_data: IngestInput) -> IngestResult:
     destination_path = get_init_path(session_path)
     if not input_data.dry_run:
         destination_path.mkdir(exist_ok=True)
-    source_files = [file for file in input_data.source.iterdir() if file.name != ".wv"]
+    source_files = _collect_source_files(input_data.source, input_data.recursive)
 
     result.destination = destination_path
     result.files_discovered = len(source_files)
 
     logger.info(
-        "Discovered %s entries; destination session path is %s",
+        "Discovered %s files; destination session path is %s",
         result.files_discovered,
         display_path(destination_path),
     )
@@ -112,7 +128,7 @@ def run(input_data: IngestInput) -> IngestResult:
         process = progress.add_task("Processing source files", total=result.files_discovered)
 
         for file in source_files:
-            if not file.is_file() or not is_allowed_image_file(file):
+            if not is_allowed_image_file(file):
                 result.files_ignored += 1
                 logger.debug("Skipping %s: not a supported image file", display_file(file))
                 progress.update(process, advance=1)

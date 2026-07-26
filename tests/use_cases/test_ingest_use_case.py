@@ -55,13 +55,85 @@ def test_run_dry_copy_uses_identity_and_workspace_session(
     assert result.destination == (
         configured_workspace / "sessions" / "20240628_120000__HNT001" / "init"
     )
-    assert result.files_discovered == 3
+    assert result.files_discovered == 2
     assert result.files_copied == 1
     assert result.files_deleted == 0
-    assert result.files_ignored == 2
+    assert result.files_ignored == 1
     assert result.files_failed == 0
     assert result.dry_run is True
     assert image_path.exists()
+    assert not result.destination.exists()
+
+
+def test_run_non_recursive_does_not_discover_nested_files(
+    configured_workspace: Path,
+    make_image,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    make_image(source / "capture.jpg")
+    nested = source / "nested"
+    nested.mkdir()
+    nested_image = make_image(nested / "nested.jpg")
+    _freeze_ingest_environment(monkeypatch)
+
+    result = ingest.run(
+        ingest.IngestInput(
+            source=source,
+            mode="copy",
+            identity=ingest.ExplicitIngestIdentity(
+                device_id="HNT001",
+                monitoring_site_id="SITE001",
+            ),
+            dry_run=True,
+        )
+    )
+
+    assert result.files_discovered == 1
+    assert result.files_copied == 1
+    assert result.files_ignored == 0
+    assert nested_image.exists()
+
+
+def test_run_recursive_discovers_nested_files_and_skips_wv_directory(
+    configured_workspace: Path,
+    make_image,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    root_image = make_image(source / "capture.jpg")
+    nested = source / "nested"
+    nested.mkdir()
+    nested_image = make_image(nested / "nested.jpg")
+    (nested / "notes.txt").write_text("ignore me")
+    wv_directory = source / ".wv"
+    wv_directory.mkdir()
+    make_image(wv_directory / "config-image.jpg")
+    _freeze_ingest_environment(monkeypatch)
+
+    result = ingest.run(
+        ingest.IngestInput(
+            source=source,
+            mode="copy",
+            identity=ingest.ExplicitIngestIdentity(
+                device_id="HNT001",
+                monitoring_site_id="SITE001",
+            ),
+            dry_run=True,
+            recursive=True,
+        )
+    )
+
+    assert result.files_discovered == 3
+    assert result.files_copied == 2
+    assert result.files_ignored == 1
+    assert result.files_deleted == 0
+    assert root_image.exists()
+    assert nested_image.exists()
     assert not result.destination.exists()
 
 
