@@ -3,7 +3,10 @@ from pathlib import Path
 
 
 USE_CASES_ROOT = Path(__file__).parents[2] / "src" / "wv" / "use_cases"
-PIPELINE_PREPROCESS = USE_CASES_ROOT / "pipeline" / "preprocess.py"
+WORKFLOW_MODULES = {
+    USE_CASES_ROOT / "pipeline" / "preprocess.py",
+    USE_CASES_ROOT / "session" / "clean_corrupted.py",
+}
 
 
 def _parse(path: Path) -> ast.Module:
@@ -65,7 +68,7 @@ def test_use_case_modules_do_not_import_other_use_case_modules_except_workflows(
     offenders: list[str] = []
 
     for path in _python_files():
-        if path == PIPELINE_PREPROCESS:
+        if path in WORKFLOW_MODULES:
             continue
 
         for node in ast.walk(_parse(path)):

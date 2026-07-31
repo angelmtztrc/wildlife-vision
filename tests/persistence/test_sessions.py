@@ -2,7 +2,11 @@ from pathlib import Path
 
 from wv.models import IngestSession, SessionImage
 from wv.persistence.database import initialize_database
-from wv.persistence.repositories import SessionImageRepository, SessionRepository
+from wv.persistence.repositories import (
+    SessionImageRepository,
+    SessionProcessRepository,
+    SessionRepository,
+)
 from wv.persistence.sql_session import sql_session_scope
 
 
@@ -91,3 +95,64 @@ def test_create_or_replace_session_image_by_initial_path(tmp_path: Path):
     assert images == [replaced]
     assert images[0].source_relative_path == "DCIM/second.jpg"
     assert images[0].content_digest == "BBBBBB222222"
+
+
+def test_relocate_session_image(tmp_path: Path):
+    database_path = tmp_path / ".wv" / "database.sqlite"
+    initialize_database(database_path)
+
+    with sql_session_scope(database_path) as sql_session:
+        _create_session(SessionRepository(sql_session))
+        image = SessionImageRepository(sql_session).create_or_replace_by_initial_path(
+            SessionImage(
+                id="image-1",
+                session_id="20240628_120000__HNT001",
+                source_relative_path="DCIM/first.jpg",
+                initial_relative_path="init/capture.jpg",
+                current_relative_path="init/capture.jpg",
+                state="init",
+                content_digest="AAAAAA111111",
+                content_size_bytes=100,
+                captured_at="2024-06-28T10:15:30",
+                ingested_at="2026-07-26T10:00:00+00:00",
+            )
+        )
+        relocated = SessionImageRepository(sql_session).relocate(
+            image.id,
+            "ignored/corrupted/capture.jpg",
+            "ignored/corrupted",
+        )
+
+    assert relocated.current_relative_path == "ignored/corrupted/capture.jpg"
+    assert relocated.state == "ignored/corrupted"
+
+
+def test_start_and_complete_session_process(tmp_path: Path):
+    database_path = tmp_path / ".wv" / "database.sqlite"
+    initialize_database(database_path)
+
+    with sql_session_scope(database_path) as sql_session:
+        _create_session(SessionRepository(sql_session))
+        repository = SessionProcessRepository(sql_session)
+        started = repository.start(
+            "20240628_120000__HNT001",
+            "clean_corrupted",
+            "2026-07-26T10:01:00+00:00",
+            parameters_json=None,
+        )
+        completed = repository.complete(
+            started.session_id,
+            started.process_name,
+            status="completed",
+            completed_at="2026-07-26T10:02:00+00:00",
+            files_discovered=2,
+            files_processed=2,
+            files_selected=1,
+            files_moved=1,
+            files_ignored=0,
+            files_failed=0,
+        )
+
+    assert completed.status == "completed"
+    assert completed.attempt_count == 1
+    assert completed.files_moved == 1

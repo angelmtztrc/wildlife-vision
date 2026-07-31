@@ -64,3 +64,21 @@ class SessionImage:
     content_size_bytes: int
     captured_at: str
     ingested_at: str
+
+
+@dataclass(frozen=True)
+class SessionProcess:
+    session_id: str
+    process_name: str
+    status: str
+    attempt_count: int
+    started_at: str
+    completed_at: str | None = None
+    failure_message: str | None = None
+    parameters_json: str | None = None
+    files_discovered: int = 0
+    files_processed: int = 0
+    files_selected: int = 0
+    files_moved: int = 0
+    files_ignored: int = 0
+    files_failed: int = 0

@@ -1,6 +1,6 @@
 import typer
 
-from wv.cli.commands import clean, config, detect, device, export, gui, ingest, monitoring_site, pipeline, sd, setup, workspace
+from wv.cli.commands import clean, config, detect, device, export, gui, ingest, monitoring_site, pipeline, sd, session, setup, workspace
 from wv.core.logger import configure_external_output, set_verbose
 
 app = typer.Typer(
@@ -34,6 +34,7 @@ app.add_typer(ingest.app, name="ingest")
 app.add_typer(monitoring_site.app, name="monitoring-site")
 app.add_typer(pipeline.app, name="pipeline")
 app.add_typer(sd.app, name="sd")
+app.add_typer(session.app, name="session")
 app.add_typer(workspace.app, name="workspace")
 app.command(
     "setup",
