@@ -29,7 +29,6 @@ def init_sd(
             dir_okay=True,
             readable=True,
             writable=True,
-            resolve_path=True,
         ),
     ],
     device: Annotated[str, typer.Option("--device", help="Registered device ID.")],
@@ -69,7 +68,6 @@ def show_sd(
             file_okay=False,
             dir_okay=True,
             readable=True,
-            resolve_path=True,
         ),
     ],
 ):
@@ -98,7 +96,6 @@ def sync_sd(
             file_okay=False,
             dir_okay=True,
             readable=True,
-            resolve_path=True,
         ),
     ],
 ):
@@ -134,7 +131,6 @@ def update_sd(
             dir_okay=True,
             readable=True,
             writable=True,
-            resolve_path=True,
         ),
     ],
     device: Annotated[str | None, typer.Option("--device", help="Registered device ID.")] = None,
@@ -175,7 +171,6 @@ def clear_sd(
             dir_okay=True,
             readable=True,
             writable=True,
-            resolve_path=True,
         ),
     ],
 ):

@@ -151,6 +151,63 @@ def test_run_non_recursive_does_not_discover_nested_files(
     assert nested_image.exists()
 
 
+def test_run_rejects_symlinked_source_before_creating_a_session(
+    configured_workspace: Path,
+    make_image,
+    tmp_path: Path,
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    image_path = make_image(tmp_path / "capture.jpg")
+    (source / "capture.jpg").symlink_to(image_path)
+
+    with pytest.raises(IngestError, match="Symbolic links are not supported"):
+        ingest.run(
+            ingest.IngestInput(
+                source=source,
+                mode="drain",
+                identity=ingest.ExplicitIngestIdentity(
+                    device_id="HNT001",
+                    monitoring_site_id="SITE001",
+                ),
+            )
+        )
+
+    assert image_path.exists()
+    assert (source / "capture.jpg").is_symlink()
+    assert list((configured_workspace / "sessions").iterdir()) == []
+    with sql_session_scope(get_workspace_database_path(configured_workspace)) as sql_session:
+        assert SessionRepository(sql_session).list() == []
+
+
+def test_run_rejects_symlinked_workspace_sessions_path(
+    configured_workspace: Path,
+    make_image,
+    tmp_path: Path,
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    make_image(source / "capture.jpg")
+    sessions_path = configured_workspace / "sessions"
+    sessions_target = tmp_path / "sessions-target"
+    sessions_path.rmdir()
+    sessions_path.symlink_to(sessions_target, target_is_directory=True)
+
+    with pytest.raises(IngestError, match="Symbolic links are not supported"):
+        ingest.run(
+            ingest.IngestInput(
+                source=source,
+                mode="copy",
+                identity=ingest.ExplicitIngestIdentity(
+                    device_id="HNT001",
+                    monitoring_site_id="SITE001",
+                ),
+            )
+        )
+
+    assert not sessions_target.exists()
+
+
 def test_run_recursive_discovers_nested_files_and_skips_wv_directory(
     configured_workspace: Path,
     make_image,

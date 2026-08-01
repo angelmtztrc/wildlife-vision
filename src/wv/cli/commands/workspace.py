@@ -33,7 +33,6 @@ def init_workspace(
             dir_okay=True,
             readable=True,
             writable=True,
-            resolve_path=True,
         ),
     ],
 ):

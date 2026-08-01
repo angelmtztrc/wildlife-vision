@@ -1,11 +1,10 @@
 from pathlib import Path
 from typing import Any
 
-from wv.workspace.common import WorkspaceError
-from wv.workspace.config import get_workspace_path
 from wv.workspace.workspace_config import (
     get_config_property,
     load_workspace_config,
+    require_workspace_path as require_active_workspace_path,
     validate_known_key,
     validate_workspace_config,
     write_workspace_config,
@@ -13,10 +12,7 @@ from wv.workspace.workspace_config import (
 
 
 def require_workspace_path() -> Path:
-    workspace_path = get_workspace_path()
-    if workspace_path is None:
-        raise WorkspaceError("No workspace configured.")
-    return workspace_path
+    return require_active_workspace_path()
 
 
 def load_validated_config_value() -> tuple[dict[str, Any], Path]:

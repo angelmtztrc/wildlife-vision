@@ -159,6 +159,9 @@ def clean_overexposed_ir(
                 recover=recover,
             )
         )
+    except SessionProcessError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
         raise typer.BadParameter(str(exc), param_hint="session_id") from exc
 
@@ -227,6 +230,9 @@ def clean_bursts(
                 recover=recover,
             )
         )
+    except SessionProcessError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
         raise typer.BadParameter(str(exc), param_hint="session_id") from exc
 

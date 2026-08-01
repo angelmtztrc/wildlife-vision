@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from wv.core.files import SymlinkPathError, ensure_not_symlink
 from wv.persistence import initialize_database
 from wv.workspace.common import WORKSPACE_DIRECTORIES, WORKSPACE_METADATA_DIRNAME, WorkspaceError
 from wv.workspace.config import write_global_config
@@ -25,8 +26,12 @@ class WorkspaceInitializeResult:
 
 
 def _validate_workspace_parent(path: Path) -> Path:
-    workspace_path = path.expanduser().resolve()
+    workspace_path = path.expanduser().absolute()
 
+    try:
+        ensure_not_symlink(workspace_path)
+    except SymlinkPathError as exc:
+        raise WorkspaceError(str(exc)) from exc
     if not workspace_path.exists():
         raise WorkspaceError(f"Workspace path does not exist: {workspace_path}")
     if not workspace_path.is_dir():

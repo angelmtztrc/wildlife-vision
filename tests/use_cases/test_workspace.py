@@ -91,6 +91,18 @@ def test_run_init_rejects_existing_workspace(tmp_path: Path):
         run_initialize(WorkspaceInitializeInput(path=workspace_path))
 
 
+def test_run_init_rejects_symlinked_workspace_root(tmp_path: Path):
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    workspace_link = tmp_path / "workspace-link"
+    workspace_link.symlink_to(workspace_path, target_is_directory=True)
+
+    with pytest.raises(WorkspaceError, match="Symbolic links are not supported"):
+        run_initialize(WorkspaceInitializeInput(path=workspace_link))
+
+    assert not (workspace_path / ".wv").exists()
+
+
 def test_get_status_returns_not_configured_when_global_config_missing(
     tmp_path: Path, monkeypatch
 ):
@@ -126,6 +138,18 @@ def test_validate_rejects_missing_workspace_parts(tmp_path: Path, monkeypatch):
     (workspace_path / "models").rmdir()
 
     with pytest.raises(WorkspaceError, match="models"):
+        run_validate(WorkspaceValidateInput())
+
+
+def test_validate_rejects_symlink_in_workspace_tree(tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    run_initialize(WorkspaceInitializeInput(path=workspace_path))
+    (workspace_path / "sessions" / "link").symlink_to(tmp_path / "target")
+
+    with pytest.raises(WorkspaceError, match="Symbolic links are not supported"):
         run_validate(WorkspaceValidateInput())
 
 

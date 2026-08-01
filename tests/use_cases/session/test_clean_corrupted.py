@@ -167,6 +167,27 @@ def test_dry_run_does_not_create_process_or_move_files(
     assert process is None
 
 
+def test_run_rejects_symlinked_session_content_before_creating_process(
+    configured_workspace: Path,
+    make_corrupted_image,
+    tmp_path: Path,
+):
+    _, source_path = _create_session_inventory(configured_workspace)
+    linked_target = make_corrupted_image(tmp_path / "capture.jpg")
+    source_path.symlink_to(linked_target)
+
+    with pytest.raises(SessionProcessError, match="Symbolic links are not supported"):
+        run(SessionCleanCorruptedInput(session_id=SESSION_ID, dry_run=True))
+
+    with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
+        process = SessionProcessRepository(sql_session).get_optional(
+            SESSION_ID, "clean_corrupted"
+        )
+    assert process is None
+    assert source_path.is_symlink()
+    assert linked_target.exists()
+
+
 def test_run_rejects_ineligible_ingest_session(
     configured_workspace: Path, make_image
 ):

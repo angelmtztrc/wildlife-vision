@@ -4,10 +4,22 @@ from pathlib import Path
 from uuid import uuid4
 
 from wv.core.display import display_file, display_path
-from wv.core.files import ensure_directory, get_content_digest, is_allowed_image_file
+from wv.core.files import (
+    SymlinkPathError,
+    ensure_directory,
+    ensure_not_symlink,
+    ensure_tree_has_no_symlinks,
+    get_content_digest,
+    is_allowed_image_file,
+)
 from wv.core.images import get_image_datetime
 from wv.core.logger import get_logger, get_progress
-from wv.core.sd_config import SdConfigError, read_sd_config
+from wv.core.sd_config import (
+    SdConfigError,
+    get_sd_config_path,
+    load_sd_config,
+    resolve_sd_path,
+)
 from wv.core.session import get_init_path, require_session_component
 from wv.models import IngestSession, SessionImage
 from wv.persistence.database import initialize_database
@@ -73,7 +85,9 @@ def _collect_source_files(source: Path, recursive: bool) -> list[Path]:
     return source_files
 
 
-def _resolve_identity(input_data: IngestInput, database_path: Path) -> ResolvedIngestIdentity:
+def _resolve_identity(
+    input_data: IngestInput, database_path: Path, source: Path
+) -> ResolvedIngestIdentity:
     if isinstance(input_data.identity, ExplicitIngestIdentity):
         with sql_session_scope(database_path) as sql_session:
             return validate_explicit_identity(
@@ -83,14 +97,14 @@ def _resolve_identity(input_data: IngestInput, database_path: Path) -> ResolvedI
             )
 
     try:
-        sd_config = read_sd_config(input_data.source)
+        sd_config = load_sd_config(get_sd_config_path(source))
     except SdConfigError as exc:
         raise IngestError(str(exc)) from exc
 
     with sql_session_scope(database_path) as sql_session:
         return validate_sd_identity(
             sql_session,
-            input_data.source,
+            source,
             sd_config.device_id,
             sd_config.monitoring_site_id,
         )
@@ -191,10 +205,22 @@ def run(input_data: IngestInput) -> IngestResult:
 
     workspace_path = require_workspace_path()
     database_path = require_workspace_database_path(workspace_path)
-    initialize_database(database_path)
-    resolved_identity = _resolve_identity(input_data, database_path)
+    try:
+        source = (
+            resolve_sd_path(input_data.source)
+            if isinstance(input_data.identity, SdCardIngestIdentity)
+            else input_data.source
+        )
+        if isinstance(input_data.identity, ExplicitIngestIdentity):
+            ensure_tree_has_no_symlinks(source)
+        ensure_not_symlink(workspace_path / "sessions")
+    except (FileNotFoundError, NotADirectoryError, SdConfigError, SymlinkPathError) as exc:
+        raise IngestError(str(exc)) from exc
 
-    ensure_directory(input_data.source)
+    initialize_database(database_path)
+    resolved_identity = _resolve_identity(input_data, database_path, source)
+
+    ensure_directory(source)
     device_id = require_session_component(resolved_identity.device_id, "Device ID")
     monitoring_site_id = require_session_component(
         resolved_identity.monitoring_site_id, "Monitoring site ID"
@@ -206,8 +232,8 @@ def run(input_data: IngestInput) -> IngestResult:
     destination_path = get_init_path(session_path)
     if not input_data.dry_run:
         destination_path.mkdir(exist_ok=True)
-    source_files = _collect_source_files(input_data.source, input_data.recursive)
-    source_root = input_data.source.resolve()
+    source_files = _collect_source_files(source, input_data.recursive)
+    source_root = source.resolve()
 
     result.destination = destination_path
     result.files_discovered = len(source_files)

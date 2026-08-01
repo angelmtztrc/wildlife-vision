@@ -5,6 +5,7 @@ from wv.use_cases.session.clean_overexposed_ir import (
 )
 from wv.use_cases.session.clean_bursts import SessionCleanBurstsResult
 from wv.use_cases.session.detect_content import SessionDetectContentResult
+from wv.use_cases.session._shared import SessionProcessError
 
 
 def test_session_clean_corrupted_prints_summary(cli_runner, monkeypatch):
@@ -127,6 +128,34 @@ def test_session_clean_bursts_forwards_options(cli_runner, monkeypatch):
     assert received_input.similarity_threshold == 7
     assert received_input.dry_run is True
     assert received_input.recover is True
+
+
+def test_session_clean_overexposed_ir_reports_session_process_errors(cli_runner, monkeypatch):
+    def fail_run(input_data):
+        raise SessionProcessError("Symbolic links are not supported: /session/init/image.jpg")
+
+    monkeypatch.setattr("wv.cli.commands.session.run_clean_overexposed_ir", fail_run)
+
+    result = cli_runner.invoke(
+        app, ["session", "clean", "overexposed-ir", "session-1"]
+    )
+
+    assert result.exit_code == 1
+    assert "Symbolic links are not supported" in result.output
+    assert "Invalid value for 'SESSION_ID'" not in result.output
+
+
+def test_session_clean_bursts_reports_session_process_errors(cli_runner, monkeypatch):
+    def fail_run(input_data):
+        raise SessionProcessError("Symbolic links are not supported: /session/init/image.jpg")
+
+    monkeypatch.setattr("wv.cli.commands.session.run_clean_bursts", fail_run)
+
+    result = cli_runner.invoke(app, ["session", "clean", "bursts", "session-1"])
+
+    assert result.exit_code == 1
+    assert "Symbolic links are not supported" in result.output
+    assert "Invalid value for 'SESSION_ID'" not in result.output
 
 
 def test_session_detect_content_forwards_options(cli_runner, monkeypatch):

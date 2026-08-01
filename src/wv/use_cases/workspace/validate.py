@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from alembic.util.exc import CommandError
 from sqlalchemy.exc import SQLAlchemyError
 
+from wv.core.files import SymlinkPathError, ensure_tree_has_no_symlinks
 from wv.persistence.database import get_database_head_revision, get_database_revision
 from wv.workspace.common import WorkspaceError
 
@@ -27,6 +28,10 @@ def run(input_data: WorkspaceValidateInput) -> WorkspaceValidateResult:
 
     if not status.exists:
         raise WorkspaceError(f"Workspace path does not exist: {status.workspace_path}")
+    try:
+        ensure_tree_has_no_symlinks(status.workspace_path)
+    except (FileNotFoundError, NotADirectoryError, SymlinkPathError) as exc:
+        raise WorkspaceError(str(exc)) from exc
     if not status.sessions_exists:
         raise WorkspaceError("Missing workspace directory: sessions")
     if not status.models_exists:

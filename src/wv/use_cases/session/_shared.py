@@ -7,7 +7,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from wv.core.files import (
+    SymlinkPathError,
     ensure_directory,
+    ensure_not_symlink,
+    ensure_tree_has_no_symlinks,
     get_content_digest,
     is_allowed_image_file,
 )
@@ -76,10 +79,15 @@ def resolve_managed_session(session_id: str) -> ManagedSession:
 
     sessions_path = workspace_path / "sessions"
     session_path = sessions_path / session.id
-    if session_path.parent.resolve() != sessions_path.resolve():
+    if session_path.parent != sessions_path:
         raise SessionProcessError(f"Invalid session ID: {session.id}")
 
-    ensure_directory(session_path)
+    try:
+        ensure_not_symlink(sessions_path)
+        ensure_tree_has_no_symlinks(session_path)
+    except (FileNotFoundError, NotADirectoryError, SymlinkPathError) as exc:
+        raise SessionProcessError(str(exc)) from exc
+
     init_path = get_init_path(session_path)
     ensure_directory(init_path)
 

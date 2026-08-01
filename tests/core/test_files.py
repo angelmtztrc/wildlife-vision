@@ -3,8 +3,11 @@ from pathlib import Path
 import pytest
 
 from wv.core.files import (
+    SymlinkPathError,
     copy_file_preserving_metadata,
     ensure_directory,
+    ensure_not_symlink,
+    ensure_tree_has_no_symlinks,
     get_file_id,
     is_allowed_image_file,
     move_file_with_staged_copy,
@@ -42,6 +45,42 @@ def test_ensure_directory_raises_for_file(tmp_path: Path):
 
     with pytest.raises(NotADirectoryError):
         ensure_directory(file_path)
+
+
+def test_ensure_not_symlink_rejects_a_symbolic_link(tmp_path: Path):
+    target = tmp_path / "target.txt"
+    link = tmp_path / "link.txt"
+    target.write_text("content")
+    link.symlink_to(target)
+
+    with pytest.raises(SymlinkPathError, match="Symbolic links are not supported"):
+        ensure_not_symlink(link)
+
+
+def test_ensure_tree_has_no_symlinks_accepts_regular_nested_tree(tmp_path: Path):
+    nested_file = tmp_path / "nested" / "image.jpg"
+    nested_file.parent.mkdir()
+    nested_file.write_bytes(b"image")
+
+    ensure_tree_has_no_symlinks(tmp_path)
+
+
+@pytest.mark.parametrize("link_kind", ["file", "directory", "broken"])
+def test_ensure_tree_has_no_symlinks_rejects_links(tmp_path: Path, link_kind: str):
+    link = tmp_path / "link"
+    if link_kind == "file":
+        target = tmp_path / "target.jpg"
+        target.write_bytes(b"image")
+        link.symlink_to(target)
+    elif link_kind == "directory":
+        target = tmp_path / "target"
+        target.mkdir()
+        link.symlink_to(target, target_is_directory=True)
+    else:
+        link.symlink_to(tmp_path / "missing.jpg")
+
+    with pytest.raises(SymlinkPathError, match=str(link)):
+        ensure_tree_has_no_symlinks(tmp_path)
 
 
 def test_get_file_id_is_stable_for_identical_content(tmp_path: Path):

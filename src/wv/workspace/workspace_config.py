@@ -3,6 +3,7 @@ from typing import Any
 
 import yaml
 
+from wv.core.files import SymlinkPathError, ensure_not_symlink
 from wv.workspace.common import WORKSPACE_CONFIG_NAME, WORKSPACE_DATABASE_NAME, WORKSPACE_METADATA_DIRNAME, WorkspaceError
 from wv.workspace.config import get_workspace_path
 from wv.workspace.schema import WORKSPACE_CONFIG_PROPERTIES, WORKSPACE_VERSION, build_default_config
@@ -16,6 +17,10 @@ def require_workspace_path() -> Path:
     workspace_path = get_workspace_path()
     if workspace_path is None:
         raise WorkspaceError("No workspace configured.")
+    try:
+        ensure_not_symlink(workspace_path)
+    except SymlinkPathError as exc:
+        raise WorkspaceError(str(exc)) from exc
     if not workspace_path.is_dir():
         raise WorkspaceError(f"Workspace path does not exist: {workspace_path}")
     return workspace_path
@@ -31,7 +36,17 @@ def get_workspace_database_path(workspace_path: Path) -> Path:
 
 def require_workspace_database_path(workspace_path: Path | None = None) -> Path:
     active_workspace_path = workspace_path or require_workspace_path()
-    database_path = get_workspace_database_path(active_workspace_path)
+    try:
+        ensure_not_symlink(active_workspace_path)
+    except SymlinkPathError as exc:
+        raise WorkspaceError(str(exc)) from exc
+    metadata_path = get_workspace_metadata_dir(active_workspace_path)
+    database_path = metadata_path / WORKSPACE_DATABASE_NAME
+    try:
+        ensure_not_symlink(metadata_path)
+        ensure_not_symlink(database_path)
+    except SymlinkPathError as exc:
+        raise WorkspaceError(str(exc)) from exc
     if not database_path.is_file():
         raise WorkspaceError(f"Workspace database file not found: {database_path}")
     return database_path
@@ -39,6 +54,11 @@ def require_workspace_database_path(workspace_path: Path | None = None) -> Path:
 
 def load_workspace_config(config_file: Path | None = None) -> dict[str, Any]:
     resolved_config_file = config_file or get_workspace_config_path()
+    try:
+        ensure_not_symlink(resolved_config_file.parent)
+        ensure_not_symlink(resolved_config_file)
+    except SymlinkPathError as exc:
+        raise WorkspaceError(str(exc)) from exc
     if not resolved_config_file.exists():
         raise WorkspaceError(f"Workspace config file not found: {resolved_config_file}")
 
@@ -53,6 +73,11 @@ def load_workspace_config(config_file: Path | None = None) -> dict[str, Any]:
 
 def write_workspace_config(value: dict[str, Any], config_file: Path | None = None) -> Path:
     resolved_config_file = config_file or get_workspace_config_path()
+    try:
+        ensure_not_symlink(resolved_config_file.parent)
+        ensure_not_symlink(resolved_config_file)
+    except SymlinkPathError as exc:
+        raise WorkspaceError(str(exc)) from exc
     resolved_config_file.parent.mkdir(parents=True, exist_ok=True)
 
     with resolved_config_file.open("w", encoding="utf-8") as file_handle:

@@ -10,6 +10,46 @@ from uuid import uuid4
 allowed_image_exts = {".jpg", ".jpeg"}
 
 
+class SymlinkPathError(ValueError):
+    """Raised when a managed filesystem path contains a symbolic link."""
+
+
+def ensure_not_symlink(path: Path) -> None:
+    """Require that a path entry is not a symbolic link.
+
+    Args:
+        path: Path entry to inspect. The entry may be absent.
+
+    Raises:
+        SymlinkPathError: If ``path`` is a symbolic link, including a broken
+            symbolic link.
+    """
+    if path.is_symlink():
+        raise SymlinkPathError(f"Symbolic links are not supported: {path}")
+
+
+def ensure_tree_has_no_symlinks(root: Path) -> None:
+    """Require that an existing directory tree contains no symbolic links.
+
+    The tree is walked without following directory links. Both file and
+    directory entries are checked, so broken links are rejected as well.
+
+    Args:
+        root: Existing directory tree to inspect.
+
+    Raises:
+        SymlinkPathError: If ``root`` or an entry below it is a symbolic link.
+        FileNotFoundError: If ``root`` does not exist.
+        NotADirectoryError: If ``root`` is not a directory.
+    """
+    ensure_not_symlink(root)
+    ensure_directory(root)
+
+    for directory, directory_names, file_names in root.walk(follow_symlinks=False):
+        for name in [*directory_names, *file_names]:
+            ensure_not_symlink(directory / name)
+
+
 def is_allowed_image_file(file_path: Path) -> bool:
     """Return whether a file path has a supported image extension.
 

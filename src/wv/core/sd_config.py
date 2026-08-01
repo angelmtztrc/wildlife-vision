@@ -13,6 +13,8 @@ from uuid import uuid4
 
 import yaml
 
+from wv.core.files import SymlinkPathError, ensure_not_symlink, ensure_tree_has_no_symlinks
+
 
 class SdConfigError(ValueError):
     """Raised when SD-card configuration cannot be read or written."""
@@ -44,12 +46,12 @@ def resolve_sd_path(path: Path) -> Path:
     Raises:
         SdConfigError: If ``path`` does not exist or is not a directory.
     """
-    resolved_path = path.expanduser().resolve()
-    if not resolved_path.exists():
-        raise SdConfigError(f"SD path does not exist: {resolved_path}")
-    if not resolved_path.is_dir():
-        raise SdConfigError(f"SD path is not a directory: {resolved_path}")
-    return resolved_path
+    expanded_path = path.expanduser()
+    try:
+        ensure_tree_has_no_symlinks(expanded_path)
+    except (FileNotFoundError, NotADirectoryError, SymlinkPathError) as exc:
+        raise SdConfigError(str(exc)) from exc
+    return expanded_path.resolve()
 
 
 def get_sd_config_path(path: Path) -> Path:
@@ -77,6 +79,12 @@ def load_sd_config(config_path: Path) -> SdConfigRecord:
         SdConfigError: If the config file is missing, unreadable, malformed, or
             missing required string fields.
     """
+    try:
+        ensure_not_symlink(config_path.parent)
+        ensure_not_symlink(config_path)
+    except SymlinkPathError as exc:
+        raise SdConfigError(str(exc)) from exc
+
     if not config_path.is_file():
         raise SdConfigError(f"SD config file not found: {config_path}")
 
@@ -142,6 +150,12 @@ def write_sd_config(config_path: Path, config: SdConfigRecord) -> Path:
         Creates the config parent directory, writes a temporary file beside the
         config, atomically replaces the config, and fsyncs the parent directory.
     """
+    try:
+        ensure_not_symlink(config_path.parent)
+        ensure_not_symlink(config_path)
+    except SymlinkPathError as exc:
+        raise SdConfigError(str(exc)) from exc
+
     config_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = config_path.with_name(f".{config_path.name}.{uuid4().hex}.tmp")
 
@@ -193,6 +207,12 @@ def remove_sd_config(config_path: Path) -> None:
     Side Effects:
         Deletes ``config_path`` and fsyncs its parent directory.
     """
+    try:
+        ensure_not_symlink(config_path.parent)
+        ensure_not_symlink(config_path)
+    except SymlinkPathError as exc:
+        raise SdConfigError(str(exc)) from exc
+
     config_path.unlink()
     try:
         _sync_directory(config_path.parent)

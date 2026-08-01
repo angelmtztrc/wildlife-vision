@@ -44,6 +44,20 @@ def test_workspace_init_rejects_existing_workspace(
     assert "already exists" in result.output
 
 
+def test_workspace_init_rejects_symlinked_root(cli_runner, tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    workspace_link = tmp_path / "workspace-link"
+    workspace_link.symlink_to(workspace_path, target_is_directory=True)
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+
+    result = cli_runner.invoke(workspace.app, ["init", str(workspace_link)])
+
+    assert result.exit_code == 1
+    assert "Workspace initialization failed" in result.output
+
+
 def test_workspace_show_reports_configuration(cli_runner, tmp_path: Path, monkeypatch):
     config_dir = tmp_path / "user-config"
     workspace_path = tmp_path / "workspace"

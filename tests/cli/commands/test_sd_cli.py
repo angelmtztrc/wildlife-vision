@@ -53,6 +53,22 @@ def test_sd_init_rejects_already_assigned_device(cli_runner, tmp_path: Path, mon
     assert "wv sd update" in result.output
 
 
+def test_sd_init_rejects_symlinked_root(cli_runner, tmp_path: Path, monkeypatch):
+    _setup_workspace(cli_runner, tmp_path, monkeypatch)
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    sd_link = tmp_path / "sd-link"
+    sd_link.symlink_to(sd_path, target_is_directory=True)
+
+    result = cli_runner.invoke(
+        sd.app,
+        ["init", str(sd_link), "--device", "HNT001", "--monitoring-site", "SITE001"],
+    )
+
+    assert result.exit_code == 1
+    assert "Symbolic links are not supported" in result.output
+
+
 def test_sd_show_prints_config(cli_runner, tmp_path: Path, monkeypatch):
     _setup_workspace(cli_runner, tmp_path, monkeypatch)
     sd_path = tmp_path / "sd-card"

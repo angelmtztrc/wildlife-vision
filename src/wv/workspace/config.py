@@ -46,4 +46,4 @@ def get_workspace_path() -> Path | None:
     if not isinstance(path_value, str) or not path_value.strip():
         return None
 
-    return Path(path_value).expanduser().resolve()
+    return Path(path_value).expanduser().absolute()

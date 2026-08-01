@@ -144,6 +144,36 @@ def test_run_show_rejects_missing_config(tmp_path: Path):
         run_show(sd_path)
 
 
+def test_run_init_rejects_symlinked_sd_root(
+    configured_workspace: Path,
+    tmp_path: Path,
+):
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    sd_link = tmp_path / "sd-link"
+    sd_link.symlink_to(sd_path, target_is_directory=True)
+
+    with pytest.raises(SdError, match="Symbolic links are not supported"):
+        run_init(SdInitInput(path=sd_link, device_id="HNT001", monitoring_site_id="SITE001"))
+
+    assert not (sd_path / ".wv").exists()
+    assert run_show_device("HNT001").monitoring_site_id is None
+
+
+def test_run_show_rejects_symlinked_config_file(
+    configured_workspace: Path,
+    tmp_path: Path,
+):
+    sd_path = tmp_path / "sd-card"
+    sd_path.mkdir()
+    config_path = sd_path / ".wv" / "config.yml"
+    config_path.parent.mkdir()
+    config_path.symlink_to(tmp_path / "config.yml")
+
+    with pytest.raises(SdError, match="Symbolic links are not supported"):
+        run_show(sd_path)
+
+
 def test_run_update_changes_monitoring_site_and_records_deployment(
     configured_workspace: Path,
     tmp_path: Path,
