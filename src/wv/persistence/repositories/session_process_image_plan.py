@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session as SqlSession
 
 from wv.models import SessionProcessImagePlan
 from wv.persistence.common import RecordAlreadyExistsError
+from wv.persistence.models.session_image import SessionImageModel
 from wv.persistence.models.session_process_image_plan import SessionProcessImagePlanModel
 
 
@@ -28,6 +29,18 @@ class SessionProcessImagePlanRepository:
             raise RecordAlreadyExistsError(
                 f"Session process image plan already exists: {session_id}/{process_name}"
             )
+
+        image_ids = {plan.image_id for plan in plans}
+        matching_image_ids = set(
+            self.sql_session.scalars(
+                select(SessionImageModel.id).where(
+                    SessionImageModel.session_id == session_id,
+                    SessionImageModel.id.in_(image_ids),
+                )
+            ).all()
+        )
+        if matching_image_ids != image_ids:
+            raise ValueError("Session process image plans must belong to the session.")
 
         models = [
             SessionProcessImagePlanModel(

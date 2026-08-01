@@ -18,16 +18,6 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "session_processes",
-        sa.Column("bursts_count", sa.Integer(), nullable=False, server_default="0"),
-    )
-    op.create_index(
-        "uq_session_images_session_id_id",
-        "session_images",
-        ["session_id", "id"],
-        unique=True,
-    )
     op.create_table(
         "session_process_image_plans",
         sa.Column("session_id", sa.Text(), nullable=False),
@@ -45,10 +35,7 @@ def upgrade() -> None:
             "(decision = 'move' AND target_relative_path IS NOT NULL)",
             name="ck_session_process_image_plans_target",
         ),
-        sa.ForeignKeyConstraint(
-            ["session_id", "image_id"],
-            ["session_images.session_id", "session_images.id"],
-        ),
+        sa.ForeignKeyConstraint(["image_id"], ["session_images.id"]),
         sa.ForeignKeyConstraint(
             ["session_id", "process_name"],
             ["session_processes.session_id", "session_processes.process_name"],
@@ -68,5 +55,3 @@ def downgrade() -> None:
         table_name="session_process_image_plans",
     )
     op.drop_table("session_process_image_plans")
-    op.drop_index("uq_session_images_session_id_id", table_name="session_images")
-    op.drop_column("session_processes", "bursts_count")
