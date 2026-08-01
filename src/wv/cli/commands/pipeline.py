@@ -3,24 +3,22 @@ from typing import Annotated
 
 import typer
 
+from wv.core.bursts import DEFAULT_BURST_GAP_THRESHOLD, DEFAULT_SIMILARITY_THRESHOLD
+from wv.core.detection import (
+    DEFAULT_AMBIGUITY_GAP,
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_CONFIDENCE_THRESHOLD,
+)
 from wv.core.display import display_path
-from wv.core.logger import get_logger
-from wv.core.session import get_init_path
-from wv.use_cases.clean.overexposed_ir import (
+from wv.core.images import (
     DEFAULT_HIGH_LEVEL,
     DEFAULT_MEAN_THRESHOLD,
     DEFAULT_PTC_HIGH_THRESHOLD,
     DEFAULT_STD_THRESHOLD,
 )
-from wv.use_cases.clean.bursts import (
-    DEFAULT_BURST_GAP_THRESHOLD,
-    DEFAULT_SIMILARITY_THRESHOLD,
-)
-from wv.use_cases.detect.content import (
-    DEFAULT_AMBIGUITY_GAP,
-    DEFAULT_CONFIDENCE_THRESHOLD,
-    DEFAULT_MODEL,
-)
+from wv.core.logger import get_logger
+from wv.core.session import get_init_path
+from wv.ml.megadetector import DEFAULT_MODEL
 from wv.use_cases.pipeline.preprocess import PipelinePreprocessInput
 from wv.use_cases.pipeline.preprocess import run as run_pipeline_preprocess
 
@@ -122,7 +120,7 @@ def pipeline_preprocess(
             min=1,
             help="Number of images to send to the detector per inference batch.",
         ),
-    ] = 32,
+    ] = DEFAULT_BATCH_SIZE,
     dry_run: Annotated[
         bool,
         typer.Option(

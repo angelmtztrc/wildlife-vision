@@ -4,11 +4,14 @@ from typing import Annotated
 import typer
 
 from wv.core.display import display_path
-from wv.core.logger import get_logger
-from wv.use_cases.detect.content import (
+from wv.core.detection import (
     DEFAULT_AMBIGUITY_GAP,
+    DEFAULT_BATCH_SIZE,
     DEFAULT_CONFIDENCE_THRESHOLD,
-    DEFAULT_MODEL,
+)
+from wv.core.logger import get_logger
+from wv.ml.megadetector import DEFAULT_MODEL
+from wv.use_cases.detect.content import (
     DetectContentInput,
 )
 from wv.use_cases.detect.content import run as run_detect_content
@@ -67,7 +70,7 @@ def detect_content(
             min=1,
             help="Number of images to send to the detector per inference batch.",
         ),
-    ] = 32,
+    ] = DEFAULT_BATCH_SIZE,
     dry_run: Annotated[
         bool,
         typer.Option(

@@ -3,6 +3,9 @@ from pathlib import Path
 
 from wv.core.display import display_file, display_path
 from wv.core.detection import (
+    DEFAULT_AMBIGUITY_GAP,
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_CONFIDENCE_THRESHOLD,
     DetectionDecision,
     build_detection_description,
     classify_detections,
@@ -16,9 +19,6 @@ from wv.core.metadata import upsert_image_description_properties
 from wv.core.session import get_detection_path
 from wv.ml.megadetector import DEFAULT_MODEL, MlDetection, evaluate_images
 
-DEFAULT_CONFIDENCE_THRESHOLD = 0.8
-DEFAULT_AMBIGUITY_GAP = 0.3
-
 logger = get_logger(__name__)
 
 
@@ -30,7 +30,7 @@ class DetectContentInput:
     model: str = DEFAULT_MODEL
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
     ambiguity_gap: float = DEFAULT_AMBIGUITY_GAP
-    batch_size: int = 32
+    batch_size: int = DEFAULT_BATCH_SIZE
     dry_run: bool = False
 
 

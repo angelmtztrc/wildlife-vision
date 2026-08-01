@@ -7,6 +7,11 @@ from PIL import Image
 
 from wv.core.exif import read_exif
 
+DEFAULT_MEAN_THRESHOLD = 200.0
+DEFAULT_STD_THRESHOLD = 25.0
+DEFAULT_HIGH_LEVEL = 220
+DEFAULT_PTC_HIGH_THRESHOLD = 0.60
+
 
 @dataclass(frozen=True)
 class ImageExposureMetrics:

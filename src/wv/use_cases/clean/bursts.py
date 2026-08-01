@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from wv.core.bursts import (
+    DEFAULT_BURST_GAP_THRESHOLD,
+    DEFAULT_SIMILARITY_THRESHOLD,
     BurstCandidate,
     build_burst_reduction_plan,
     create_burst_candidate,
@@ -18,9 +20,6 @@ from wv.core.logger import get_logger, get_progress
 from wv.core.session import get_ignored_bursts_path
 
 logger = get_logger(__name__)
-
-DEFAULT_BURST_GAP_THRESHOLD = 60
-DEFAULT_SIMILARITY_THRESHOLD = 5
 
 
 @dataclass(frozen=True)

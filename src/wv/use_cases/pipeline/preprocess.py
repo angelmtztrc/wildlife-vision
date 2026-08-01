@@ -3,33 +3,34 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from wv.use_cases.clean.bursts import (
-    CleanBurstsInput,
-    CleanBurstsResult,
-    DEFAULT_BURST_GAP_THRESHOLD,
-    DEFAULT_SIMILARITY_THRESHOLD,
+from wv.core.bursts import DEFAULT_BURST_GAP_THRESHOLD, DEFAULT_SIMILARITY_THRESHOLD
+from wv.core.detection import (
+    DEFAULT_AMBIGUITY_GAP,
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_CONFIDENCE_THRESHOLD,
 )
+from wv.core.images import (
+    DEFAULT_HIGH_LEVEL,
+    DEFAULT_MEAN_THRESHOLD,
+    DEFAULT_PTC_HIGH_THRESHOLD,
+    DEFAULT_STD_THRESHOLD,
+)
+from wv.core.session import get_init_path
+from wv.ml.megadetector import DEFAULT_MODEL
+from wv.use_cases.clean.bursts import CleanBurstsInput, CleanBurstsResult
 from wv.use_cases.clean.bursts import run as run_clean_bursts
 from wv.use_cases.clean.corrupted import CleanCorruptedInput, CleanCorruptedResult
 from wv.use_cases.clean.corrupted import run as run_clean_corrupted
 from wv.use_cases.clean.overexposed_ir import (
     CleanOverexposedIrInput,
     CleanOverexposedIrResult,
-    DEFAULT_HIGH_LEVEL,
-    DEFAULT_MEAN_THRESHOLD,
-    DEFAULT_PTC_HIGH_THRESHOLD,
-    DEFAULT_STD_THRESHOLD,
 )
 from wv.use_cases.clean.overexposed_ir import run as run_clean_overexposed_ir
 from wv.use_cases.detect.content import (
-    DEFAULT_AMBIGUITY_GAP,
-    DEFAULT_CONFIDENCE_THRESHOLD,
-    DEFAULT_MODEL,
     DetectContentInput,
     DetectContentResult,
 )
 from wv.use_cases.detect.content import run as run_detect_content
-from wv.core.session import get_init_path
 
 SESSION_NAME_PATTERN = re.compile(
     r"(?P<timestamp>\d{8}_\d{6})__(?P<camera>[A-Za-z0-9_]+)"
@@ -48,7 +49,7 @@ class PipelinePreprocessInput:
     model: str = DEFAULT_MODEL
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
     ambiguity_gap: float = DEFAULT_AMBIGUITY_GAP
-    batch_size: int = 32
+    batch_size: int = DEFAULT_BATCH_SIZE
     dry_run: bool = False
 
 

@@ -1,20 +1,23 @@
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
-from wv.core.images import validate_exposure_thresholds
-from wv.core.logger import get_logger
-from wv.core.session import get_ignored_overexposed_path
-from wv.models import SessionProcess
-from wv.persistence.repositories import SessionImageRepository, SessionProcessRepository
-from wv.persistence.sql_session import sql_session_scope
-from wv.use_cases.clean.overexposed_ir import (
-    CleanOverexposedIrInput,
-    CleanOverexposedIrResult,
+from wv.core.files import is_allowed_image_file
+from wv.core.images import (
     DEFAULT_HIGH_LEVEL,
     DEFAULT_MEAN_THRESHOLD,
     DEFAULT_PTC_HIGH_THRESHOLD,
     DEFAULT_STD_THRESHOLD,
+    compute_image_exposure_metrics,
+    is_image_overexposed,
+    validate_exposure_thresholds,
 )
-from wv.use_cases.clean.overexposed_ir import run as run_clean_overexposed_ir
+from wv.core.logger import get_logger, get_progress
+from wv.core.session import get_ignored_overexposed_path
+from wv.models import SessionProcess
+from wv.persistence.repositories import SessionImageRepository, SessionProcessRepository
+
+from wv.persistence.sql_session import sql_session_scope
 
 from ._shared import (
     ManagedSession,
@@ -49,7 +52,26 @@ class SessionCleanOverexposedIrInput:
 class SessionCleanOverexposedIrResult:
     session_id: str
     process: SessionProcess | None
-    clean_result: CleanOverexposedIrResult
+    files_discovered: int = 0
+    files_processed: int = 0
+    files_moved: int = 0
+    files_overexposed: int = 0
+    files_ignored: int = 0
+    files_failed: int = 0
+    destination: Path = Path()
+    dry_run: bool = False
+
+
+@dataclass
+class _CleanOverexposedIrSummary:
+    files_discovered: int = 0
+    files_processed: int = 0
+    files_moved: int = 0
+    files_overexposed: int = 0
+    files_ignored: int = 0
+    files_failed: int = 0
+    destination: Path = Path()
+    dry_run: bool = False
 
 
 def _parameters_json(input_data: SessionCleanOverexposedIrInput) -> str:
@@ -119,7 +141,7 @@ def _start_attempt(
 
 def _complete_attempt(
     managed_session: ManagedSession,
-    result: CleanOverexposedIrResult,
+    result: _CleanOverexposedIrSummary,
     recovered_moves: int,
 ) -> SessionProcess:
     with sql_session_scope(managed_session.database_path) as sql_session:
@@ -156,6 +178,68 @@ def _fail_attempt(managed_session: ManagedSession, error: Exception) -> None:
         )
 
 
+def _clean_overexposed_images(
+    managed_session: ManagedSession, input_data: SessionCleanOverexposedIrInput
+) -> _CleanOverexposedIrSummary:
+    destination = get_ignored_overexposed_path(managed_session.session_path)
+    result = _CleanOverexposedIrSummary(
+        destination=destination, dry_run=input_data.dry_run
+    )
+
+    source_files = list(managed_session.init_path.iterdir())
+    with get_progress() as progress:
+        task = progress.add_task("Processing overexposed IR candidates", total=len(source_files))
+        for file_path in source_files:
+            result.files_discovered += 1
+            try:
+                if not file_path.is_file() or not is_allowed_image_file(file_path):
+                    result.files_ignored += 1
+                    continue
+                metrics = compute_image_exposure_metrics(file_path, input_data.high_level)
+                result.files_processed += 1
+                if not is_image_overexposed(
+                    metrics,
+                    input_data.mean_threshold,
+                    input_data.std_threshold,
+                    input_data.ptc_high_threshold,
+                ):
+                    result.files_ignored += 1
+                    continue
+
+                result.files_overexposed += 1
+                if input_data.dry_run:
+                    continue
+                destination.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(file_path), destination / file_path.name)
+                result.files_moved += 1
+            except Exception:
+                result.files_failed += 1
+                logger.exception("Failed to process overexposed IR candidate %s", file_path)
+            finally:
+                progress.update(task, advance=1)
+
+    return result
+
+
+def _result(
+    managed_session: ManagedSession,
+    process: SessionProcess | None,
+    summary: _CleanOverexposedIrSummary,
+) -> SessionCleanOverexposedIrResult:
+    return SessionCleanOverexposedIrResult(
+        session_id=managed_session.session.id,
+        process=process,
+        files_discovered=summary.files_discovered,
+        files_processed=summary.files_processed,
+        files_moved=summary.files_moved,
+        files_overexposed=summary.files_overexposed,
+        files_ignored=summary.files_ignored,
+        files_failed=summary.files_failed,
+        destination=summary.destination,
+        dry_run=summary.dry_run,
+    )
+
+
 def run(
     input_data: SessionCleanOverexposedIrInput,
 ) -> SessionCleanOverexposedIrResult:
@@ -166,8 +250,8 @@ def run(
             options.
 
     Returns:
-        The raw cleanup result and persisted process record. ``process`` is
-        ``None`` for dry runs because they do not mutate process state.
+        The managed cleanup counters and persisted process record. ``process``
+        is ``None`` for dry runs because they do not mutate process state.
 
     Raises:
         SessionProcessError: If ordering, retry parameters, or inventory rules
@@ -184,36 +268,14 @@ def run(
         )
 
         if input_data.dry_run:
-            clean_result = run_clean_overexposed_ir(
-                CleanOverexposedIrInput(
-                    source=managed_session.init_path,
-                    output=managed_session.session_path,
-                    mean_threshold=input_data.mean_threshold,
-                    std_threshold=input_data.std_threshold,
-                    high_level=input_data.high_level,
-                    ptc_high_threshold=input_data.ptc_high_threshold,
-                    dry_run=True,
-                )
-            )
-            return SessionCleanOverexposedIrResult(
-                session_id=managed_session.session.id,
-                process=None,
-                clean_result=clean_result,
+            return _result(
+                managed_session, None, _clean_overexposed_images(managed_session, input_data)
             )
 
         _start_attempt(managed_session, input_data, parameters_json)
         try:
-            clean_result = run_clean_overexposed_ir(
-                CleanOverexposedIrInput(
-                    source=managed_session.init_path,
-                    output=managed_session.session_path,
-                    mean_threshold=input_data.mean_threshold,
-                    std_threshold=input_data.std_threshold,
-                    high_level=input_data.high_level,
-                    ptc_high_threshold=input_data.ptc_high_threshold,
-                )
-            )
-            process = _complete_attempt(managed_session, clean_result, recovered_moves)
+            summary = _clean_overexposed_images(managed_session, input_data)
+            process = _complete_attempt(managed_session, summary, recovered_moves)
         except Exception as exc:
             try:
                 _fail_attempt(managed_session, exc)
@@ -221,8 +283,4 @@ def run(
                 logger.exception("Unable to record failed session process %s", PROCESS_NAME)
             raise
 
-    return SessionCleanOverexposedIrResult(
-        session_id=managed_session.session.id,
-        process=process,
-        clean_result=clean_result,
-    )
+    return _result(managed_session, process, summary)

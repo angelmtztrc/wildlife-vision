@@ -5,6 +5,10 @@ from pathlib import Path
 from wv.core.display import display_file, display_path
 from wv.core.files import ensure_directory, is_allowed_image_file
 from wv.core.images import (
+    DEFAULT_HIGH_LEVEL,
+    DEFAULT_MEAN_THRESHOLD,
+    DEFAULT_PTC_HIGH_THRESHOLD,
+    DEFAULT_STD_THRESHOLD,
     compute_image_exposure_metrics,
     is_image_overexposed,
     validate_exposure_thresholds,
@@ -13,11 +17,6 @@ from wv.core.logger import get_logger, get_progress
 from wv.core.session import get_ignored_overexposed_path
 
 logger = get_logger(__name__)
-
-DEFAULT_MEAN_THRESHOLD = 200.0
-DEFAULT_STD_THRESHOLD = 25.0
-DEFAULT_HIGH_LEVEL = 220
-DEFAULT_PTC_HIGH_THRESHOLD = 0.60
 
 
 @dataclass(frozen=True)

@@ -6,6 +6,9 @@ from importlib.metadata import version
 from pathlib import Path
 
 from wv.core.detection import (
+    DEFAULT_AMBIGUITY_GAP,
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_CONFIDENCE_THRESHOLD,
     build_detection_description,
     classify_detections,
     format_detection_confidence,
@@ -22,12 +25,6 @@ from wv.persistence.repositories import (
     SessionProcessRepository,
 )
 from wv.persistence.sql_session import sql_session_scope
-from wv.use_cases.detect.content import (
-    DEFAULT_AMBIGUITY_GAP,
-    DEFAULT_CONFIDENCE_THRESHOLD,
-    DetectContentResult,
-)
-
 from ._shared import (
     ManagedSession,
     SessionProcessError,
@@ -43,9 +40,6 @@ from ._shared import (
 
 PROCESS_NAME = "detect_content"
 ALGORITHM_VERSION = 1
-DEFAULT_BATCH_SIZE = 32
-
-
 @dataclass(frozen=True)
 class SessionDetectContentInput:
     session_id: str
@@ -61,7 +55,36 @@ class SessionDetectContentInput:
 class SessionDetectContentResult:
     session_id: str
     process: SessionProcess | None
-    detect_result: DetectContentResult
+    files_discovered: int = 0
+    files_evaluated: int = 0
+    files_moved: int = 0
+    files_ignored: int = 0
+    files_failed: int = 0
+    files_replaced: int = 0
+    files_animal: int = 0
+    files_human: int = 0
+    files_vehicle: int = 0
+    files_empty: int = 0
+    files_other: int = 0
+    destination: Path = Path()
+    dry_run: bool = False
+
+
+@dataclass
+class _DetectContentSummary:
+    files_discovered: int = 0
+    files_evaluated: int = 0
+    files_moved: int = 0
+    files_ignored: int = 0
+    files_failed: int = 0
+    files_replaced: int = 0
+    files_animal: int = 0
+    files_human: int = 0
+    files_vehicle: int = 0
+    files_empty: int = 0
+    files_other: int = 0
+    destination: Path = Path()
+    dry_run: bool = False
 
 
 def _parameters_json(input_data: SessionDetectContentInput) -> str:
@@ -114,7 +137,7 @@ def _require_content(path: Path, content_digest: str, content_size_bytes: int) -
         raise SessionProcessError(f"Image does not match persisted inventory: {path}")
 
 
-def _increment_label(result: DetectContentResult, label: str) -> None:
+def _increment_label(result: _DetectContentSummary, label: str) -> None:
     setattr(result, f"files_{label}", getattr(result, f"files_{label}") + 1)
 
 
@@ -122,9 +145,9 @@ def _build_plan(
     managed_session: ManagedSession,
     input_data: SessionDetectContentInput,
     candidates: list[SessionImage],
-) -> tuple[list[SessionProcessImagePlan], DetectContentResult, str]:
+) -> tuple[list[SessionProcessImagePlan], _DetectContentSummary, str]:
     if not candidates:
-        return [], DetectContentResult(), canonical_process_parameters({"schema_version": 1})
+        return [], _DetectContentSummary(), canonical_process_parameters({"schema_version": 1})
 
     resolved_model = resolve_model(input_data.model)
     execution_details = canonical_process_parameters(
@@ -152,7 +175,12 @@ def _build_plan(
     if len(inference_results) != len(candidates):
         raise SessionProcessError("MegaDetector did not return one result per candidate.")
 
-    result = DetectContentResult(files_discovered=len(candidates), files_evaluated=0)
+    result = _DetectContentSummary(
+        files_discovered=len(candidates),
+        files_evaluated=0,
+        destination=get_detection_path(managed_session.session_path),
+        dry_run=input_data.dry_run,
+    )
     plans: list[SessionProcessImagePlan] = []
     planned_at = utc_now()
     with tempfile.TemporaryDirectory(prefix="wv-detection-plan-") as temporary_directory:
@@ -267,7 +295,7 @@ def _plan_details(plan: SessionProcessImagePlan) -> dict[str, object]:
 def _apply_plans(
     managed_session: ManagedSession,
     plans: list[SessionProcessImagePlan],
-    result: DetectContentResult,
+    result: _DetectContentSummary,
 ) -> None:
     with sql_session_scope(managed_session.database_path) as sql_session:
         images = {
@@ -337,7 +365,7 @@ def _content_matches(path: Path, digest: str, size: int) -> bool:
 
 
 def _complete(
-    managed_session: ManagedSession, result: DetectContentResult
+    managed_session: ManagedSession, result: _DetectContentSummary
 ) -> SessionProcess:
     with sql_session_scope(managed_session.database_path) as sql_session:
         return SessionProcessRepository(sql_session).complete(
@@ -354,7 +382,7 @@ def _complete(
         )
 
 
-def _fail(managed_session: ManagedSession, error: Exception, result: DetectContentResult) -> None:
+def _fail(managed_session: ManagedSession, error: Exception, result: _DetectContentSummary) -> None:
     with sql_session_scope(managed_session.database_path) as sql_session:
         SessionProcessRepository(sql_session).fail(
             managed_session.session.id,
@@ -368,6 +396,30 @@ def _fail(managed_session: ManagedSession, error: Exception, result: DetectConte
             files_ignored=result.files_ignored,
             files_failed=result.files_failed + 1,
         )
+
+
+def _result(
+    managed_session: ManagedSession,
+    process: SessionProcess | None,
+    summary: _DetectContentSummary,
+) -> SessionDetectContentResult:
+    return SessionDetectContentResult(
+        session_id=managed_session.session.id,
+        process=process,
+        files_discovered=summary.files_discovered,
+        files_evaluated=summary.files_evaluated,
+        files_moved=summary.files_moved,
+        files_ignored=summary.files_ignored,
+        files_failed=summary.files_failed,
+        files_replaced=summary.files_replaced,
+        files_animal=summary.files_animal,
+        files_human=summary.files_human,
+        files_vehicle=summary.files_vehicle,
+        files_empty=summary.files_empty,
+        files_other=summary.files_other,
+        destination=summary.destination,
+        dry_run=summary.dry_run,
+    )
 
 
 def run(input_data: SessionDetectContentInput) -> SessionDetectContentResult:
@@ -385,22 +437,31 @@ def run(input_data: SessionDetectContentInput) -> SessionDetectContentResult:
                 for path in managed_session.init_path.iterdir()
                 if not path.is_file() or not is_allowed_image_file(path)
             )
-            result = DetectContentResult(
+            result = _DetectContentSummary(
                 files_discovered=len(plans) + ignored,
                 files_evaluated=len(plans),
                 files_ignored=ignored,
+                destination=get_detection_path(managed_session.session_path),
+                dry_run=input_data.dry_run,
             )
             for plan in plans:
                 _increment_label(result, str(_plan_details(plan)["label"]))
         else:
             candidates, discovered, ignored = _load_candidates(managed_session)
-            result = DetectContentResult(files_discovered=discovered, files_ignored=ignored)
+            result = _DetectContentSummary(
+                files_discovered=discovered,
+                files_ignored=ignored,
+                destination=get_detection_path(managed_session.session_path),
+                dry_run=input_data.dry_run,
+            )
             try:
                 plans, planned_result, execution_details = _build_plan(
                     managed_session, input_data, candidates
                 )
                 planned_result.files_discovered = discovered
                 planned_result.files_ignored = ignored
+                planned_result.destination = get_detection_path(managed_session.session_path)
+                planned_result.dry_run = input_data.dry_run
                 result = planned_result
             except Exception as exc:
                 if not input_data.dry_run:
@@ -411,7 +472,7 @@ def run(input_data: SessionDetectContentInput) -> SessionDetectContentResult:
                 raise
 
         if input_data.dry_run:
-            return SessionDetectContentResult(managed_session.session.id, None, result)
+            return _result(managed_session, None, result)
         if not existing or not plans:
             _start_and_persist_plan(
                 managed_session, input_data, parameters_json, execution_details, plans
@@ -427,4 +488,4 @@ def run(input_data: SessionDetectContentInput) -> SessionDetectContentResult:
         except Exception as exc:
             _fail(managed_session, exc, result)
             raise
-    return SessionDetectContentResult(managed_session.session.id, process, result)
+    return _result(managed_session, process, result)

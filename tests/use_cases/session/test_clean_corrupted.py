@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+import wv.use_cases.session.clean_corrupted as managed_corrupted
 from wv.models import IngestSession, SessionImage
 from wv.core.files import get_content_digest
 from wv.persistence.repositories import (
@@ -91,6 +92,11 @@ def test_run_moves_corrupted_image_and_updates_inventory(
     assert result.process is not None
     assert result.process.status == "completed"
     assert result.process.files_moved == 1
+    assert result.files_discovered == 1
+    assert result.files_corrupted == 1
+    assert result.files_moved == 1
+    assert result.destination == session_path / "ignored" / "corrupted"
+    assert result.dry_run is False
     assert not source_path.exists()
     assert destination_path.is_file()
 
@@ -153,6 +159,7 @@ def test_dry_run_does_not_create_process_or_move_files(
 
     assert result.process is None
     assert source_path.exists()
+    assert result.dry_run is True
     with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
         process = SessionProcessRepository(sql_session).get_optional(
             SESSION_ID, "clean_corrupted"
@@ -181,3 +188,23 @@ def test_run_rejects_untracked_supported_image(
 
     with pytest.raises(SessionProcessError, match="not tracked"):
         run(SessionCleanCorruptedInput(session_id=SESSION_ID))
+
+
+def test_run_records_image_inspection_failure(
+    configured_workspace: Path, make_image, monkeypatch: pytest.MonkeyPatch
+):
+    _, source_path = _create_session_inventory(configured_workspace)
+    make_image(source_path)
+    _record_actual_image_content(configured_workspace, source_path)
+    monkeypatch.setattr(
+        managed_corrupted,
+        "is_image_corrupted",
+        lambda _: (_ for _ in ()).throw(OSError("cannot inspect image")),
+    )
+
+    result = run(SessionCleanCorruptedInput(session_id=SESSION_ID))
+
+    assert result.files_failed == 1
+    assert result.process is not None
+    assert result.process.status == "completed_with_failures"
+    assert source_path.is_file()

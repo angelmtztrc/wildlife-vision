@@ -1,12 +1,14 @@
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
-from wv.core.logger import get_logger
+from wv.core.files import is_allowed_image_file
+from wv.core.images import is_image_corrupted
+from wv.core.logger import get_logger, get_progress
 from wv.core.session import get_ignored_corrupted_path
 from wv.models import SessionProcess
 from wv.persistence.repositories import SessionImageRepository, SessionProcessRepository
 from wv.persistence.sql_session import sql_session_scope
-from wv.use_cases.clean.corrupted import CleanCorruptedInput, CleanCorruptedResult
-from wv.use_cases.clean.corrupted import run as run_clean_corrupted
 
 from ._shared import (
     ManagedSession,
@@ -35,7 +37,24 @@ class SessionCleanCorruptedInput:
 class SessionCleanCorruptedResult:
     session_id: str
     process: SessionProcess | None
-    clean_result: CleanCorruptedResult
+    files_discovered: int = 0
+    files_moved: int = 0
+    files_ignored: int = 0
+    files_corrupted: int = 0
+    files_failed: int = 0
+    destination: Path = Path()
+    dry_run: bool = False
+
+
+@dataclass
+class _CleanCorruptedSummary:
+    files_discovered: int = 0
+    files_moved: int = 0
+    files_ignored: int = 0
+    files_corrupted: int = 0
+    files_failed: int = 0
+    destination: Path = Path()
+    dry_run: bool = False
 
 
 def _prepare_attempt(
@@ -79,7 +98,7 @@ def _start_attempt(
 
 def _complete_attempt(
     managed_session: ManagedSession,
-    result: CleanCorruptedResult,
+    result: _CleanCorruptedSummary,
     recovered_moves: int,
 ) -> SessionProcess:
     with sql_session_scope(managed_session.database_path) as sql_session:
@@ -118,19 +137,69 @@ def _fail_attempt(managed_session: ManagedSession, error: Exception) -> None:
         )
 
 
+def _clean_corrupted_images(
+    managed_session: ManagedSession, dry_run: bool
+) -> _CleanCorruptedSummary:
+    destination = get_ignored_corrupted_path(managed_session.session_path)
+    result = _CleanCorruptedSummary(destination=destination, dry_run=dry_run)
+
+    source_files = list(managed_session.init_path.iterdir())
+    with get_progress() as progress:
+        task = progress.add_task("Processing corrupted image candidates", total=len(source_files))
+        for file_path in source_files:
+            result.files_discovered += 1
+            try:
+                if not file_path.is_file() or not is_allowed_image_file(file_path):
+                    result.files_ignored += 1
+                    continue
+                if not is_image_corrupted(file_path):
+                    continue
+                result.files_corrupted += 1
+                if dry_run:
+                    continue
+                destination.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(file_path), destination / file_path.name)
+                result.files_moved += 1
+            except Exception:
+                result.files_failed += 1
+                logger.exception("Failed to process corrupted image candidate %s", file_path)
+            finally:
+                progress.update(task, advance=1)
+
+    return result
+
+
+def _result(
+    managed_session: ManagedSession,
+    process: SessionProcess | None,
+    summary: _CleanCorruptedSummary,
+) -> SessionCleanCorruptedResult:
+    return SessionCleanCorruptedResult(
+        session_id=managed_session.session.id,
+        process=process,
+        files_discovered=summary.files_discovered,
+        files_moved=summary.files_moved,
+        files_ignored=summary.files_ignored,
+        files_corrupted=summary.files_corrupted,
+        files_failed=summary.files_failed,
+        destination=summary.destination,
+        dry_run=summary.dry_run,
+    )
+
+
 def run(input_data: SessionCleanCorruptedInput) -> SessionCleanCorruptedResult:
     """Run corrupted cleanup for an inventory-tracked workspace session.
 
-    The workflow validates the session lifecycle, reconciles deterministic file
-    moves with the session inventory, and records one durable process attempt.
-    The underlying corruption cleanup remains reusable without persistence.
+    The operation validates the session lifecycle, performs corruption
+    classification, reconciles deterministic file moves with the session
+    inventory, and records one durable process attempt.
 
     Args:
         input_data: Session identifier and execution options.
 
     Returns:
-        The raw cleanup result and the persisted process record. ``process`` is
-        ``None`` for dry runs because they do not mutate process state.
+        The managed cleanup counters and persisted process record. ``process``
+        is ``None`` for dry runs because they do not mutate process state.
 
     Raises:
         SessionProcessError: If session lifecycle, ordering, or inventory rules
@@ -143,28 +212,12 @@ def run(input_data: SessionCleanCorruptedInput) -> SessionCleanCorruptedResult:
         recovered_moves = _prepare_attempt(managed_session, input_data)
 
         if input_data.dry_run:
-            clean_result = run_clean_corrupted(
-                CleanCorruptedInput(
-                    source=managed_session.init_path,
-                    output=managed_session.session_path,
-                    dry_run=True,
-                )
-            )
-            return SessionCleanCorruptedResult(
-                session_id=managed_session.session.id,
-                process=None,
-                clean_result=clean_result,
-            )
+            return _result(managed_session, None, _clean_corrupted_images(managed_session, True))
 
         _start_attempt(managed_session, input_data.recover)
         try:
-            clean_result = run_clean_corrupted(
-                CleanCorruptedInput(
-                    source=managed_session.init_path,
-                    output=managed_session.session_path,
-                )
-            )
-            process = _complete_attempt(managed_session, clean_result, recovered_moves)
+            summary = _clean_corrupted_images(managed_session, False)
+            process = _complete_attempt(managed_session, summary, recovered_moves)
         except Exception as exc:
             try:
                 _fail_attempt(managed_session, exc)
@@ -172,8 +225,4 @@ def run(input_data: SessionCleanCorruptedInput) -> SessionCleanCorruptedResult:
                 logger.exception("Unable to record failed session process %s", PROCESS_NAME)
             raise
 
-    return SessionCleanCorruptedResult(
-        session_id=managed_session.session.id,
-        process=process,
-        clean_result=clean_result,
-    )
+    return _result(managed_session, process, summary)

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+import wv.use_cases.session.clean_overexposed_ir as managed_overexposed
 from wv.core.files import get_content_digest
 from wv.models import IngestSession, SessionImage
 from wv.persistence.repositories import (
@@ -105,6 +106,13 @@ def test_run_moves_overexposed_image_and_tracks_parameters(
     assert result.process.files_processed == 2
     assert result.process.files_selected == 1
     assert result.process.files_moved == 1
+    assert result.files_discovered == 2
+    assert result.files_processed == 2
+    assert result.files_overexposed == 1
+    assert result.files_moved == 1
+    assert result.files_ignored == 1
+    assert result.destination == session_path / "ignored" / "overexposed"
+    assert result.dry_run is False
     assert not white_path.exists()
     assert gray_path.is_file()
 
@@ -180,6 +188,7 @@ def test_dry_run_does_not_create_process_or_move_files(
 
     assert result.process is None
     assert image_path.is_file()
+    assert result.dry_run is True
     with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
         process = SessionProcessRepository(sql_session).get_optional(
             SESSION_ID, "clean_overexposed_ir"
@@ -217,3 +226,24 @@ def test_run_recovers_interrupted_move(
     with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
         image = SessionImageRepository(sql_session).get("image-1")
     assert image.current_relative_path == "ignored/overexposed/white.jpg"
+
+
+def test_run_records_image_inspection_failure(
+    configured_workspace: Path, make_image, monkeypatch: pytest.MonkeyPatch
+):
+    init_path = configured_workspace / "sessions" / SESSION_ID / "init"
+    image_path = make_image(init_path / "gray.jpg", color=(100, 100, 100))
+    _create_session_inventory(configured_workspace, [image_path])
+    _complete_corrupted_process(configured_workspace)
+    monkeypatch.setattr(
+        managed_overexposed,
+        "compute_image_exposure_metrics",
+        lambda *_: (_ for _ in ()).throw(OSError("cannot inspect image")),
+    )
+
+    result = run(SessionCleanOverexposedIrInput(session_id=SESSION_ID))
+
+    assert result.files_failed == 1
+    assert result.process is not None
+    assert result.process.status == "completed_with_failures"
+    assert image_path.is_file()

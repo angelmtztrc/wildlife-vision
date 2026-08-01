@@ -107,9 +107,12 @@ def test_run_persists_detection_plan_and_updates_inventory(
 
     assert result.process is not None
     assert result.process.status == "completed"
-    assert result.detect_result.files_animal == 1
-    assert result.detect_result.files_empty == 1
-    assert result.detect_result.files_moved == 2
+    assert result.files_animal == 1
+    assert result.files_empty == 1
+    assert result.files_moved == 2
+    assert result.files_discovered == 2
+    assert result.destination == configured_workspace / "sessions" / SESSION_ID / "detection"
+    assert result.dry_run is False
     with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
         plans = SessionProcessImagePlanRepository(sql_session).list_for_process(
             SESSION_ID, "detect_content"

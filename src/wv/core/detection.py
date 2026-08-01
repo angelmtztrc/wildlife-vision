@@ -6,6 +6,10 @@ from math import isfinite
 from wv.core.metadata import upsert_image_description_properties
 from wv.ml.megadetector import MlDetection
 
+DEFAULT_CONFIDENCE_THRESHOLD = 0.8
+DEFAULT_AMBIGUITY_GAP = 0.3
+DEFAULT_BATCH_SIZE = 32
+
 
 @dataclass(frozen=True)
 class DetectionDecision:

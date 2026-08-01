@@ -2,7 +2,20 @@ from typing import Annotated
 
 import typer
 
+from wv.core.bursts import DEFAULT_BURST_GAP_THRESHOLD, DEFAULT_SIMILARITY_THRESHOLD
+from wv.core.detection import (
+    DEFAULT_AMBIGUITY_GAP,
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_CONFIDENCE_THRESHOLD,
+)
+from wv.core.images import (
+    DEFAULT_HIGH_LEVEL,
+    DEFAULT_MEAN_THRESHOLD,
+    DEFAULT_PTC_HIGH_THRESHOLD,
+    DEFAULT_STD_THRESHOLD,
+)
 from wv.core.logger import get_logger
+from wv.ml.megadetector import DEFAULT_MODEL
 from wv.use_cases.session.clean_corrupted import SessionCleanCorruptedInput
 from wv.use_cases.session.clean_corrupted import run as run_clean_corrupted
 from wv.use_cases.session.clean_overexposed_ir import (
@@ -11,23 +24,7 @@ from wv.use_cases.session.clean_overexposed_ir import (
 from wv.use_cases.session.clean_overexposed_ir import run as run_clean_overexposed_ir
 from wv.use_cases.session.clean_bursts import SessionCleanBurstsInput
 from wv.use_cases.session.clean_bursts import run as run_clean_bursts
-from wv.use_cases.clean.bursts import (
-    DEFAULT_BURST_GAP_THRESHOLD,
-    DEFAULT_SIMILARITY_THRESHOLD,
-)
-from wv.use_cases.clean.overexposed_ir import (
-    DEFAULT_HIGH_LEVEL,
-    DEFAULT_MEAN_THRESHOLD,
-    DEFAULT_PTC_HIGH_THRESHOLD,
-    DEFAULT_STD_THRESHOLD,
-)
-from wv.use_cases.detect.content import (
-    DEFAULT_AMBIGUITY_GAP,
-    DEFAULT_CONFIDENCE_THRESHOLD,
-    DEFAULT_MODEL,
-)
 from wv.use_cases.session.detect_content import (
-    DEFAULT_BATCH_SIZE,
     SessionDetectContentInput,
 )
 from wv.use_cases.session.detect_content import run as run_detect_content
@@ -81,13 +78,13 @@ def clean_corrupted(
     logger.done(
         "Finished managed corrupted cleanup for %s: corrupted=%s moved=%s failed=%s%s",
         result.session_id,
-        result.clean_result.files_corrupted,
-        result.clean_result.files_moved,
-        result.clean_result.files_failed,
+        result.files_corrupted,
+        result.files_moved,
+        result.files_failed,
         " (dry run)" if dry_run else "",
     )
 
-    if result.clean_result.files_failed > 0:
+    if result.files_failed > 0:
         raise typer.Exit(code=1)
 
     return None
@@ -168,14 +165,14 @@ def clean_overexposed_ir(
     logger.done(
         "Finished managed overexposed cleanup for %s: processed=%s overexposed=%s moved=%s failed=%s%s",
         result.session_id,
-        result.clean_result.files_processed,
-        result.clean_result.files_overexposed,
-        result.clean_result.files_moved,
-        result.clean_result.files_failed,
+        result.files_processed,
+        result.files_overexposed,
+        result.files_moved,
+        result.files_failed,
         " (dry run)" if dry_run else "",
     )
 
-    if result.clean_result.files_failed > 0:
+    if result.files_failed > 0:
         raise typer.Exit(code=1)
 
     return None
@@ -236,14 +233,14 @@ def clean_bursts(
     logger.done(
         "Finished managed burst cleanup for %s: bursts=%s reduced=%s moved=%s failed=%s%s",
         result.session_id,
-        result.clean_result.files_bursts,
-        result.clean_result.files_reduced,
-        result.clean_result.files_moved,
-        result.clean_result.files_failed,
+        result.files_bursts,
+        result.files_reduced,
+        result.files_moved,
+        result.files_failed,
         " (dry run)" if dry_run else "",
     )
 
-    if result.clean_result.files_failed > 0:
+    if result.files_failed > 0:
         raise typer.Exit(code=1)
 
     return None
@@ -290,16 +287,16 @@ def detect_content(
     logger.done(
         "Finished managed detection for %s: evaluated=%s animal=%s human=%s vehicle=%s empty=%s other=%s moved=%s failed=%s%s",
         result.session_id,
-        result.detect_result.files_evaluated,
-        result.detect_result.files_animal,
-        result.detect_result.files_human,
-        result.detect_result.files_vehicle,
-        result.detect_result.files_empty,
-        result.detect_result.files_other,
-        result.detect_result.files_moved,
-        result.detect_result.files_failed,
+        result.files_evaluated,
+        result.files_animal,
+        result.files_human,
+        result.files_vehicle,
+        result.files_empty,
+        result.files_other,
+        result.files_moved,
+        result.files_failed,
         " (dry run)" if dry_run else "",
     )
-    if result.detect_result.files_failed > 0:
+    if result.files_failed > 0:
         raise typer.Exit(code=1)
     return None

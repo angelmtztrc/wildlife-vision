@@ -10,6 +10,9 @@ from PIL import Image, ImageFilter, ImageOps, ImageStat
 from wv.core.files import parse_ingested_image_filename
 from wv.core.images import get_image_datetime
 
+DEFAULT_BURST_GAP_THRESHOLD = 60
+DEFAULT_SIMILARITY_THRESHOLD = 5
+
 
 @dataclass(frozen=True)
 class BurstCandidate:

@@ -1,15 +1,9 @@
-from pathlib import Path
-
 from wv.cli.main import app
-from wv.use_cases.clean.corrupted import CleanCorruptedResult
 from wv.use_cases.session.clean_corrupted import SessionCleanCorruptedResult
-from wv.use_cases.clean.overexposed_ir import CleanOverexposedIrResult
 from wv.use_cases.session.clean_overexposed_ir import (
     SessionCleanOverexposedIrResult,
 )
-from wv.use_cases.clean.bursts import CleanBurstsResult
 from wv.use_cases.session.clean_bursts import SessionCleanBurstsResult
-from wv.use_cases.detect.content import DetectContentResult
 from wv.use_cases.session.detect_content import SessionDetectContentResult
 
 
@@ -18,11 +12,8 @@ def test_session_clean_corrupted_prints_summary(cli_runner, monkeypatch):
         return SessionCleanCorruptedResult(
             session_id=input_data.session_id,
             process=None,
-            clean_result=CleanCorruptedResult(
-                files_corrupted=1,
-                files_moved=1,
-                destination=Path("ignored/corrupted"),
-            ),
+            files_corrupted=1,
+            files_moved=1,
         )
 
     monkeypatch.setattr("wv.cli.commands.session.run_clean_corrupted", fake_run)
@@ -43,12 +34,9 @@ def test_session_clean_overexposed_ir_forwards_options(cli_runner, monkeypatch):
         return SessionCleanOverexposedIrResult(
             session_id=input_data.session_id,
             process=None,
-            clean_result=CleanOverexposedIrResult(
-                files_processed=2,
-                files_overexposed=1,
-                files_moved=1,
-                destination=Path("ignored/overexposed"),
-            ),
+            files_processed=2,
+            files_overexposed=1,
+            files_moved=1,
         )
 
     monkeypatch.setattr("wv.cli.commands.session.run_clean_overexposed_ir", fake_run)
@@ -91,7 +79,7 @@ def test_session_clean_overexposed_ir_exits_with_file_failures(
         lambda input_data: SessionCleanOverexposedIrResult(
             session_id=input_data.session_id,
             process=None,
-            clean_result=CleanOverexposedIrResult(files_failed=1),
+            files_failed=1,
         ),
     )
 
@@ -111,7 +99,9 @@ def test_session_clean_bursts_forwards_options(cli_runner, monkeypatch):
         return SessionCleanBurstsResult(
             session_id=input_data.session_id,
             process=None,
-            clean_result=CleanBurstsResult(files_bursts=1, files_reduced=2, files_moved=2),
+            files_bursts=1,
+            files_reduced=2,
+            files_moved=2,
         )
 
     monkeypatch.setattr("wv.cli.commands.session.run_clean_bursts", fake_run)
@@ -148,7 +138,8 @@ def test_session_detect_content_forwards_options(cli_runner, monkeypatch):
         return SessionDetectContentResult(
             session_id=input_data.session_id,
             process=None,
-            detect_result=DetectContentResult(files_evaluated=1, files_animal=1),
+            files_evaluated=1,
+            files_animal=1,
         )
 
     monkeypatch.setattr("wv.cli.commands.session.run_detect_content", fake_run)

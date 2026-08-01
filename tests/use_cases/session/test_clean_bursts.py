@@ -125,6 +125,11 @@ def test_run_persists_plan_before_moving_and_updates_inventory(
     assert result.process.status == "completed"
     assert result.process.files_selected == 2
     assert result.process.files_moved == 2
+    assert result.files_discovered == 3
+    assert result.files_bursts == 1
+    assert result.files_reduced == 2
+    assert result.files_moved == 2
+    assert result.destination == session_path / "ignored" / "bursts"
     with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
         plans = SessionProcessImagePlanRepository(sql_session).list_for_process(
             SESSION_ID, "clean_bursts"
@@ -226,7 +231,7 @@ def test_planning_failure_moves_no_files(
 
     result = run(SessionCleanBurstsInput(session_id=SESSION_ID))
 
-    assert result.clean_result.files_failed == 1
+    assert result.files_failed == 1
     assert result.process is not None
     assert result.process.status == "failed"
     assert all(path.is_file() for path in image_paths)
@@ -255,6 +260,7 @@ def test_dry_run_does_not_create_plan_or_move_files(
 
     assert result.process is None
     assert all(path.is_file() for path in image_paths)
+    assert result.dry_run is True
     with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
         plans = SessionProcessImagePlanRepository(sql_session).list_for_process(
             SESSION_ID, "clean_bursts"

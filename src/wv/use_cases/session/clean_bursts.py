@@ -4,6 +4,8 @@ from pathlib import Path
 from wv.core.bursts import (
     BurstCandidate,
     BurstReductionPlan,
+    DEFAULT_BURST_GAP_THRESHOLD,
+    DEFAULT_SIMILARITY_THRESHOLD,
     build_burst_reduction_plan,
     create_burst_candidate,
     validate_burst_thresholds,
@@ -19,12 +21,6 @@ from wv.persistence.repositories import (
     SessionProcessRepository,
 )
 from wv.persistence.sql_session import sql_session_scope
-from wv.use_cases.clean.bursts import (
-    CleanBurstsResult,
-    DEFAULT_BURST_GAP_THRESHOLD,
-    DEFAULT_SIMILARITY_THRESHOLD,
-)
-
 from ._shared import (
     ManagedSession,
     SessionProcessError,
@@ -58,7 +54,28 @@ class SessionCleanBurstsInput:
 class SessionCleanBurstsResult:
     session_id: str
     process: SessionProcess | None
-    clean_result: CleanBurstsResult
+    files_discovered: int = 0
+    files_processed: int = 0
+    files_moved: int = 0
+    files_ignored: int = 0
+    files_bursts: int = 0
+    files_reduced: int = 0
+    files_failed: int = 0
+    destination: Path = Path()
+    dry_run: bool = False
+
+
+@dataclass
+class _CleanBurstsSummary:
+    files_discovered: int = 0
+    files_processed: int = 0
+    files_moved: int = 0
+    files_ignored: int = 0
+    files_bursts: int = 0
+    files_reduced: int = 0
+    files_failed: int = 0
+    destination: Path = Path()
+    dry_run: bool = False
 
 
 @dataclass(frozen=True)
@@ -158,10 +175,10 @@ def _count_existing_plan_unsupported_entries(
 
 def _build_result(
     planning_input: _PlanningInput, plan: BurstReductionPlan, dry_run: bool
-) -> CleanBurstsResult:
+) -> _CleanBurstsSummary:
     kept = sum(1 for decision in plan.decisions if decision.decision == "keep")
     reduced = sum(1 for decision in plan.decisions if decision.decision == "move")
-    return CleanBurstsResult(
+    return _CleanBurstsSummary(
         files_discovered=planning_input.files_discovered,
         files_processed=plan.processed,
         files_ignored=planning_input.unsupported_files + kept,
@@ -245,7 +262,7 @@ def _record_planning_failure(
     managed_session: ManagedSession,
     input_data: SessionCleanBurstsInput,
     parameters_json: str,
-    result: CleanBurstsResult,
+    result: _CleanBurstsSummary,
 ) -> SessionProcess:
     with sql_session_scope(managed_session.database_path) as sql_session:
         process_repository = SessionProcessRepository(sql_session)
@@ -280,7 +297,7 @@ def _record_planning_failure(
 def _apply_plan(
     managed_session: ManagedSession,
     plans: list[SessionProcessImagePlan],
-    result: CleanBurstsResult,
+    result: _CleanBurstsSummary,
 ) -> None:
     with sql_session_scope(managed_session.database_path) as sql_session:
         images = {
@@ -401,7 +418,7 @@ def _require_inventory_match(path: Path, image: SessionImage) -> None:
 
 
 def _complete_process(
-    managed_session: ManagedSession, result: CleanBurstsResult
+    managed_session: ManagedSession, result: _CleanBurstsSummary
 ) -> SessionProcess:
     with sql_session_scope(managed_session.database_path) as sql_session:
         status = "completed_with_failures" if result.files_failed else "completed"
@@ -430,6 +447,26 @@ def _fail_process(managed_session: ManagedSession, error: Exception) -> None:
         )
 
 
+def _result(
+    managed_session: ManagedSession,
+    process: SessionProcess | None,
+    summary: _CleanBurstsSummary,
+) -> SessionCleanBurstsResult:
+    return SessionCleanBurstsResult(
+        session_id=managed_session.session.id,
+        process=process,
+        files_discovered=summary.files_discovered,
+        files_processed=summary.files_processed,
+        files_moved=summary.files_moved,
+        files_ignored=summary.files_ignored,
+        files_bursts=summary.files_bursts,
+        files_reduced=summary.files_reduced,
+        files_failed=summary.files_failed,
+        destination=summary.destination,
+        dry_run=summary.dry_run,
+    )
+
+
 def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
     """Run deterministic, plan-backed burst cleanup for a workspace session.
 
@@ -440,7 +477,8 @@ def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
         input_data: Session identifier, burst thresholds, and execution options.
 
     Returns:
-        The process record and burst-cleanup result. Dry runs return no process.
+        The managed burst-cleanup counters and process record. Dry runs return
+        no process record.
 
     Raises:
         SessionProcessError: If lifecycle, plan, or inventory rules reject work.
@@ -466,7 +504,7 @@ def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
             plan = BurstReductionPlan(
                 decisions=(), failures=(), bursts=0, processed=len(existing_plans)
             )
-            result = CleanBurstsResult(
+            result = _CleanBurstsSummary(
                 files_discovered=len(existing_plans) + unsupported_files,
                 files_processed=len(existing_plans),
                 files_ignored=unsupported_files
@@ -494,18 +532,10 @@ def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
                 process = _record_planning_failure(
                     managed_session, input_data, parameters_json, result
                 )
-            return SessionCleanBurstsResult(
-                session_id=managed_session.session.id,
-                process=process,
-                clean_result=result,
-            )
+            return _result(managed_session, process, result)
 
         if input_data.dry_run:
-            return SessionCleanBurstsResult(
-                session_id=managed_session.session.id,
-                process=None,
-                clean_result=result,
-            )
+            return _result(managed_session, None, result)
 
         if not existing_plans:
             _persist_new_plan(managed_session, input_data, parameters_json, plan)
@@ -538,8 +568,4 @@ def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
                 logger.exception("Unable to record failed session process %s", PROCESS_NAME)
             raise
 
-    return SessionCleanBurstsResult(
-        session_id=managed_session.session.id,
-        process=process,
-        clean_result=result,
-    )
+    return _result(managed_session, process, result)
