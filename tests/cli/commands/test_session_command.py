@@ -9,6 +9,8 @@ from wv.use_cases.session.clean_overexposed_ir import (
 )
 from wv.use_cases.clean.bursts import CleanBurstsResult
 from wv.use_cases.session.clean_bursts import SessionCleanBurstsResult
+from wv.use_cases.detect.content import DetectContentResult
+from wv.use_cases.session.detect_content import SessionDetectContentResult
 
 
 def test_session_clean_corrupted_prints_summary(cli_runner, monkeypatch):
@@ -133,5 +135,48 @@ def test_session_clean_bursts_forwards_options(cli_runner, monkeypatch):
     assert result.exit_code == 0
     assert received_input.burst_gap_threshold == 30
     assert received_input.similarity_threshold == 7
+    assert received_input.dry_run is True
+    assert received_input.recover is True
+
+
+def test_session_detect_content_forwards_options(cli_runner, monkeypatch):
+    received_input = None
+
+    def fake_run(input_data):
+        nonlocal received_input
+        received_input = input_data
+        return SessionDetectContentResult(
+            session_id=input_data.session_id,
+            process=None,
+            detect_result=DetectContentResult(files_evaluated=1, files_animal=1),
+        )
+
+    monkeypatch.setattr("wv.cli.commands.session.run_detect_content", fake_run)
+
+    result = cli_runner.invoke(
+        app,
+        [
+            "session",
+            "detect",
+            "content",
+            "session-1",
+            "--model",
+            "custom.pt",
+            "--confidence-threshold",
+            "0.7",
+            "--ambiguity-gap",
+            "0.2",
+            "--batch-size",
+            "4",
+            "--dry-run",
+            "--recover",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert received_input.model == "custom.pt"
+    assert received_input.confidence_threshold == 0.7
+    assert received_input.ambiguity_gap == 0.2
+    assert received_input.batch_size == 4
     assert received_input.dry_run is True
     assert received_input.recover is True

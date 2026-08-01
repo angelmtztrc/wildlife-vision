@@ -1,9 +1,11 @@
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 
 from PIL import Image, ImageOps
 
 from wv.core.logger import capture_external_output, get_logger, get_progress
+from wv.core.files import get_content_digest
 
 DEFAULT_MODEL = "MDV5A"
 _CATEGORY_LABELS = {1: "animal", 2: "human", 3: "vehicle"}
@@ -17,6 +19,14 @@ class PreparedModel:
     model: str
     resolved_model: Path
     inference_device: str
+
+
+@dataclass(frozen=True)
+class ResolvedModel:
+    requested_model: str
+    resolved_path: Path
+    content_digest: str
+    content_size_bytes: int
 
 
 @dataclass(frozen=True)
@@ -48,6 +58,17 @@ def _resolve_model_file(model: str, *, force_download: bool = False) -> Path:
         return Path(
             md_try_download_known_detector(model, force_download=force_download)
         )
+
+
+def resolve_model(model: str) -> ResolvedModel:
+    """Resolve and fingerprint the local MegaDetector model used for inference."""
+    resolved_path = _resolve_model_file(model).resolve()
+    return ResolvedModel(
+        requested_model=model,
+        resolved_path=resolved_path,
+        content_digest=get_content_digest(resolved_path),
+        content_size_bytes=resolved_path.stat().st_size,
+    )
 
 
 def _is_gpu_available(model_file: str) -> bool:
@@ -101,6 +122,8 @@ def _normalize_detection(raw_detection: dict[str, object]) -> MlDetection:
         confidence = float(raw_detection.get("conf", 0.0))
     except (TypeError, ValueError) as exc:
         raise ValueError("Invalid detection confidence.") from exc
+    if not isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+        raise ValueError("Invalid detection confidence.")
 
     try:
         category_id = int(str(raw_detection.get("category")))
@@ -124,8 +147,7 @@ def _normalize_raw_result(
             "Invalid detector result payload.",
         )
 
-    file_value = raw_result.get("file")
-    file_path = Path(str(file_value)) if file_value else (default_file_path or Path())
+    file_path = default_file_path or Path(str(raw_result.get("file") or ""))
 
     failure = raw_result.get("failure")
     if failure:
@@ -167,36 +189,31 @@ def _run_detector_one_image(
 def _run_detector_batch(
     detector, batch: list[Path]
 ) -> list[MlImageResult]:
-    loaded_images: list[Image.Image] = []
-    loaded_paths: list[Path] = []
-    image_results: list[MlImageResult] = []
+    results: list[MlImageResult | None] = [None] * len(batch)
+    loaded: list[tuple[int, Path, Image.Image]] = []
 
-    for file_path in batch:
+    for index, file_path in enumerate(batch):
         try:
-            loaded_images.append(_load_image_for_detection(file_path))
-            loaded_paths.append(file_path)
+            loaded.append((index, file_path, _load_image_for_detection(file_path)))
         except Exception as exc:
-            image_results.append(_failed_image_result(file_path, str(exc)))
+            results[index] = _failed_image_result(file_path, str(exc))
 
-    if not loaded_images:
-        return image_results
+    if not loaded:
+        return [result for result in results if result is not None]
 
     with capture_external_output(logger, "MegaDetector generate_detections_one_batch"):
         raw_results = detector.generate_detections_one_batch(
-            loaded_images,
-            image_id=[str(file_path) for file_path in loaded_paths],
+            [image for _, _, image in loaded],
+            image_id=[str(file_path) for _, file_path, _ in loaded],
             detection_threshold=_MIN_DETECTION_THRESHOLD,
         )
 
-    for file_path, raw_result in zip(loaded_paths, raw_results, strict=True):
-        image_results.append(
-            _normalize_raw_result(
-                raw_result,
-                default_file_path=file_path,
-            )
+    for (index, file_path, _), raw_result in zip(loaded, raw_results, strict=True):
+        results[index] = _normalize_raw_result(
+            raw_result,
+            default_file_path=file_path,
         )
-
-    return image_results
+    return [result for result in results if result is not None]
 
 
 def evaluate_images(
@@ -205,6 +222,9 @@ def evaluate_images(
     confidence_threshold: float,
     batch_size: int,
 ) -> list[MlImageResult]:
+    if not image_paths:
+        return []
+
     detector = _load_detector(model)
     image_results: list[MlImageResult] = []
     supports_batch_inference = hasattr(detector, "generate_detections_one_batch")

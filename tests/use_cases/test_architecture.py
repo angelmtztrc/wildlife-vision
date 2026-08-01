@@ -8,6 +8,7 @@ WORKFLOW_MODULES = {
     USE_CASES_ROOT / "session" / "clean_corrupted.py",
     USE_CASES_ROOT / "session" / "clean_overexposed_ir.py",
     USE_CASES_ROOT / "session" / "clean_bursts.py",
+    USE_CASES_ROOT / "session" / "detect_content.py",
 }
 
 

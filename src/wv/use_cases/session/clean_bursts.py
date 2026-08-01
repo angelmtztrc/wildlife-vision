@@ -513,6 +513,20 @@ def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
                 existing_plans = SessionProcessImagePlanRepository(
                     sql_session
                 ).list_for_process(managed_session.session.id, PROCESS_NAME)
+        else:
+            with sql_session_scope(managed_session.database_path) as sql_session:
+                SessionProcessRepository(sql_session).start(
+                    managed_session.session.id,
+                    PROCESS_NAME,
+                    utc_now(),
+                    parameters_json=parameters_json,
+                )
+                if existing_process is not None:
+                    SessionProcessRepository(sql_session).set_bursts_count(
+                        managed_session.session.id,
+                        PROCESS_NAME,
+                        existing_process.bursts_count,
+                    )
 
         try:
             _apply_plan(managed_session, existing_plans, result)

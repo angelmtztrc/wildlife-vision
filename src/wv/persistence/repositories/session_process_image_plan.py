@@ -50,6 +50,7 @@ class SessionProcessImagePlanRepository:
                 decision=plan.decision,
                 target_relative_path=plan.target_relative_path,
                 planned_at=plan.planned_at,
+                decision_details_json=plan.decision_details_json,
             )
             for plan in plans
         ]
@@ -81,4 +82,5 @@ def _model_to_session_process_image_plan(
         decision=model.decision,
         target_relative_path=model.target_relative_path,
         planned_at=model.planned_at,
+        decision_details_json=model.decision_details_json,
     )

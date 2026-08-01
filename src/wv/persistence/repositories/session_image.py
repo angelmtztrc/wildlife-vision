@@ -60,6 +60,25 @@ class SessionImageRepository:
         self.sql_session.flush()
         return _model_to_session_image(model)
 
+    def relocate_with_content(
+        self,
+        image_id: str,
+        current_relative_path: str,
+        state: str,
+        content_digest: str,
+        content_size_bytes: int,
+    ) -> SessionImage:
+        model = self.sql_session.get(SessionImageModel, image_id)
+        if model is None:
+            raise RecordNotFoundError(f"Session image not found: {image_id}")
+
+        model.current_relative_path = current_relative_path
+        model.state = state
+        model.content_digest = content_digest
+        model.content_size_bytes = content_size_bytes
+        self.sql_session.flush()
+        return _model_to_session_image(model)
+
 
 def _model_to_session_image(model: SessionImageModel) -> SessionImage:
     return SessionImage(

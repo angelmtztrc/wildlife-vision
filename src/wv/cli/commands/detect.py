@@ -6,6 +6,7 @@ import typer
 from wv.core.display import display_path
 from wv.core.logger import get_logger
 from wv.use_cases.detect.content import (
+    DEFAULT_AMBIGUITY_GAP,
     DEFAULT_CONFIDENCE_THRESHOLD,
     DEFAULT_MODEL,
     DetectContentInput,
@@ -50,6 +51,15 @@ def detect_content(
             help="Minimum confidence required to route an image to animal, human, or vehicle; weaker or ambiguous detections go to other.",
         ),
     ] = DEFAULT_CONFIDENCE_THRESHOLD,
+    ambiguity_gap: Annotated[
+        float,
+        typer.Option(
+            "--ambiguity-gap",
+            min=0.0,
+            max=1.0,
+            help="Minimum lead over the second label required to avoid other.",
+        ),
+    ] = DEFAULT_AMBIGUITY_GAP,
     batch_size: Annotated[
         int,
         typer.Option(
@@ -83,6 +93,7 @@ def detect_content(
             output=output,
             model=model,
             confidence_threshold=confidence_threshold,
+            ambiguity_gap=ambiguity_gap,
             batch_size=batch_size,
             dry_run=dry_run,
         )

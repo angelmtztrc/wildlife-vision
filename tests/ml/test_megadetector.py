@@ -199,3 +199,41 @@ def test_evaluate_images_marks_invalid_detection_payload_as_failure(
             failure="Invalid detections payload.",
         )
     ]
+
+
+def test_evaluate_images_preserves_batch_order_when_an_image_cannot_load(
+    make_corrupted_image, make_image, tmp_path: Path, monkeypatch
+):
+    source = tmp_path / "source"
+    source.mkdir()
+    first = make_image(source / "first.jpg")
+    broken = make_corrupted_image(source / "broken.jpg")
+    last = make_image(source / "last.jpg")
+    detector = FakeBatchDetector(
+        batch_results={
+            str(first): _raw_result(first, [{"category": "1", "conf": 0.91}]),
+            str(last): _raw_result(last, [{"category": "1", "conf": 0.92}]),
+        }
+    )
+    monkeypatch.setattr(megadetector, "_load_detector", lambda model, force_download=False: detector)
+
+    results = megadetector.evaluate_images("MDV5A", [first, broken, last], 0.8, 8)
+
+    assert [result.file_path for result in results] == [first, broken, last]
+    assert results[1].failure is not None
+
+
+def test_evaluate_images_rejects_non_finite_confidence(
+    make_image, tmp_path: Path, monkeypatch
+):
+    image_path = make_image(tmp_path / "image.jpg")
+    detector = FakeBatchDetector(
+        batch_results={
+            str(image_path): _raw_result(image_path, [{"category": "1", "conf": float("nan")}])
+        }
+    )
+    monkeypatch.setattr(megadetector, "_load_detector", lambda model, force_download=False: detector)
+
+    result = megadetector.evaluate_images("MDV5A", [image_path], 0.8, 1)[0]
+
+    assert result.failure == "Invalid detection confidence."

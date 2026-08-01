@@ -2,6 +2,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from wv.core.display import display_file, display_path
+from wv.core.detection import (
+    DetectionDecision,
+    build_detection_description,
+    classify_detections,
+    format_detection_confidence,
+    validate_detection_settings,
+)
 from wv.core.exif import read_exif, write_exif_image_description
 from wv.core.files import ensure_directory, is_allowed_image_file, move_file_with_staged_copy
 from wv.core.logger import get_logger, get_progress
@@ -22,6 +29,7 @@ class DetectContentInput:
     output: Path
     model: str = DEFAULT_MODEL
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
+    ambiguity_gap: float = DEFAULT_AMBIGUITY_GAP
     batch_size: int = 32
     dry_run: bool = False
 
@@ -43,41 +51,6 @@ class DetectContentResult:
     dry_run: bool = False
 
 
-@dataclass(frozen=True)
-class DetectionDecision:
-    label: str
-    confidence: float
-
-
-def _classify_detections(
-    detections: list[MlDetection], confidence_threshold: float
-) -> DetectionDecision:
-    if not detections:
-        return DetectionDecision(label="empty", confidence=0.0)
-
-    confidence_by_label: dict[str, float] = {}
-    for detection in detections:
-        confidence_by_label[detection.label] = max(
-            confidence_by_label.get(detection.label, 0.0), detection.confidence
-        )
-
-    ranked_labels = sorted(
-        confidence_by_label.items(), key=lambda item: item[1], reverse=True
-    )
-    best_label, best_confidence = ranked_labels[0]
-
-    if best_confidence < confidence_threshold:
-        return DetectionDecision(label="other", confidence=best_confidence)
-
-    if (
-        len(ranked_labels) > 1
-        and best_confidence - ranked_labels[1][1] < DEFAULT_AMBIGUITY_GAP
-    ):
-        return DetectionDecision(label="other", confidence=best_confidence)
-
-    return DetectionDecision(label=best_label, confidence=best_confidence)
-
-
 def _increment_decision_counter(
     result: DetectContentResult, decision: DetectionDecision
 ) -> None:
@@ -93,10 +66,6 @@ def _increment_decision_counter(
         result.files_other += 1
 
 
-def _format_detection_confidence(confidence: float) -> str:
-    return f"{confidence:.6f}".rstrip("0").rstrip(".") or "0"
-
-
 def _read_existing_image_description(file_path: Path) -> str | None:
     value = read_exif(file_path, "ImageDescription")
     if value is None:
@@ -109,11 +78,11 @@ def _read_existing_image_description(file_path: Path) -> str | None:
 
 
 def run(input_data: DetectContentInput) -> DetectContentResult:
-    if not 0.0 <= input_data.confidence_threshold <= 1.0:
-        raise ValueError("confidence_threshold must be between 0.0 and 1.0.")
-
-    if input_data.batch_size < 1:
-        raise ValueError("batch_size must be at least 1.")
+    validate_detection_settings(
+        input_data.confidence_threshold,
+        input_data.ambiguity_gap,
+        input_data.batch_size,
+    )
 
     destination_root = get_detection_path(input_data.output)
     result = DetectContentResult(destination=destination_root, dry_run=input_data.dry_run)
@@ -197,8 +166,10 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
                 continue
 
             file_path = detection_result.file_path
-            decision = _classify_detections(
-                detection_result.detections, input_data.confidence_threshold
+            decision = classify_detections(
+                detection_result.detections,
+                input_data.confidence_threshold,
+                input_data.ambiguity_gap,
             )
             result.files_evaluated += 1
             _increment_decision_counter(result, decision)
@@ -207,7 +178,7 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
                 "Classified %s as %s (confidence=%s)",
                 display_file(file_path),
                 decision.label,
-                _format_detection_confidence(decision.confidence),
+                format_detection_confidence(decision.confidence),
             )
 
             if input_data.dry_run:
@@ -220,14 +191,8 @@ def run(input_data: DetectContentInput) -> DetectContentResult:
                 continue
 
             try:
-                updated_description = upsert_image_description_properties(
-                    _read_existing_image_description(file_path),
-                    {
-                        "Detection": decision.label,
-                        "Detection_Confidence": _format_detection_confidence(
-                            decision.confidence
-                        ),
-                    },
+                updated_description = build_detection_description(
+                    _read_existing_image_description(file_path), decision
                 )
                 destination = get_detection_path(input_data.output, decision.label) / file_path.name
 

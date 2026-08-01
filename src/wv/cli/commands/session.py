@@ -21,10 +21,23 @@ from wv.use_cases.clean.overexposed_ir import (
     DEFAULT_PTC_HIGH_THRESHOLD,
     DEFAULT_STD_THRESHOLD,
 )
+from wv.use_cases.detect.content import (
+    DEFAULT_AMBIGUITY_GAP,
+    DEFAULT_CONFIDENCE_THRESHOLD,
+    DEFAULT_MODEL,
+)
+from wv.use_cases.session.detect_content import (
+    DEFAULT_BATCH_SIZE,
+    SessionDetectContentInput,
+)
+from wv.use_cases.session.detect_content import run as run_detect_content
+from wv.use_cases.session._shared import SessionProcessError
 
 app = typer.Typer(help="Run database-tracked processing for ingested sessions.")
 clean_app = typer.Typer(help="Run ordered cleanup stages for an ingested session.")
 app.add_typer(clean_app, name="clean")
+detect_app = typer.Typer(help="Run ordered detection stages for an ingested session.")
+app.add_typer(detect_app, name="detect")
 
 logger = get_logger(__name__)
 
@@ -59,6 +72,9 @@ def clean_corrupted(
                 recover=recover,
             )
         )
+    except SessionProcessError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
         raise typer.BadParameter(str(exc), param_hint="session_id") from exc
 
@@ -230,4 +246,60 @@ def clean_bursts(
     if result.clean_result.files_failed > 0:
         raise typer.Exit(code=1)
 
+    return None
+
+
+@detect_app.command("content")
+def detect_content(
+    session_id: Annotated[
+        str,
+        typer.Argument(help="ID of an ingested session in the active workspace."),
+    ],
+    model: Annotated[str, typer.Option(help="MegaDetector model name or path.")] = DEFAULT_MODEL,
+    confidence_threshold: Annotated[
+        float,
+        typer.Option("--confidence-threshold", min=0.0, max=1.0),
+    ] = DEFAULT_CONFIDENCE_THRESHOLD,
+    ambiguity_gap: Annotated[
+        float,
+        typer.Option("--ambiguity-gap", min=0.0, max=1.0),
+    ] = DEFAULT_AMBIGUITY_GAP,
+    batch_size: Annotated[int, typer.Option("--batch-size", min=1)] = DEFAULT_BATCH_SIZE,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    recover: Annotated[bool, typer.Option("--recover")] = False,
+):
+    """Detect session content using an immutable, recoverable inference plan."""
+    try:
+        result = run_detect_content(
+            SessionDetectContentInput(
+                session_id=session_id,
+                model=model,
+                confidence_threshold=confidence_threshold,
+                ambiguity_gap=ambiguity_gap,
+                batch_size=batch_size,
+                dry_run=dry_run,
+                recover=recover,
+            )
+        )
+    except SessionProcessError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
+        raise typer.BadParameter(str(exc), param_hint="session_id") from exc
+
+    logger.done(
+        "Finished managed detection for %s: evaluated=%s animal=%s human=%s vehicle=%s empty=%s other=%s moved=%s failed=%s%s",
+        result.session_id,
+        result.detect_result.files_evaluated,
+        result.detect_result.files_animal,
+        result.detect_result.files_human,
+        result.detect_result.files_vehicle,
+        result.detect_result.files_empty,
+        result.detect_result.files_other,
+        result.detect_result.files_moved,
+        result.detect_result.files_failed,
+        " (dry run)" if dry_run else "",
+    )
+    if result.detect_result.files_failed > 0:
+        raise typer.Exit(code=1)
     return None

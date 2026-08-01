@@ -46,6 +46,7 @@ class SessionProcessRepository:
                 files_ignored=0,
                 files_failed=0,
                 bursts_count=0,
+                execution_details_json=None,
             )
             self.sql_session.add(model)
         else:
@@ -139,6 +140,14 @@ class SessionProcessRepository:
         self.sql_session.flush()
         return _model_to_session_process(model)
 
+    def set_execution_details(
+        self, session_id: str, process_name: str, execution_details_json: str
+    ) -> SessionProcess:
+        model = self._get_model(session_id, process_name)
+        model.execution_details_json = execution_details_json
+        self.sql_session.flush()
+        return _model_to_session_process(model)
+
     def _get_model(self, session_id: str, process_name: str) -> SessionProcessModel:
         model = self.sql_session.get(SessionProcessModel, (session_id, process_name))
         if model is None:
@@ -165,4 +174,5 @@ def _model_to_session_process(model: SessionProcessModel) -> SessionProcess:
         files_ignored=model.files_ignored,
         files_failed=model.files_failed,
         bursts_count=model.bursts_count,
+        execution_details_json=model.execution_details_json,
     )

@@ -22,6 +22,7 @@ from wv.use_cases.clean.overexposed_ir import (
 )
 from wv.use_cases.clean.overexposed_ir import run as run_clean_overexposed_ir
 from wv.use_cases.detect.content import (
+    DEFAULT_AMBIGUITY_GAP,
     DEFAULT_CONFIDENCE_THRESHOLD,
     DEFAULT_MODEL,
     DetectContentInput,
@@ -46,6 +47,7 @@ class PipelinePreprocessInput:
     similarity_threshold: int = DEFAULT_SIMILARITY_THRESHOLD
     model: str = DEFAULT_MODEL
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
+    ambiguity_gap: float = DEFAULT_AMBIGUITY_GAP
     batch_size: int = 32
     dry_run: bool = False
 
@@ -127,6 +129,7 @@ def run(input_data: PipelinePreprocessInput) -> PipelinePreprocessResult:
             output=input_data.session_path,
             model=input_data.model,
             confidence_threshold=input_data.confidence_threshold,
+            ambiguity_gap=input_data.ambiguity_gap,
             batch_size=input_data.batch_size,
             dry_run=input_data.dry_run,
         )

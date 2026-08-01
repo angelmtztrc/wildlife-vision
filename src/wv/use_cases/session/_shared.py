@@ -159,7 +159,7 @@ def validate_process_attempt(
     )
 
 
-def canonical_process_parameters(parameters: dict[str, int | float]) -> str:
+def canonical_process_parameters(parameters: dict[str, object]) -> str:
     """Serialize process parameters into a stable JSON representation."""
     return json.dumps(parameters, sort_keys=True, separators=(",", ":"))
 

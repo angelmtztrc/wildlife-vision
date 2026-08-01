@@ -34,3 +34,4 @@ class SessionProcessModel(Base):
     files_ignored: Mapped[int]
     files_failed: Mapped[int]
     bursts_count: Mapped[int]
+    execution_details_json: Mapped[str | None]

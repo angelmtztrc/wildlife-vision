@@ -31,3 +31,4 @@ class SessionProcessImagePlanModel(Base):
     decision: Mapped[str]
     target_relative_path: Mapped[str | None]
     planned_at: Mapped[str]
+    decision_details_json: Mapped[str | None]

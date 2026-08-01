@@ -83,6 +83,7 @@ class SessionProcess:
     files_ignored: int = 0
     files_failed: int = 0
     bursts_count: int = 0
+    execution_details_json: str | None = None
 
 
 @dataclass(frozen=True)
@@ -93,3 +94,4 @@ class SessionProcessImagePlan:
     decision: str
     target_relative_path: str | None
     planned_at: str
+    decision_details_json: str | None = None
