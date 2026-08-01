@@ -9,6 +9,7 @@ from wv.use_cases.workspace.initialize import (
     WorkspaceInitializeInput,
     run as run_initialize_workspace,
 )
+from wv.use_cases.workspace.migrate import WorkspaceMigrateInput, run as run_migrate_workspace
 from wv.use_cases.workspace.show import WorkspaceShowInput, run as run_show_workspace
 from wv.use_cases.workspace.validate import (
     WorkspaceValidateInput,
@@ -16,7 +17,7 @@ from wv.use_cases.workspace.validate import (
 )
 from wv.workspace.common import WorkspaceError
 
-app = typer.Typer(help="Manage workspace initialization and validation.")
+app = typer.Typer(help="Manage workspace initialization, migration, and validation.")
 
 logger = get_logger(__name__)
 
@@ -50,6 +51,32 @@ def init_workspace(
         display_path(result.global_config_file),
         display_path(result.database_file),
     )
+
+    return None
+
+
+@app.command("migrate")
+def migrate_workspace():
+    """Apply pending database migrations to the active workspace."""
+    try:
+        result = run_migrate_workspace(WorkspaceMigrateInput())
+    except WorkspaceError as exc:
+        logger.error("Workspace migration failed: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    if result.migrated:
+        logger.done(
+            "Workspace database migrated at %s (%s -> %s)",
+            display_path(result.database_path),
+            result.previous_revision,
+            result.current_revision,
+        )
+    else:
+        logger.done(
+            "Workspace database is already up to date at %s (revision=%s)",
+            display_path(result.database_path),
+            result.current_revision,
+        )
 
     return None
 

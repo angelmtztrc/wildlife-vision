@@ -5,7 +5,12 @@ from alembic import command
 from alembic.config import Config
 
 from wv.persistence.alembic import get_alembic_directory
-from wv.persistence.database import initialize_database
+from wv.persistence.database import (
+    get_database_head_revision,
+    get_database_revision,
+    initialize_database,
+    upgrade_database,
+)
 from wv.persistence.sql_session import build_database_url
 
 
@@ -53,7 +58,7 @@ def test_initialize_database_records_applied_migration(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
 
-    assert _get_migration_version(database_path) == "0004_session_process_image_plans"
+    assert _get_migration_version(database_path) == get_database_head_revision()
 
 
 def test_initialize_database_is_idempotent(tmp_path: Path):
@@ -68,12 +73,19 @@ def test_initialize_database_is_idempotent(tmp_path: Path):
     assert count == 1
 
 
-def test_initialize_database_upgrades_session_process_database(tmp_path: Path):
+def test_upgrade_database_upgrades_session_process_database(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     database_path.parent.mkdir()
     command.upgrade(_get_alembic_config(database_path), "0003_session_processes")
 
-    initialize_database(database_path)
+    upgrade_database(database_path)
 
-    assert _get_migration_version(database_path) == "0004_session_process_image_plans"
+    assert _get_migration_version(database_path) == get_database_head_revision()
     assert "session_process_image_plans" in _get_table_names(database_path)
+
+
+def test_get_database_revision_returns_none_for_unversioned_database(tmp_path: Path):
+    database_path = tmp_path / "database.sqlite"
+    database_path.touch()
+
+    assert get_database_revision(database_path) is None

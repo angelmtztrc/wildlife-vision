@@ -45,8 +45,15 @@ Additional commands would be:
 
 ```bash
 wv workspace show # returns formatted information of the workspace
-wv workspace validate # ensures the workspace is accessible, and the database is up-to date
+wv workspace migrate # applies pending Alembic migrations to the active workspace database
+wv workspace validate # ensures the workspace is accessible and its database is up to date
 ```
+
+`wv workspace migrate` upgrades only the configured workspace's existing
+`.wv/database.sqlite` database to the packaged Alembic head. It is forward-only
+and idempotent: a database already at the current revision is left unchanged.
+It does not create a missing database, migrate workspace configuration or
+directories, or create an automatic backup.
 
 ### Configuration
 

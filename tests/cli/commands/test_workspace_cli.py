@@ -1,8 +1,19 @@
 from pathlib import Path
 
 import platformdirs
+from alembic import command
+from alembic.config import Config
 
 from wv.cli.commands import workspace
+from wv.persistence.alembic import get_alembic_directory
+from wv.persistence.sql_session import build_database_url
+
+
+def _downgrade_database(database_path: Path) -> None:
+    config = Config()
+    config.set_main_option("script_location", str(get_alembic_directory()))
+    config.set_main_option("sqlalchemy.url", build_database_url(database_path))
+    command.downgrade(config, "0003_session_processes")
 
 
 def test_workspace_init_creates_workspace(cli_runner, tmp_path: Path, monkeypatch):
@@ -86,3 +97,47 @@ def test_workspace_validate_fails_for_invalid_structure(
     assert result.exit_code == 1
     assert "validation failed" in result.output.lower()
     assert "exports" in result.output
+
+
+def test_workspace_migrate_upgrades_active_database(cli_runner, tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    cli_runner.invoke(workspace.app, ["init", str(workspace_path)])
+    _downgrade_database(workspace_path / ".wv" / "database.sqlite")
+
+    result = cli_runner.invoke(workspace.app, ["migrate"])
+
+    assert result.exit_code == 0
+    assert "Workspace database migrated" in result.output
+    assert "0003_session_processes" in result.output
+
+
+def test_workspace_migrate_reports_current_database(cli_runner, tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    cli_runner.invoke(workspace.app, ["init", str(workspace_path)])
+
+    result = cli_runner.invoke(workspace.app, ["migrate"])
+
+    assert result.exit_code == 0
+    assert "already up to date" in result.output
+
+
+def test_workspace_migrate_rejects_missing_database(cli_runner, tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    cli_runner.invoke(workspace.app, ["init", str(workspace_path)])
+    database_path = workspace_path / ".wv" / "database.sqlite"
+    database_path.unlink()
+
+    result = cli_runner.invoke(workspace.app, ["migrate"])
+
+    assert result.exit_code == 1
+    assert "Workspace migration failed" in result.output
+    assert database_path.exists() is False
