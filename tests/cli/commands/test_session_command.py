@@ -7,6 +7,8 @@ from wv.use_cases.clean.overexposed_ir import CleanOverexposedIrResult
 from wv.use_cases.session.clean_overexposed_ir import (
     SessionCleanOverexposedIrResult,
 )
+from wv.use_cases.clean.bursts import CleanBurstsResult
+from wv.use_cases.session.clean_bursts import SessionCleanBurstsResult
 
 
 def test_session_clean_corrupted_prints_summary(cli_runner, monkeypatch):
@@ -96,3 +98,40 @@ def test_session_clean_overexposed_ir_exits_with_file_failures(
     )
 
     assert result.exit_code == 1
+
+
+def test_session_clean_bursts_forwards_options(cli_runner, monkeypatch):
+    received_input = None
+
+    def fake_run(input_data):
+        nonlocal received_input
+        received_input = input_data
+        return SessionCleanBurstsResult(
+            session_id=input_data.session_id,
+            process=None,
+            clean_result=CleanBurstsResult(files_bursts=1, files_reduced=2, files_moved=2),
+        )
+
+    monkeypatch.setattr("wv.cli.commands.session.run_clean_bursts", fake_run)
+
+    result = cli_runner.invoke(
+        app,
+        [
+            "session",
+            "clean",
+            "bursts",
+            "session-1",
+            "--burst-gap-threshold",
+            "30",
+            "--similarity-threshold",
+            "7",
+            "--dry-run",
+            "--recover",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert received_input.burst_gap_threshold == 30
+    assert received_input.similarity_threshold == 7
+    assert received_input.dry_run is True
+    assert received_input.recover is True

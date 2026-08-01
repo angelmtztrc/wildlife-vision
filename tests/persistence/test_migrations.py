@@ -45,6 +45,7 @@ def test_initialize_database_applies_initial_schema(tmp_path: Path):
         "sessions",
         "session_images",
         "session_processes",
+        "session_process_image_plans",
     }
 
 
@@ -52,7 +53,7 @@ def test_initialize_database_records_applied_migration(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)
 
-    assert _get_migration_version(database_path) == "0003_session_processes"
+    assert _get_migration_version(database_path) == "0004_session_process_image_plans"
 
 
 def test_initialize_database_is_idempotent(tmp_path: Path):
@@ -67,12 +68,12 @@ def test_initialize_database_is_idempotent(tmp_path: Path):
     assert count == 1
 
 
-def test_initialize_database_upgrades_session_inventory_database(tmp_path: Path):
+def test_initialize_database_upgrades_session_process_database(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     database_path.parent.mkdir()
-    command.upgrade(_get_alembic_config(database_path), "0002_session_inventory")
+    command.upgrade(_get_alembic_config(database_path), "0003_session_processes")
 
     initialize_database(database_path)
 
-    assert _get_migration_version(database_path) == "0003_session_processes"
-    assert "session_processes" in _get_table_names(database_path)
+    assert _get_migration_version(database_path) == "0004_session_process_image_plans"
+    assert "session_process_image_plans" in _get_table_names(database_path)

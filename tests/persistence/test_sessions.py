@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from wv.models import IngestSession, SessionImage
+from wv.models import IngestSession, SessionImage, SessionProcessImagePlan
 from wv.persistence.database import initialize_database
 from wv.persistence.repositories import (
     SessionImageRepository,
     SessionProcessRepository,
+    SessionProcessImagePlanRepository,
     SessionRepository,
 )
 from wv.persistence.sql_session import sql_session_scope
@@ -156,3 +157,50 @@ def test_start_and_complete_session_process(tmp_path: Path):
     assert completed.status == "completed"
     assert completed.attempt_count == 1
     assert completed.files_moved == 1
+
+
+def test_create_and_list_session_process_image_plans(tmp_path: Path):
+    database_path = tmp_path / ".wv" / "database.sqlite"
+    initialize_database(database_path)
+
+    with sql_session_scope(database_path) as sql_session:
+        _create_session(SessionRepository(sql_session))
+        SessionImageRepository(sql_session).create_or_replace_by_initial_path(
+            SessionImage(
+                id="image-1",
+                session_id="20240628_120000__HNT001",
+                source_relative_path="DCIM/capture.jpg",
+                initial_relative_path="init/capture.jpg",
+                current_relative_path="init/capture.jpg",
+                state="init",
+                content_digest="AAAAAA111111",
+                content_size_bytes=100,
+                captured_at="2024-06-28T10:15:30",
+                ingested_at="2026-07-26T10:00:00+00:00",
+            )
+        )
+        SessionProcessRepository(sql_session).start(
+            "20240628_120000__HNT001",
+            "clean_bursts",
+            "2026-07-26T10:01:00+00:00",
+            parameters_json="{}",
+        )
+        created = SessionProcessImagePlanRepository(sql_session).create_many(
+            [
+                SessionProcessImagePlan(
+                    session_id="20240628_120000__HNT001",
+                    process_name="clean_bursts",
+                    image_id="image-1",
+                    decision="move",
+                    target_relative_path="ignored/bursts/capture.jpg",
+                    planned_at="2026-07-26T10:01:00+00:00",
+                )
+            ]
+        )
+
+    with sql_session_scope(database_path) as sql_session:
+        plans = SessionProcessImagePlanRepository(sql_session).list_for_process(
+            "20240628_120000__HNT001", "clean_bursts"
+        )
+
+    assert plans == created

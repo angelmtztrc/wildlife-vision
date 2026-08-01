@@ -3,7 +3,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from wv.use_cases.clean.bursts import CleanBurstsInput, CleanBurstsResult
+from wv.use_cases.clean.bursts import (
+    CleanBurstsInput,
+    CleanBurstsResult,
+    DEFAULT_BURST_GAP_THRESHOLD,
+    DEFAULT_SIMILARITY_THRESHOLD,
+)
 from wv.use_cases.clean.bursts import run as run_clean_bursts
 from wv.use_cases.clean.corrupted import CleanCorruptedInput, CleanCorruptedResult
 from wv.use_cases.clean.corrupted import run as run_clean_corrupted
@@ -37,8 +42,8 @@ class PipelinePreprocessInput:
     std_threshold: float = DEFAULT_STD_THRESHOLD
     high_level: int = DEFAULT_HIGH_LEVEL
     ptc_high_threshold: float = DEFAULT_PTC_HIGH_THRESHOLD
-    burst_gap_threshold: int = 60
-    similarity_threshold: int = 5
+    burst_gap_threshold: int = DEFAULT_BURST_GAP_THRESHOLD
+    similarity_threshold: int = DEFAULT_SIMILARITY_THRESHOLD
     model: str = DEFAULT_MODEL
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
     batch_size: int = 32

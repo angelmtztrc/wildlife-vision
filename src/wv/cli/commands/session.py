@@ -9,6 +9,12 @@ from wv.use_cases.session.clean_overexposed_ir import (
     SessionCleanOverexposedIrInput,
 )
 from wv.use_cases.session.clean_overexposed_ir import run as run_clean_overexposed_ir
+from wv.use_cases.session.clean_bursts import SessionCleanBurstsInput
+from wv.use_cases.session.clean_bursts import run as run_clean_bursts
+from wv.use_cases.clean.bursts import (
+    DEFAULT_BURST_GAP_THRESHOLD,
+    DEFAULT_SIMILARITY_THRESHOLD,
+)
 from wv.use_cases.clean.overexposed_ir import (
     DEFAULT_HIGH_LEVEL,
     DEFAULT_MEAN_THRESHOLD,
@@ -148,6 +154,74 @@ def clean_overexposed_ir(
         result.session_id,
         result.clean_result.files_processed,
         result.clean_result.files_overexposed,
+        result.clean_result.files_moved,
+        result.clean_result.files_failed,
+        " (dry run)" if dry_run else "",
+    )
+
+    if result.clean_result.files_failed > 0:
+        raise typer.Exit(code=1)
+
+    return None
+
+
+@clean_app.command("bursts")
+def clean_bursts(
+    session_id: Annotated[
+        str,
+        typer.Argument(help="ID of an ingested session in the active workspace."),
+    ],
+    burst_gap_threshold: Annotated[
+        int,
+        typer.Option(
+            "--burst-gap-threshold",
+            min=0,
+            help="Maximum time gap in seconds between consecutive burst images.",
+        ),
+    ] = DEFAULT_BURST_GAP_THRESHOLD,
+    similarity_threshold: Annotated[
+        int,
+        typer.Option(
+            "--similarity-threshold",
+            min=0,
+            max=64,
+            help="Maximum 64-bit perceptual-hash distance for similar images.",
+        ),
+    ] = DEFAULT_SIMILARITY_THRESHOLD,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Preview burst cleanup without moving files or updating the database.",
+        ),
+    ] = False,
+    recover: Annotated[
+        bool,
+        typer.Option(
+            "--recover",
+            help="Resume an interrupted burst-cleanup attempt using its saved plan.",
+        ),
+    ] = False,
+):
+    """Reduce burst images while recording an immutable session decision plan."""
+    try:
+        result = run_clean_bursts(
+            SessionCleanBurstsInput(
+                session_id=session_id,
+                burst_gap_threshold=burst_gap_threshold,
+                similarity_threshold=similarity_threshold,
+                dry_run=dry_run,
+                recover=recover,
+            )
+        )
+    except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
+        raise typer.BadParameter(str(exc), param_hint="session_id") from exc
+
+    logger.done(
+        "Finished managed burst cleanup for %s: bursts=%s reduced=%s moved=%s failed=%s%s",
+        result.session_id,
+        result.clean_result.files_bursts,
+        result.clean_result.files_reduced,
         result.clean_result.files_moved,
         result.clean_result.files_failed,
         " (dry run)" if dry_run else "",

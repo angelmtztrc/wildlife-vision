@@ -4,6 +4,9 @@ from wv.persistence.repositories.monitoring_site import MonitoringSiteRepository
 from wv.persistence.repositories.session import SessionRepository
 from wv.persistence.repositories.session_image import SessionImageRepository
 from wv.persistence.repositories.session_process import SessionProcessRepository
+from wv.persistence.repositories.session_process_image_plan import (
+    SessionProcessImagePlanRepository,
+)
 
 __all__ = [
     "DeploymentRepository",
@@ -11,5 +14,6 @@ __all__ = [
     "MonitoringSiteRepository",
     "SessionImageRepository",
     "SessionProcessRepository",
+    "SessionProcessImagePlanRepository",
     "SessionRepository",
 ]

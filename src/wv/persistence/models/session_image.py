@@ -12,6 +12,11 @@ class SessionImageModel(Base):
             "initial_relative_path",
             name="uq_session_images_session_initial_path",
         ),
+        UniqueConstraint(
+            "session_id",
+            "id",
+            name="uq_session_images_session_id_id",
+        ),
         Index("ix_session_images_session_id", "session_id"),
         Index("ix_session_images_session_state", "session_id", "state"),
         Index(

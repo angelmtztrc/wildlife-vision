@@ -10,6 +10,7 @@ from wv.persistence.models import (
     MonitoringSiteModel,
     SessionImageModel,
     SessionProcessModel,
+    SessionProcessImagePlanModel,
     SessionModel,
 )
 

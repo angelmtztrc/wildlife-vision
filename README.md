@@ -218,3 +218,21 @@ wv pipeline run latest # run the pipeline with the last created session
 wv pipeline run <SESSION_ID> --next # runs the pipeline from the next available stage
 wv pipeline run <SESSION_ID> --until <STAGE> # run the pipeline before reaching the provided stage
 ```
+
+### Managed session cleanup
+
+Ingested sessions can record ordered cleanup progress in the workspace database.
+These commands require an active workspace and use the session identifier created
+by ingestion:
+
+```bash
+wv session clean corrupted <SESSION_ID>
+wv session clean overexposed-ir <SESSION_ID>
+wv session clean bursts <SESSION_ID>
+```
+
+The order is enforced: corrupted cleanup precedes overexposed cleanup, which
+precedes burst cleanup. Use `--recover` only after an interrupted managed command;
+it reconciles the saved session state before continuing. The standalone `wv clean`
+commands remain filesystem-only and do not update session inventory or process
+tracking.

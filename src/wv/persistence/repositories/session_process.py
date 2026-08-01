@@ -45,6 +45,7 @@ class SessionProcessRepository:
                 files_moved=0,
                 files_ignored=0,
                 files_failed=0,
+                bursts_count=0,
             )
             self.sql_session.add(model)
         else:
@@ -60,6 +61,7 @@ class SessionProcessRepository:
             model.files_moved = 0
             model.files_ignored = 0
             model.files_failed = 0
+            model.bursts_count = 0
 
         self.sql_session.flush()
         return _model_to_session_process(model)
@@ -77,6 +79,7 @@ class SessionProcessRepository:
         files_moved: int,
         files_ignored: int,
         files_failed: int,
+        bursts_count: int = 0,
     ) -> SessionProcess:
         model = self._get_model(session_id, process_name)
         model.status = status
@@ -88,6 +91,7 @@ class SessionProcessRepository:
         model.files_moved = files_moved
         model.files_ignored = files_ignored
         model.files_failed = files_failed
+        model.bursts_count = bursts_count
         self.sql_session.flush()
         return _model_to_session_process(model)
 
@@ -98,11 +102,40 @@ class SessionProcessRepository:
         *,
         completed_at: str,
         failure_message: str,
+        files_discovered: int | None = None,
+        files_processed: int | None = None,
+        files_selected: int | None = None,
+        files_moved: int | None = None,
+        files_ignored: int | None = None,
+        files_failed: int | None = None,
+        bursts_count: int | None = None,
     ) -> SessionProcess:
         model = self._get_model(session_id, process_name)
         model.status = "failed"
         model.completed_at = completed_at
         model.failure_message = failure_message
+        if files_discovered is not None:
+            model.files_discovered = files_discovered
+        if files_processed is not None:
+            model.files_processed = files_processed
+        if files_selected is not None:
+            model.files_selected = files_selected
+        if files_moved is not None:
+            model.files_moved = files_moved
+        if files_ignored is not None:
+            model.files_ignored = files_ignored
+        if files_failed is not None:
+            model.files_failed = files_failed
+        if bursts_count is not None:
+            model.bursts_count = bursts_count
+        self.sql_session.flush()
+        return _model_to_session_process(model)
+
+    def set_bursts_count(
+        self, session_id: str, process_name: str, bursts_count: int
+    ) -> SessionProcess:
+        model = self._get_model(session_id, process_name)
+        model.bursts_count = bursts_count
         self.sql_session.flush()
         return _model_to_session_process(model)
 
@@ -131,4 +164,5 @@ def _model_to_session_process(model: SessionProcessModel) -> SessionProcess:
         files_moved=model.files_moved,
         files_ignored=model.files_ignored,
         files_failed=model.files_failed,
+        bursts_count=model.bursts_count,
     )

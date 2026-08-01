@@ -6,6 +6,10 @@ import typer
 from wv.core.display import display_path
 from wv.core.logger import get_logger
 from wv.use_cases.clean.bursts import CleanBurstsInput
+from wv.use_cases.clean.bursts import (
+    DEFAULT_BURST_GAP_THRESHOLD,
+    DEFAULT_SIMILARITY_THRESHOLD,
+)
 from wv.use_cases.clean.bursts import run as run_clean_bursts
 from wv.use_cases.clean.corrupted import CleanCorruptedInput
 from wv.use_cases.clean.corrupted import run as run_clean_corrupted
@@ -213,16 +217,19 @@ def clean_bursts(
         int,
         typer.Option(
             "--burst-gap-threshold",
+            min=0,
             help="Maximum time gap in seconds between consecutive images for grouping them into the same burst.",
         ),
-    ] = 60,
+    ] = DEFAULT_BURST_GAP_THRESHOLD,
     similarity_threshold: Annotated[
         int,
         typer.Option(
             "--similarity-threshold",
+            min=0,
+            max=64,
             help="Maximum perceptual hash distance for treating images inside a burst as visually similar.",
         ),
-    ] = 5,
+    ] = DEFAULT_SIMILARITY_THRESHOLD,
     dry_run: Annotated[
         bool,
         typer.Option(

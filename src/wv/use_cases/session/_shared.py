@@ -1,4 +1,5 @@
 import fcntl
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -156,6 +157,35 @@ def validate_process_attempt(
     raise SessionProcessError(
         f"Session process has an unsupported status: {existing.status}"
     )
+
+
+def canonical_process_parameters(parameters: dict[str, int | float]) -> str:
+    """Serialize process parameters into a stable JSON representation."""
+    return json.dumps(parameters, sort_keys=True, separators=(",", ":"))
+
+
+def validate_process_parameters(
+    process: SessionProcess | None, parameters_json: str, process_name: str
+) -> None:
+    """Require an existing process retry to use its recorded parameters."""
+    if process is None:
+        return
+    if process.parameters_json is None:
+        raise SessionProcessError(
+            f"Session process has no recorded parameters: {process_name}"
+        )
+
+    try:
+        stored_parameters = json.loads(process.parameters_json)
+    except json.JSONDecodeError as exc:
+        raise SessionProcessError(
+            f"Session process has invalid recorded parameters: {process_name}"
+        ) from exc
+
+    if canonical_process_parameters(stored_parameters) != parameters_json:
+        raise SessionProcessError(
+            f"Session process retry must use the recorded parameters: {process_name}"
+        )
 
 
 def _relative_path(session_path: Path, path: Path) -> str:

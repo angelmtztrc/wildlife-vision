@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 
 from wv.core.images import validate_exposure_thresholds
@@ -20,10 +19,12 @@ from wv.use_cases.clean.overexposed_ir import run as run_clean_overexposed_ir
 from ._shared import (
     ManagedSession,
     SessionProcessError,
+    canonical_process_parameters,
     _exclusive_session_lock,
     _reconcile_moved_init_inventory,
     resolve_managed_session,
     utc_now,
+    validate_process_parameters,
     validate_process_attempt,
 )
 
@@ -52,43 +53,14 @@ class SessionCleanOverexposedIrResult:
 
 
 def _parameters_json(input_data: SessionCleanOverexposedIrInput) -> str:
-    return json.dumps(
+    return canonical_process_parameters(
         {
             "high_level": input_data.high_level,
             "mean_threshold": input_data.mean_threshold,
             "ptc_high_threshold": input_data.ptc_high_threshold,
             "std_threshold": input_data.std_threshold,
         },
-        sort_keys=True,
-        separators=(",", ":"),
     )
-
-
-def _validate_existing_parameters(
-    process: SessionProcess | None, parameters_json: str
-) -> None:
-    if process is None:
-        return
-
-    if process.parameters_json is None:
-        raise SessionProcessError(
-            f"Session process has no recorded parameters: {PROCESS_NAME}"
-        )
-
-    try:
-        stored_parameters = json.loads(process.parameters_json)
-    except json.JSONDecodeError as exc:
-        raise SessionProcessError(
-            f"Session process has invalid recorded parameters: {PROCESS_NAME}"
-        ) from exc
-
-    canonical_stored_parameters = json.dumps(
-        stored_parameters, sort_keys=True, separators=(",", ":")
-    )
-    if canonical_stored_parameters != parameters_json:
-        raise SessionProcessError(
-            f"Session process retry must use the recorded parameters: {PROCESS_NAME}"
-        )
 
 
 def _validate_input(input_data: SessionCleanOverexposedIrInput) -> None:
@@ -113,7 +85,7 @@ def _prepare_attempt(
             PROCESS_NAME,
             input_data.recover,
         )
-        _validate_existing_parameters(existing, parameters_json)
+        validate_process_parameters(existing, parameters_json, PROCESS_NAME)
         return _reconcile_moved_init_inventory(
             managed_session,
             SessionImageRepository(sql_session),
@@ -136,7 +108,7 @@ def _start_attempt(
             PROCESS_NAME,
             input_data.recover,
         )
-        _validate_existing_parameters(existing, parameters_json)
+        validate_process_parameters(existing, parameters_json, PROCESS_NAME)
         return process_repository.start(
             managed_session.session.id,
             PROCESS_NAME,

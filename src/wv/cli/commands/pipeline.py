@@ -12,6 +12,10 @@ from wv.use_cases.clean.overexposed_ir import (
     DEFAULT_PTC_HIGH_THRESHOLD,
     DEFAULT_STD_THRESHOLD,
 )
+from wv.use_cases.clean.bursts import (
+    DEFAULT_BURST_GAP_THRESHOLD,
+    DEFAULT_SIMILARITY_THRESHOLD,
+)
 from wv.use_cases.detect.content import DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_MODEL
 from wv.use_cases.pipeline.preprocess import PipelinePreprocessInput
 from wv.use_cases.pipeline.preprocess import run as run_pipeline_preprocess
@@ -75,15 +79,16 @@ def pipeline_preprocess(
             min=0,
             help="Maximum time gap in seconds between consecutive images for grouping them into the same burst.",
         ),
-    ] = 60,
+    ] = DEFAULT_BURST_GAP_THRESHOLD,
     similarity_threshold: Annotated[
         int,
         typer.Option(
             "--similarity-threshold",
             min=0,
+            max=64,
             help="Maximum perceptual hash distance for treating images inside a burst as visually similar.",
         ),
-    ] = 5,
+    ] = DEFAULT_SIMILARITY_THRESHOLD,
     model: Annotated[
         str,
         typer.Option(help="MegaDetector model name or path."),

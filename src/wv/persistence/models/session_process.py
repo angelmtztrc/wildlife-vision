@@ -33,3 +33,4 @@ class SessionProcessModel(Base):
     files_moved: Mapped[int]
     files_ignored: Mapped[int]
     files_failed: Mapped[int]
+    bursts_count: Mapped[int]
