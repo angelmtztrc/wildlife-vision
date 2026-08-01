@@ -10,6 +10,10 @@ from wv.use_cases.clean.corrupted import run as run_clean_corrupted
 from wv.use_cases.clean.overexposed_ir import (
     CleanOverexposedIrInput,
     CleanOverexposedIrResult,
+    DEFAULT_HIGH_LEVEL,
+    DEFAULT_MEAN_THRESHOLD,
+    DEFAULT_PTC_HIGH_THRESHOLD,
+    DEFAULT_STD_THRESHOLD,
 )
 from wv.use_cases.clean.overexposed_ir import run as run_clean_overexposed_ir
 from wv.use_cases.detect.content import (
@@ -29,10 +33,10 @@ SESSION_NAME_PATTERN = re.compile(
 @dataclass(frozen=True)
 class PipelinePreprocessInput:
     session_path: Path
-    mean_threshold: float = 200.0
-    std_threshold: float = 25.0
-    high_level: int = 220
-    ptc_high_threshold: float = 0.60
+    mean_threshold: float = DEFAULT_MEAN_THRESHOLD
+    std_threshold: float = DEFAULT_STD_THRESHOLD
+    high_level: int = DEFAULT_HIGH_LEVEL
+    ptc_high_threshold: float = DEFAULT_PTC_HIGH_THRESHOLD
     burst_gap_threshold: int = 60
     similarity_threshold: int = 5
     model: str = DEFAULT_MODEL

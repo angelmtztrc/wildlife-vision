@@ -10,6 +10,12 @@ from wv.use_cases.clean.bursts import run as run_clean_bursts
 from wv.use_cases.clean.corrupted import CleanCorruptedInput
 from wv.use_cases.clean.corrupted import run as run_clean_corrupted
 from wv.use_cases.clean.overexposed_ir import CleanOverexposedIrInput
+from wv.use_cases.clean.overexposed_ir import (
+    DEFAULT_HIGH_LEVEL,
+    DEFAULT_MEAN_THRESHOLD,
+    DEFAULT_PTC_HIGH_THRESHOLD,
+    DEFAULT_STD_THRESHOLD,
+)
 from wv.use_cases.clean.overexposed_ir import run as run_clean_overexposed_ir
 
 app = typer.Typer(
@@ -106,7 +112,7 @@ def clean_overexposed_ir(
             max=255.0,
             help="Minimum average grayscale brightness required to flag an image as overexposed.",
         ),
-    ] = 200.0,
+    ] = DEFAULT_MEAN_THRESHOLD,
     std_threshold: Annotated[
         float,
         typer.Option(
@@ -114,7 +120,7 @@ def clean_overexposed_ir(
             min=0.0,
             help="Maximum grayscale standard deviation allowed when treating a bright image as uniformly overexposed.",
         ),
-    ] = 25.0,
+    ] = DEFAULT_STD_THRESHOLD,
     high_level: Annotated[
         int,
         typer.Option(
@@ -123,7 +129,7 @@ def clean_overexposed_ir(
             max=255,
             help="Grayscale value used as the cutoff for counting near-white pixels in the image histogram.",
         ),
-    ] = 220,
+    ] = DEFAULT_HIGH_LEVEL,
     ptc_high_threshold: Annotated[
         float,
         typer.Option(
@@ -132,7 +138,7 @@ def clean_overexposed_ir(
             max=1.0,
             help="Minimum fraction of pixels at or above --high-level required to flag an image as overexposed.",
         ),
-    ] = 0.60,
+    ] = DEFAULT_PTC_HIGH_THRESHOLD,
     dry_run: Annotated[
         bool,
         typer.Option(

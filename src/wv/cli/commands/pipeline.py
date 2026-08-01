@@ -6,6 +6,12 @@ import typer
 from wv.core.display import display_path
 from wv.core.logger import get_logger
 from wv.core.session import get_init_path
+from wv.use_cases.clean.overexposed_ir import (
+    DEFAULT_HIGH_LEVEL,
+    DEFAULT_MEAN_THRESHOLD,
+    DEFAULT_PTC_HIGH_THRESHOLD,
+    DEFAULT_STD_THRESHOLD,
+)
 from wv.use_cases.detect.content import DEFAULT_CONFIDENCE_THRESHOLD, DEFAULT_MODEL
 from wv.use_cases.pipeline.preprocess import PipelinePreprocessInput
 from wv.use_cases.pipeline.preprocess import run as run_pipeline_preprocess
@@ -35,7 +41,7 @@ def pipeline_preprocess(
             max=255.0,
             help="Minimum average grayscale brightness required to flag an image as overexposed.",
         ),
-    ] = 200.0,
+    ] = DEFAULT_MEAN_THRESHOLD,
     std_threshold: Annotated[
         float,
         typer.Option(
@@ -43,7 +49,7 @@ def pipeline_preprocess(
             min=0.0,
             help="Maximum grayscale standard deviation allowed when treating a bright image as uniformly overexposed.",
         ),
-    ] = 25.0,
+    ] = DEFAULT_STD_THRESHOLD,
     high_level: Annotated[
         int,
         typer.Option(
@@ -52,7 +58,7 @@ def pipeline_preprocess(
             max=255,
             help="Grayscale value used as the cutoff for counting near-white pixels in the image histogram.",
         ),
-    ] = 220,
+    ] = DEFAULT_HIGH_LEVEL,
     ptc_high_threshold: Annotated[
         float,
         typer.Option(
@@ -61,7 +67,7 @@ def pipeline_preprocess(
             max=1.0,
             help="Minimum fraction of pixels at or above --high-level required to flag an image as overexposed.",
         ),
-    ] = 0.60,
+    ] = DEFAULT_PTC_HIGH_THRESHOLD,
     burst_gap_threshold: Annotated[
         int,
         typer.Option(

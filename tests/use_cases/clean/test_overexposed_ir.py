@@ -2,24 +2,20 @@ from pathlib import Path
 
 import pytest
 
-from wv.use_cases.clean.overexposed_ir import (
-    CleanOverexposedIrInput,
-    ImageMetrics,
-    _is_overexposed,
-    run,
-)
+from wv.core.images import ImageExposureMetrics, is_image_overexposed
+from wv.use_cases.clean.overexposed_ir import CleanOverexposedIrInput, run
 
 
-def test_is_overexposed_uses_threshold_boundaries():
-    assert _is_overexposed(
-        image_metrics=ImageMetrics(mean=200.0, std=25.0, ptc_high=0.1),
+def test_is_image_overexposed_uses_threshold_boundaries():
+    assert is_image_overexposed(
+        image_metrics=ImageExposureMetrics(mean=200.0, std=25.0, ptc_high=0.1),
         mean_threshold=200.0,
         std_threshold=25.0,
         ptc_high_threshold=0.6,
     )
 
-    assert _is_overexposed(
-        image_metrics=ImageMetrics(mean=100.0, std=50.0, ptc_high=0.6),
+    assert is_image_overexposed(
+        image_metrics=ImageExposureMetrics(mean=100.0, std=50.0, ptc_high=0.6),
         mean_threshold=200.0,
         std_threshold=25.0,
         ptc_high_threshold=0.6,
@@ -48,6 +44,7 @@ def test_run_identifies_overexposed_images_in_dry_run(make_image, tmp_path: Path
     assert result.destination == output / "ignored" / "overexposed"
     assert result.files_discovered == 2
     assert result.files_overexposed == 1
+    assert result.files_processed == 2
     assert result.files_moved == 0
     assert result.files_ignored == 1
     assert result.files_failed == 0
@@ -74,6 +71,7 @@ def test_run_moves_overexposed_images(make_image, tmp_path: Path):
 
     moved_path = output / "ignored" / "overexposed" / "white.jpg"
     assert result.files_overexposed == 1
+    assert result.files_processed == 2
     assert result.files_moved == 1
     assert result.files_ignored == 1
     assert result.files_failed == 0

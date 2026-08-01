@@ -6,6 +6,7 @@ USE_CASES_ROOT = Path(__file__).parents[2] / "src" / "wv" / "use_cases"
 WORKFLOW_MODULES = {
     USE_CASES_ROOT / "pipeline" / "preprocess.py",
     USE_CASES_ROOT / "session" / "clean_corrupted.py",
+    USE_CASES_ROOT / "session" / "clean_overexposed_ir.py",
 }
 
 

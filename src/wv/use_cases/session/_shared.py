@@ -1,8 +1,15 @@
+import fcntl
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from wv.core.files import ensure_directory
+from wv.core.files import (
+    ensure_directory,
+    get_content_digest,
+    is_allowed_image_file,
+)
 from wv.core.session import get_init_path
 from wv.models import IngestSession, SessionProcess
 from wv.persistence.database import initialize_database
@@ -149,3 +156,119 @@ def validate_process_attempt(
     raise SessionProcessError(
         f"Session process has an unsupported status: {existing.status}"
     )
+
+
+def _relative_path(session_path: Path, path: Path) -> str:
+    return path.relative_to(session_path.resolve()).as_posix()
+
+
+def _resolve_session_path(session_path: Path, relative_path: str) -> Path:
+    resolved_session_path = session_path.resolve()
+    resolved_path = (resolved_session_path / relative_path).resolve()
+    try:
+        resolved_path.relative_to(resolved_session_path)
+    except ValueError as exc:
+        raise SessionProcessError(
+            f"Session inventory path is outside the session: {relative_path}"
+        ) from exc
+    return resolved_path
+
+
+@contextmanager
+def _exclusive_session_lock(session_path: Path, dry_run: bool) -> Iterator[None]:
+    if dry_run:
+        yield
+        return
+
+    lock_path = session_path / ".wv-session-process.lock"
+    with lock_path.open("a+") as lock_file:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise SessionProcessError("Session processing is already running.") from exc
+
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+def _reconcile_moved_init_inventory(
+    managed_session: ManagedSession,
+    repository: "SessionImageRepository",
+    destination_directory: Path,
+    destination_state: str,
+    *,
+    persist: bool,
+) -> int:
+    destination_directory = _resolve_session_path(
+        managed_session.session_path,
+        _relative_path(managed_session.session_path, destination_directory),
+    )
+    init_path = managed_session.init_path.resolve()
+    relocated = 0
+
+    for image in repository.list_for_session(managed_session.session.id):
+        current_path = _resolve_session_path(
+            managed_session.session_path, image.current_relative_path
+        )
+        if current_path.parent != init_path:
+            continue
+
+        destination_path = destination_directory / current_path.name
+        if current_path.exists():
+            if not current_path.is_file():
+                raise SessionProcessError(
+                    f"Image inventory source is not a file for {image.id}: {current_path}"
+                )
+            if destination_path.exists():
+                raise SessionProcessError(
+                    f"Ambiguous image inventory for {image.id}: both {current_path} "
+                    f"and {destination_path} exist."
+                )
+            continue
+
+        if not destination_path.is_file():
+            raise SessionProcessError(
+                f"Image inventory is inconsistent for {image.id}: neither "
+                f"{current_path} nor {destination_path} exists."
+            )
+
+        if (
+            destination_path.stat().st_size != image.content_size_bytes
+            or get_content_digest(destination_path) != image.content_digest
+        ):
+            raise SessionProcessError(
+                f"Destination does not match inventory content for {image.id}: "
+                f"{destination_path}"
+            )
+
+        if persist:
+            repository.relocate(
+                image.id,
+                _relative_path(managed_session.session_path, destination_path),
+                destination_state,
+            )
+        relocated += 1
+
+    current_images = {
+        image.current_relative_path: image
+        for image in repository.list_for_session(managed_session.session.id)
+    }
+    for file_path in init_path.iterdir():
+        if not file_path.is_file() or not is_allowed_image_file(file_path):
+            continue
+
+        relative_path = _relative_path(managed_session.session_path, file_path)
+        image = current_images.get(relative_path)
+        if image is None:
+            raise SessionProcessError(
+                f"Supported image is not tracked by the session inventory: {file_path}"
+            )
+        if image.state != "init":
+            raise SessionProcessError(
+                "Image inventory state must be 'init' while stored in init: "
+                f"{file_path}"
+            )
+
+    return relocated
