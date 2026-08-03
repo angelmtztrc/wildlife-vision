@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from wv.models import IngestSession, SessionImage, SessionProcessImagePlan
+from wv.domain.session import IngestSession, SessionImage, SessionProcessImagePlan
 from wv.persistence.database import initialize_database
 from wv.persistence.repositories import (
     SessionImageRepository,

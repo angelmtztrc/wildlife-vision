@@ -6,7 +6,7 @@ from wv.core.files import is_allowed_image_file
 from wv.core.images import is_image_corrupted
 from wv.core.logger import get_logger, get_progress
 from wv.core.session import get_ignored_corrupted_path
-from wv.models import SessionProcess
+from wv.domain.session import SessionProcess
 from wv.persistence.repositories import SessionImageRepository, SessionProcessRepository
 from wv.persistence.sql_session import sql_session_scope
 

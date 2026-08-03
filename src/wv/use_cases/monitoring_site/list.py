@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from wv.models import MonitoringSite
+from wv.domain.monitoring_site import MonitoringSite
 from wv.persistence.common import PersistenceError
 from wv.persistence.repositories import MonitoringSiteRepository
 from wv.persistence.sql_session import sql_session_scope

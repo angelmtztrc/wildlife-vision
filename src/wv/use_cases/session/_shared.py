@@ -15,7 +15,7 @@ from wv.core.files import (
     is_allowed_image_file,
 )
 from wv.core.session import get_init_path
-from wv.models import IngestSession, SessionProcess
+from wv.domain.session import IngestSession, SessionProcess
 from wv.persistence.database import initialize_database
 from wv.persistence.common import RecordNotFoundError
 from wv.persistence.repositories import SessionProcessRepository, SessionRepository

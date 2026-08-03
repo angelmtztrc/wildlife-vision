@@ -4,7 +4,7 @@ import pytest
 
 import wv.use_cases.session.clean_overexposed_ir as managed_overexposed
 from wv.core.files import get_content_digest
-from wv.models import IngestSession, SessionImage
+from wv.domain.session import IngestSession, SessionImage
 from wv.persistence.repositories import (
     SessionImageRepository,
     SessionProcessRepository,

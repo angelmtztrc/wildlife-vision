@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session as SqlSession
 
-from wv.models import SessionProcessImagePlan
+from wv.domain.session import SessionProcessImagePlan
 from wv.persistence.common import RecordAlreadyExistsError
 from wv.persistence.models.session_image import SessionImageModel
 from wv.persistence.models.session_process_image_plan import SessionProcessImagePlanModel

@@ -1,7 +1,8 @@
 from pathlib import Path
 from uuid import uuid4
 
-from wv.models import Deployment, Device
+from wv.domain.deployment import Deployment
+from wv.domain.device import Device
 from wv.persistence.repositories import (
     DeploymentRepository,
     DeviceRepository,

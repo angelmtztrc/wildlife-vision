@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from wv.models import Deployment
+from wv.domain.deployment import Deployment
 from wv.persistence.database import initialize_database
 from wv.persistence.repositories import DeploymentRepository
 from wv.persistence.sql_session import sql_session_scope

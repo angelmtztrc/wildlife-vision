@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session as SqlSession
 
-from wv.models import SessionProcess
+from wv.domain.session import SessionProcess
 from wv.persistence.common import RecordNotFoundError
 from wv.persistence.models.session_process import SessionProcessModel
 

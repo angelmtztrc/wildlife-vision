@@ -5,7 +5,7 @@ import pytest
 import wv.use_cases.session.detect_content as session_detection
 from wv.core.files import get_content_digest
 from wv.ml.megadetector import MlDetection, MlImageResult, ResolvedModel
-from wv.models import IngestSession, SessionImage
+from wv.domain.session import IngestSession, SessionImage
 from wv.persistence.repositories import (
     SessionImageRepository,
     SessionProcessImagePlanRepository,

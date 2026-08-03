@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from wv.models import Device
+from wv.domain.device import Device
 from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
 from wv.persistence.database import initialize_database
 from wv.persistence.repositories import DeviceRepository

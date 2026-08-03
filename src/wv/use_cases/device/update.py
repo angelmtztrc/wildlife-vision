@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from wv.models import Device
+from wv.domain.device import Device
 from wv.persistence.common import PersistenceError
 from wv.persistence.repositories import DeviceRepository
 from wv.persistence.sql_session import sql_session_scope

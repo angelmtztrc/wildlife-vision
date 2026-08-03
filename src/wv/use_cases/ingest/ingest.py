@@ -21,7 +21,7 @@ from wv.core.sd_config import (
     resolve_sd_path,
 )
 from wv.core.session import get_init_path, require_session_component
-from wv.models import IngestSession, SessionImage
+from wv.domain.session import IngestSession, SessionImage
 from wv.persistence.database import initialize_database
 from wv.persistence.repositories import SessionImageRepository, SessionRepository
 from wv.persistence.sql_session import sql_session_scope

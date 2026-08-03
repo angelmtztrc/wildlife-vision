@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SqlSession
 
-from wv.models import Device
+from wv.domain.device import Device
 from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
 from wv.persistence.models.device import DeviceModel
 

@@ -18,7 +18,7 @@ from wv.core.exif import read_exif, write_exif_image_description
 from wv.core.files import get_content_digest, is_allowed_image_file, move_file_with_staged_copy
 from wv.core.session import get_detection_path
 from wv.ml.megadetector import DEFAULT_MODEL, MlImageResult, evaluate_images, resolve_model
-from wv.models import SessionImage, SessionProcess, SessionProcessImagePlan
+from wv.domain.session import SessionImage, SessionProcess, SessionProcessImagePlan
 from wv.persistence.repositories import (
     SessionImageRepository,
     SessionProcessImagePlanRepository,

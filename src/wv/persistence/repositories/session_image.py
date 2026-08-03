@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session as SqlSession
 
-from wv.models import SessionImage
+from wv.domain.session import SessionImage
 from wv.persistence.common import RecordNotFoundError
 from wv.persistence.models.session_image import SessionImageModel
 

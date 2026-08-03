@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SqlSession
 
-from wv.models import IngestSession
+from wv.domain.session import IngestSession
 from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
 from wv.persistence.models.session import SessionModel
 

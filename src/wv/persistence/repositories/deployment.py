@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session as SqlSession
 
-from wv.models import Deployment
+from wv.domain.deployment import Deployment
 from wv.persistence.models.deployment import DeploymentModel
 
 

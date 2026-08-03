@@ -9,7 +9,7 @@ from wv.core.bursts import (
     BurstReductionPlan,
 )
 from wv.core.files import get_content_digest
-from wv.models import IngestSession, SessionImage
+from wv.domain.session import IngestSession, SessionImage
 from wv.persistence.repositories import (
     SessionImageRepository,
     SessionProcessImagePlanRepository,

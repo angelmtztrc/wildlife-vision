@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 import wv.use_cases.session.clean_corrupted as managed_corrupted
-from wv.models import IngestSession, SessionImage
+from wv.domain.session import IngestSession, SessionImage
 from wv.core.files import get_content_digest
 from wv.persistence.repositories import (
     SessionImageRepository,

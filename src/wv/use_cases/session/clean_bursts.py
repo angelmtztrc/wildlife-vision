@@ -14,7 +14,7 @@ from wv.core.display import display_file
 from wv.core.files import get_content_digest, is_allowed_image_file, move_file_with_staged_copy
 from wv.core.logger import get_logger
 from wv.core.session import get_ignored_bursts_path
-from wv.models import SessionImage, SessionProcess, SessionProcessImagePlan
+from wv.domain.session import SessionImage, SessionProcess, SessionProcessImagePlan
 from wv.persistence.repositories import (
     SessionImageRepository,
     SessionProcessImagePlanRepository,
