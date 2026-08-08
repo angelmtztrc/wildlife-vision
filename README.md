@@ -105,13 +105,17 @@ wv config path # it returns the path of the config
 Monitoring areas are large geographic catalogs such as ranches, reserves, or properties. Each monitoring site is one fixed geographic location inside exactly one area and must include latitude and longitude.
 
 ```bash
-wv monitoring-area create RANCHO_EL_CASCABEL --name "Rancho El Cascabel"
-wv monitoring-site create CASCABEL_FALLEN_TREE_RIVERBANK \
+wv monitoring-area create --name "Rancho El Cascabel"
+wv monitoring-site create \
   --area RANCHO_EL_CASCABEL \
   --name "Fallen tree in riverbank" \
   --latitude 28.550981 \
   --longitude -101.140348
 ```
+
+Area and site identifiers are generated from `--name` as uppercase ASCII words
+joined with underscores. Use `--id <IDENTIFIER>` when a collision or a preferred
+identifier requires an override. Updating a name does not change its ID.
 
 A monitoring site can be created using the following command and options.
 

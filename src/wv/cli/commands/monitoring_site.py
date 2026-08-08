@@ -33,11 +33,14 @@ def _format_value(value: object) -> str:
 
 @app.command("create")
 def create(
-    site_id: Annotated[str, typer.Argument(help="Monitoring site ID.")],
     area: Annotated[str, typer.Option("--area", help="Parent monitoring area ID.")],
     name: Annotated[str, typer.Option(help="Monitoring site name.")],
     latitude: Annotated[float, typer.Option(help="Monitoring site latitude.")],
     longitude: Annotated[float, typer.Option(help="Monitoring site longitude.")],
+    site_id: Annotated[
+        str | None,
+        typer.Option("--id", help="Optional identifier; defaults to a normalized name."),
+    ] = None,
     description: Annotated[str | None, typer.Option(help="Monitoring site description.")] = None,
     elevation: Annotated[float | None, typer.Option(help="Monitoring site elevation.")] = None,
     notes: Annotated[str | None, typer.Option(help="Monitoring site notes.")] = None,
@@ -45,12 +48,12 @@ def create(
     try:
         result = run_create_monitoring_site(
             CreateMonitoringSiteInput(
-                id=site_id,
                 monitoring_area_id=area,
                 name=name,
                 description=description,
                 latitude=latitude,
                 longitude=longitude,
+                id=site_id,
                 elevation=elevation,
                 notes=notes,
             )

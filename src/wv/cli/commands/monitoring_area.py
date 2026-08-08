@@ -16,13 +16,23 @@ logger = get_logger(__name__)
 
 @app.command("create")
 def create(
-    area_id: Annotated[str, typer.Argument(help="Monitoring area ID.")],
     name: Annotated[str, typer.Option(help="Monitoring area name.")],
+    area_id: Annotated[
+        str | None,
+        typer.Option("--id", help="Optional identifier; defaults to a normalized name."),
+    ] = None,
     description: Annotated[str | None, typer.Option(help="Monitoring area description.")] = None,
     notes: Annotated[str | None, typer.Option(help="Monitoring area notes.")] = None,
 ):
     try:
-        result = run_create(CreateMonitoringAreaInput(area_id, name, description, notes))
+        result = run_create(
+            CreateMonitoringAreaInput(
+                name=name,
+                id=area_id,
+                description=description,
+                notes=notes,
+            )
+        )
     except (WorkspaceError, MonitoringAreaError) as exc:
         logger.error("Monitoring area creation failed: %s", exc)
         raise typer.Exit(code=1) from exc

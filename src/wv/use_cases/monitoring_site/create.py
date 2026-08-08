@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from wv.core.identifiers import normalize_catalog_identifier
 from wv.domain.monitoring_site import MonitoringSite
 from wv.persistence.common import PersistenceError
 from wv.persistence.repositories import MonitoringAreaRepository, MonitoringSiteRepository
@@ -11,11 +12,11 @@ from . import _shared as shared
 
 @dataclass(frozen=True)
 class CreateMonitoringSiteInput:
-    id: str
     monitoring_area_id: str
     name: str
     latitude: float
     longitude: float
+    id: str | None = None
     description: str | None = None
     elevation: float | None = None
     notes: str | None = None
@@ -32,11 +33,15 @@ def run(input_data: CreateMonitoringSiteInput) -> CreateMonitoringSiteResult:
     if not -180 <= input_data.longitude <= 180:
         raise shared.MonitoringSiteError("Longitude must be between -180 and 180.")
     try:
+        site_id = normalize_catalog_identifier(input_data.id or input_data.name)
+    except ValueError as exc:
+        raise shared.MonitoringSiteError(str(exc)) from exc
+    try:
         with sql_session_scope(require_workspace_database_path()) as sql_session:
             MonitoringAreaRepository(sql_session).get(input_data.monitoring_area_id)
             monitoring_site = MonitoringSiteRepository(sql_session).create(
                 MonitoringSite(
-                    id=input_data.id,
+                    id=site_id,
                     monitoring_area_id=input_data.monitoring_area_id,
                     name=input_data.name,
                     description=input_data.description,
@@ -47,6 +52,9 @@ def run(input_data: CreateMonitoringSiteInput) -> CreateMonitoringSiteResult:
                 )
             )
     except PersistenceError as exc:
-        raise shared.to_monitoring_site_error(exc) from exc
+        message = str(exc)
+        if message.startswith("Monitoring site already exists:"):
+            message += ". Provide --id to choose a different identifier."
+        raise shared.MonitoringSiteError(message) from exc
 
     return CreateMonitoringSiteResult(monitoring_site=monitoring_site)
