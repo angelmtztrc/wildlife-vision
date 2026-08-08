@@ -115,7 +115,7 @@ def test_run_persists_plan_before_moving_and_updates_inventory(
     monkeypatch.setattr(
         managed_bursts,
         "build_burst_reduction_plan",
-        lambda candidates, *_: _three_image_plan(candidates),
+        lambda candidates, *_, **__: _three_image_plan(candidates),
     )
 
     result = run(SessionCleanBurstsInput(session_id=SESSION_ID))
@@ -158,7 +158,7 @@ def test_retry_reuses_persisted_plan_without_replanning(
     monkeypatch.setattr(
         managed_bursts,
         "build_burst_reduction_plan",
-        lambda candidates, *_: _three_image_plan(candidates),
+        lambda candidates, *_, **__: _three_image_plan(candidates),
     )
     original_move = managed_bursts.move_file_with_staged_copy
     calls = 0
@@ -211,7 +211,7 @@ def test_planning_failure_moves_no_files(
     _create_session_inventory(configured_workspace, image_paths)
     _complete_overexposed_process(configured_workspace)
 
-    def failing_plan(candidates, *_):
+    def failing_plan(candidates, *_, **__):
         return BurstReductionPlan(
             decisions=tuple(
                 BurstDecision(candidate.id, candidate.path, "keep")
@@ -252,7 +252,7 @@ def test_dry_run_does_not_create_plan_or_move_files(
     monkeypatch.setattr(
         managed_bursts,
         "build_burst_reduction_plan",
-        lambda candidates, *_: _three_image_plan(candidates),
+        lambda candidates, *_, **__: _three_image_plan(candidates),
     )
 
     result = run(SessionCleanBurstsInput(session_id=SESSION_ID, dry_run=True))

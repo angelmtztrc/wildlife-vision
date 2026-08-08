@@ -101,13 +101,21 @@ def test_plan_reports_analysis_failure_without_selecting_it(monkeypatch):
 
     monkeypatch.setattr(bursts, "_analyze_candidate", fail_analysis)
 
+    processed_candidates = 0
+
+    def on_candidate_processed():
+        nonlocal processed_candidates
+        processed_candidates += 1
+
     plan = build_burst_reduction_plan(
         [candidate, _candidate("other.jpg", candidate.captured_at + timedelta(seconds=1))],
         60,
         0,
+        on_candidate_processed=on_candidate_processed,
     )
 
     assert len(plan.failures) == 1
+    assert processed_candidates == 2
     assert (
         next(
             decision
