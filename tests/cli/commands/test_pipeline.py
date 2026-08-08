@@ -103,4 +103,4 @@ def test_pipeline_preprocess_rejects_invalid_session_path(
     )
 
     assert result.exit_code != 0
-    assert "YYYYMMDD_HHMMSS__CAMERA" in result.output
+    assert "YYYYMMDD_HHMMSS__MONITORING_SITE" in result.output

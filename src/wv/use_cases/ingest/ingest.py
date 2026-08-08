@@ -40,7 +40,6 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True)
 class ExplicitIngestIdentity:
-    device_id: str
     monitoring_site_id: str
 
 
@@ -92,7 +91,6 @@ def _resolve_identity(
         with sql_session_scope(database_path) as sql_session:
             return validate_explicit_identity(
                 sql_session,
-                input_data.identity.device_id,
                 input_data.identity.monitoring_site_id,
             )
 
@@ -103,10 +101,9 @@ def _resolve_identity(
 
     with sql_session_scope(database_path) as sql_session:
         return validate_sd_identity(
-            sql_session,
-            source,
-            sd_config.device_id,
-            sd_config.monitoring_site_id,
+                sql_session,
+                source,
+                sd_config.monitoring_site_id,
         )
 
 
@@ -138,7 +135,6 @@ def _create_session_record(
     database_path: Path,
     *,
     session_id: str,
-    device_id: str,
     monitoring_site_id: str,
     source_path: Path,
     input_data: IngestInput,
@@ -148,7 +144,6 @@ def _create_session_record(
         SessionRepository(sql_session).create(
             IngestSession(
                 id=session_id,
-                device_id=device_id,
                 monitoring_site_id=monitoring_site_id,
                 source_path=str(source_path),
                 mode=input_data.mode,
@@ -221,13 +216,12 @@ def run(input_data: IngestInput) -> IngestResult:
     resolved_identity = _resolve_identity(input_data, database_path, source)
 
     ensure_directory(source)
-    device_id = require_session_component(resolved_identity.device_id, "Device ID")
     monitoring_site_id = require_session_component(
         resolved_identity.monitoring_site_id, "Monitoring site ID"
     )
 
     result = IngestResult(dry_run=input_data.dry_run)
-    session_path = get_session_path(workspace_path, device_id, input_data.dry_run)
+    session_path = get_session_path(workspace_path, monitoring_site_id, input_data.dry_run)
     session_id = session_path.name
     destination_path = get_init_path(session_path)
     if not input_data.dry_run:
@@ -242,7 +236,6 @@ def run(input_data: IngestInput) -> IngestResult:
         _create_session_record(
             database_path,
             session_id=session_id,
-            device_id=device_id,
             monitoring_site_id=monitoring_site_id,
             source_path=source_root,
             input_data=input_data,

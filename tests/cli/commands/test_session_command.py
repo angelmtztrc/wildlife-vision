@@ -1,11 +1,135 @@
+from wv.domain.session import IngestSession, SessionImageStateCount
 from wv.cli.main import app
+from wv.use_cases.session.list import ListSessionsResult
 from wv.use_cases.session.clean_corrupted import SessionCleanCorruptedResult
 from wv.use_cases.session.clean_overexposed_ir import (
     SessionCleanOverexposedIrResult,
 )
 from wv.use_cases.session.clean_bursts import SessionCleanBurstsResult
 from wv.use_cases.session.detect_content import SessionDetectContentResult
-from wv.use_cases.session._shared import SessionProcessError
+from wv.use_cases.session.status import (
+    SessionStageStatus,
+    SessionStatusResult,
+)
+from wv.use_cases.session._shared import SessionError, SessionProcessError
+
+
+def test_session_list_forwards_filters_and_prints_rows(cli_runner, monkeypatch):
+    received_input = None
+
+    def fake_run(input_data):
+        nonlocal received_input
+        received_input = input_data
+        return ListSessionsResult(
+            items=[
+                IngestSession(
+                    id="20260801_120000__SITE001",
+                    monitoring_site_id="SITE001",
+                    source_path="/Volumes/SD",
+                    mode="copy",
+                    recursive=False,
+                    started_at="2026-08-01T12:00:00+00:00",
+                    ingest_status="completed",
+                )
+            ]
+        )
+
+    monkeypatch.setattr("wv.cli.commands.session.run_list_sessions", fake_run)
+
+    result = cli_runner.invoke(
+        app,
+        [
+            "session",
+            "list",
+            "--monitoring-site",
+            "SITE001",
+            "--ingest-status",
+            "completed",
+            "--limit",
+            "5",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert received_input.monitoring_site_id == "SITE001"
+    assert received_input.ingest_status == "completed"
+    assert received_input.limit == 5
+    assert result.output.strip() == (
+        "20260801_120000__SITE001\t2026-08-01T12:00:00+00:00\t"
+        "SITE001\tcompleted"
+    )
+
+
+def test_session_list_reports_session_errors(cli_runner, monkeypatch):
+    def fail_run(input_data):
+        raise SessionError("Unknown ingest status: invalid")
+
+    monkeypatch.setattr("wv.cli.commands.session.run_list_sessions", fail_run)
+
+    result = cli_runner.invoke(
+        app, ["session", "list", "--ingest-status", "invalid"]
+    )
+
+    assert result.exit_code == 1
+    assert "Unknown ingest status" in result.output
+
+
+def test_session_status_prints_operational_details(cli_runner, monkeypatch):
+    session = IngestSession(
+        id="20260801_120000__SITE001",
+        monitoring_site_id="SITE001",
+        source_path="/Volumes/SD",
+        mode="copy",
+        recursive=False,
+        started_at="2026-08-01T12:00:00+00:00",
+        ingest_status="completed",
+        files_discovered=2,
+        files_copied=2,
+    )
+    monkeypatch.setattr(
+        "wv.cli.commands.session.run_session_status",
+        lambda input_data: SessionStatusResult(
+            session=session,
+            overall_status="processing",
+            next_process="clean_overexposed_ir",
+            next_action="run",
+            stages=[
+                SessionStageStatus(
+                    name="clean_corrupted",
+                    status="completed",
+                    attempt_count=1,
+                    files_processed=2,
+                ),
+                SessionStageStatus(name="clean_overexposed_ir"),
+            ],
+            inventory=[SessionImageStateCount(state="init", count=2)],
+        ),
+    )
+
+    result = cli_runner.invoke(
+        app, ["session", "status", "20260801_120000__HNT001"]
+    )
+
+    assert result.exit_code == 0
+    assert "overall_status: processing" in result.output
+    assert "next_action: run clean_overexposed_ir" in result.output
+    assert "next_parameters:" in result.output
+    assert "inventory.init: 2" in result.output
+    assert "process.clean_corrupted.status: completed" in result.output
+    assert "process.clean_corrupted.parameters:" in result.output
+    assert "process.clean_overexposed_ir.status: not_started" in result.output
+
+
+def test_session_status_reports_unknown_session(cli_runner, monkeypatch):
+    def fail_run(input_data):
+        raise SessionError(f"Session not found: {input_data.session_id}")
+
+    monkeypatch.setattr("wv.cli.commands.session.run_session_status", fail_run)
+
+    result = cli_runner.invoke(app, ["session", "status", "MISSING"])
+
+    assert result.exit_code == 1
+    assert "Session not found: MISSING" in result.output
 
 
 def test_session_clean_corrupted_prints_summary(cli_runner, monkeypatch):

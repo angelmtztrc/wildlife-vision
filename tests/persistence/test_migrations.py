@@ -3,6 +3,8 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.util import CommandError
+import pytest
 
 from wv.persistence.alembic import get_alembic_directory
 from wv.persistence.database import (
@@ -44,9 +46,9 @@ def test_initialize_database_applies_initial_schema(tmp_path: Path):
     assert database_path.is_file()
     assert _get_table_names(database_path) >= {
         "alembic_version",
+        "monitoring_areas",
         "monitoring_sites",
         "devices",
-        "deployments",
         "sessions",
         "session_images",
         "session_processes",
@@ -82,6 +84,17 @@ def test_upgrade_database_upgrades_session_process_database(tmp_path: Path):
 
     assert _get_migration_version(database_path) == get_database_head_revision()
     assert "session_process_image_plans" in _get_table_names(database_path)
+
+
+def test_upgrade_database_refuses_populated_clean_break_workspace(tmp_path: Path):
+    database_path = tmp_path / ".wv" / "database.sqlite"
+    database_path.parent.mkdir()
+    command.upgrade(_get_alembic_config(database_path), "0006_session_detection_plan_details")
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("INSERT INTO devices (id, name) VALUES ('HNT001', 'North Camera')")
+
+    with pytest.raises(CommandError, match="destructive clean-break"):
+        upgrade_database(database_path)
 
 
 def test_get_database_revision_returns_none_for_unversioned_database(tmp_path: Path):

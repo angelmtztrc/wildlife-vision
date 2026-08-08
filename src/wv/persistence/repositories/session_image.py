@@ -1,7 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session as SqlSession
 
-from wv.domain.session import SessionImage
+from wv.domain.session import SessionImage, SessionImageStateCount
 from wv.persistence.common import RecordNotFoundError
 from wv.persistence.models.session_image import SessionImageModel
 
@@ -41,6 +41,19 @@ class SessionImageRepository:
             .order_by(SessionImageModel.current_relative_path, SessionImageModel.id)
         ).all()
         return [_model_to_session_image(model) for model in models]
+
+    def count_by_state_for_session(
+        self, session_id: str
+    ) -> list[SessionImageStateCount]:
+        rows = self.sql_session.execute(
+            select(SessionImageModel.state, func.count(SessionImageModel.id))
+            .where(SessionImageModel.session_id == session_id)
+            .group_by(SessionImageModel.state)
+            .order_by(SessionImageModel.state)
+        ).all()
+        return [
+            SessionImageStateCount(state=state, count=count) for state, count in rows
+        ]
 
     def get(self, image_id: str) -> SessionImage:
         model = self.sql_session.get(SessionImageModel, image_id)

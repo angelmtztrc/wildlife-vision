@@ -17,7 +17,7 @@ from wv.core.files import (
 from wv.core.session import get_init_path
 from wv.domain.session import IngestSession, SessionProcess
 from wv.persistence.database import initialize_database
-from wv.persistence.common import RecordNotFoundError
+from wv.persistence.common import PersistenceError, RecordNotFoundError
 from wv.persistence.repositories import SessionProcessRepository, SessionRepository
 from wv.persistence.sql_session import sql_session_scope
 from wv.workspace.workspace_config import (
@@ -34,8 +34,16 @@ PROCESS_NAMES = (
 SUCCESSFUL_PROCESS_STATUSES = {"completed", "completed_with_failures"}
 
 
-class SessionProcessError(ValueError):
+class SessionError(ValueError):
     pass
+
+
+class SessionProcessError(SessionError):
+    pass
+
+
+def to_session_error(exc: PersistenceError) -> SessionError:
+    return SessionError(str(exc))
 
 
 @dataclass(frozen=True)

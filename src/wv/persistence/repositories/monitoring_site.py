@@ -3,7 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SqlSession
 
 from wv.domain.monitoring_site import MonitoringSite
-from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
+from wv.persistence.common import PersistenceError, RecordAlreadyExistsError, RecordNotFoundError
 from wv.persistence.models.monitoring_site import MonitoringSiteModel
 
 
@@ -14,6 +14,7 @@ class MonitoringSiteRepository:
     def create(self, monitoring_site: MonitoringSite) -> MonitoringSite:
         model = MonitoringSiteModel(
             id=monitoring_site.id,
+            monitoring_area_id=monitoring_site.monitoring_area_id,
             name=monitoring_site.name,
             description=monitoring_site.description,
             latitude=monitoring_site.latitude,
@@ -27,16 +28,19 @@ class MonitoringSiteRepository:
             self.sql_session.flush()
         except IntegrityError as exc:
             self.sql_session.rollback()
+            if "UNIQUE constraint failed" not in str(exc.orig):
+                raise PersistenceError(str(exc.orig)) from exc
             raise RecordAlreadyExistsError(
                 f"Monitoring site already exists: {monitoring_site.id}"
             ) from exc
 
         return _model_to_monitoring_site(model)
 
-    def list(self) -> list[MonitoringSite]:
-        models = self.sql_session.scalars(
-            select(MonitoringSiteModel).order_by(MonitoringSiteModel.id)
-        ).all()
+    def list(self, *, monitoring_area_id: str | None = None) -> list[MonitoringSite]:
+        query = select(MonitoringSiteModel)
+        if monitoring_area_id is not None:
+            query = query.where(MonitoringSiteModel.monitoring_area_id == monitoring_area_id)
+        models = self.sql_session.scalars(query.order_by(MonitoringSiteModel.id)).all()
         return [_model_to_monitoring_site(model) for model in models]
 
     def get(self, site_id: str) -> MonitoringSite:
@@ -62,6 +66,7 @@ class MonitoringSiteRepository:
 def _model_to_monitoring_site(model: MonitoringSiteModel) -> MonitoringSite:
     return MonitoringSite(
         id=model.id,
+        monitoring_area_id=model.monitoring_area_id,
         name=model.name,
         description=model.description,
         latitude=model.latitude,

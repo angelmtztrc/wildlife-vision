@@ -8,4 +8,3 @@ class Device:
     manufacturer: str | None = None
     serial_number: str | None = None
     notes: str | None = None
-    monitoring_site_id: str | None = None

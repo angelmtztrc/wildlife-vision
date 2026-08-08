@@ -18,7 +18,6 @@ class DeviceRepository:
             manufacturer=device.manufacturer,
             serial_number=device.serial_number,
             notes=device.notes,
-            monitoring_site_id=device.monitoring_site_id,
         )
         self.sql_session.add(model)
 
@@ -59,5 +58,4 @@ def _model_to_device(model: DeviceModel) -> Device:
         manufacturer=model.manufacturer,
         serial_number=model.serial_number,
         notes=model.notes,
-        monitoring_site_id=model.monitoring_site_id,
     )

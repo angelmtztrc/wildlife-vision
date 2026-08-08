@@ -15,6 +15,7 @@ from wv.core.images import (
     DEFAULT_STD_THRESHOLD,
 )
 from wv.core.logger import get_logger
+from wv.domain.session import INGEST_STATUSES
 from wv.ml.megadetector import DEFAULT_MODEL
 from wv.use_cases.session.clean_corrupted import SessionCleanCorruptedInput
 from wv.use_cases.session.clean_corrupted import run as run_clean_corrupted
@@ -24,11 +25,16 @@ from wv.use_cases.session.clean_overexposed_ir import (
 from wv.use_cases.session.clean_overexposed_ir import run as run_clean_overexposed_ir
 from wv.use_cases.session.clean_bursts import SessionCleanBurstsInput
 from wv.use_cases.session.clean_bursts import run as run_clean_bursts
+from wv.use_cases.session.list import ListSessionsInput
+from wv.use_cases.session.list import run as run_list_sessions
 from wv.use_cases.session.detect_content import (
     SessionDetectContentInput,
 )
 from wv.use_cases.session.detect_content import run as run_detect_content
-from wv.use_cases.session._shared import SessionProcessError
+from wv.use_cases.session.status import SessionStatusInput
+from wv.use_cases.session.status import run as run_session_status
+from wv.use_cases.session._shared import SessionError, SessionProcessError
+from wv.workspace.common import WorkspaceError
 
 app = typer.Typer(help="Run database-tracked processing for ingested sessions.")
 clean_app = typer.Typer(help="Run ordered cleanup stages for an ingested session.")
@@ -37,6 +43,124 @@ detect_app = typer.Typer(help="Run ordered detection stages for an ingested sess
 app.add_typer(detect_app, name="detect")
 
 logger = get_logger(__name__)
+
+
+@app.command("list")
+def list_sessions(
+    area: Annotated[
+        str | None,
+        typer.Option("--area", help="Only show sessions in this monitoring area."),
+    ] = None,
+    monitoring_site: Annotated[
+        str | None,
+        typer.Option(
+            "--monitoring-site",
+            help="Only show sessions for this monitoring-site ID.",
+        ),
+    ] = None,
+    ingest_status: Annotated[
+        str | None,
+        typer.Option(
+            "--ingest-status",
+            help=f"Only show sessions with one of: {', '.join(INGEST_STATUSES)}.",
+        ),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, help="Maximum number of sessions to show."),
+    ] = 20,
+):
+    """List recent persisted ingest sessions in the active workspace."""
+    try:
+        result = run_list_sessions(
+            ListSessionsInput(
+                monitoring_area_id=area,
+                monitoring_site_id=monitoring_site,
+                ingest_status=ingest_status,
+                limit=limit,
+            )
+        )
+    except (WorkspaceError, SessionError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    for item in result.items:
+        typer.echo(
+            f"{item.id}\t{item.started_at}\t{item.monitoring_site_id}\t"
+            f"{item.ingest_status}"
+        )
+
+    return None
+
+
+@app.command("status")
+def session_status(
+    session_id: Annotated[
+        str,
+        typer.Argument(help="ID of an ingested session in the active workspace."),
+    ],
+):
+    """Show ingest, processing, inventory, and filesystem status for a session."""
+    try:
+        result = run_session_status(SessionStatusInput(session_id=session_id))
+    except (WorkspaceError, SessionError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    session = result.session
+    typer.echo(f"id: {session.id}")
+    typer.echo(f"overall_status: {result.overall_status}")
+    if result.next_action is not None and result.next_process is not None:
+        next_stage = next(
+            stage for stage in result.stages if stage.name == result.next_process
+        )
+        typer.echo(f"next_action: {result.next_action} {result.next_process}")
+        typer.echo(f"next_parameters: {next_stage.parameters_json or ''}")
+    else:
+        typer.echo("next_action: none")
+        typer.echo("next_parameters:")
+    typer.echo(f"monitoring_site: {session.monitoring_site_id}")
+    typer.echo(f"monitoring_area: {result.monitoring_area_id}")
+    typer.echo(f"source_path: {session.source_path}")
+    typer.echo(f"mode: {session.mode}")
+    typer.echo(f"recursive: {str(session.recursive).lower()}")
+    typer.echo(f"started_at: {session.started_at}")
+    typer.echo(f"completed_at: {session.completed_at or ''}")
+    typer.echo(f"ingest_status: {session.ingest_status}")
+    typer.echo(f"ingest_failure: {session.failure_message or ''}")
+    typer.echo(f"ingest.files_discovered: {session.files_discovered}")
+    typer.echo(f"ingest.files_copied: {session.files_copied}")
+    typer.echo(f"ingest.files_deleted: {session.files_deleted}")
+    typer.echo(f"ingest.files_ignored: {session.files_ignored}")
+    typer.echo(f"ingest.files_failed: {session.files_failed}")
+    typer.echo(f"ingest.files_replaced: {session.files_replaced}")
+
+    if result.filesystem is not None:
+        typer.echo(f"filesystem_status: {result.filesystem.status}")
+        typer.echo(f"session_path: {result.filesystem.session_path}")
+        typer.echo(f"init_path: {result.filesystem.init_path}")
+        typer.echo(f"filesystem_message: {result.filesystem.message or ''}")
+
+    for item in result.inventory:
+        typer.echo(f"inventory.{item.state}: {item.count}")
+
+    for stage in result.stages:
+        prefix = f"process.{stage.name}"
+        typer.echo(f"{prefix}.status: {stage.status}")
+        typer.echo(f"{prefix}.attempts: {stage.attempt_count}")
+        typer.echo(f"{prefix}.started_at: {stage.started_at or ''}")
+        typer.echo(f"{prefix}.completed_at: {stage.completed_at or ''}")
+        typer.echo(f"{prefix}.failure: {stage.failure_message or ''}")
+        typer.echo(f"{prefix}.files_discovered: {stage.files_discovered}")
+        typer.echo(f"{prefix}.files_processed: {stage.files_processed}")
+        typer.echo(f"{prefix}.files_selected: {stage.files_selected}")
+        typer.echo(f"{prefix}.files_moved: {stage.files_moved}")
+        typer.echo(f"{prefix}.files_ignored: {stage.files_ignored}")
+        typer.echo(f"{prefix}.files_failed: {stage.files_failed}")
+        typer.echo(f"{prefix}.bursts: {stage.bursts_count}")
+        typer.echo(f"{prefix}.parameters: {stage.parameters_json or ''}")
+
+    return None
 
 
 @clean_app.command("corrupted")

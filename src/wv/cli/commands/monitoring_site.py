@@ -34,10 +34,11 @@ def _format_value(value: object) -> str:
 @app.command("create")
 def create(
     site_id: Annotated[str, typer.Argument(help="Monitoring site ID.")],
+    area: Annotated[str, typer.Option("--area", help="Parent monitoring area ID.")],
     name: Annotated[str, typer.Option(help="Monitoring site name.")],
+    latitude: Annotated[float, typer.Option(help="Monitoring site latitude.")],
+    longitude: Annotated[float, typer.Option(help="Monitoring site longitude.")],
     description: Annotated[str | None, typer.Option(help="Monitoring site description.")] = None,
-    latitude: Annotated[float | None, typer.Option(help="Monitoring site latitude.")] = None,
-    longitude: Annotated[float | None, typer.Option(help="Monitoring site longitude.")] = None,
     elevation: Annotated[float | None, typer.Option(help="Monitoring site elevation.")] = None,
     notes: Annotated[str | None, typer.Option(help="Monitoring site notes.")] = None,
 ):
@@ -45,6 +46,7 @@ def create(
         result = run_create_monitoring_site(
             CreateMonitoringSiteInput(
                 id=site_id,
+                monitoring_area_id=area,
                 name=name,
                 description=description,
                 latitude=latitude,
@@ -66,15 +68,19 @@ def create(
 
 
 @app.command("list")
-def list_sites():
+def list_sites(
+    area: Annotated[
+        str | None, typer.Option("--area", help="Only show sites in this area.")
+    ] = None,
+):
     try:
-        result = run_list_monitoring_sites(ListMonitoringSitesInput())
+        result = run_list_monitoring_sites(ListMonitoringSitesInput(monitoring_area_id=area))
     except WorkspaceError as exc:
         logger.error("Monitoring site list failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
     for site in result.items:
-        typer.echo(f"{site.id}\t{site.name}")
+        typer.echo(f"{site.id}\t{site.monitoring_area_id}\t{site.name}")
 
     return None
 
@@ -88,6 +94,7 @@ def show(site_id: Annotated[str, typer.Argument(help="Monitoring site ID.")]):
         raise typer.Exit(code=1) from exc
 
     typer.echo(f"id: {result.monitoring_site.id}")
+    typer.echo(f"area: {result.monitoring_site.monitoring_area_id}")
     typer.echo(f"name: {result.monitoring_site.name}")
     typer.echo(f"description: {_format_value(result.monitoring_site.description)}")
     typer.echo(f"latitude: {_format_value(result.monitoring_site.latitude)}")

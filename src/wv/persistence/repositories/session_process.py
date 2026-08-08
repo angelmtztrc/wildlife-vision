@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session as SqlSession
 
 from wv.domain.session import SessionProcess
@@ -20,6 +21,14 @@ class SessionProcessRepository:
     def get_optional(self, session_id: str, process_name: str) -> SessionProcess | None:
         model = self.sql_session.get(SessionProcessModel, (session_id, process_name))
         return _model_to_session_process(model) if model is not None else None
+
+    def list_for_session(self, session_id: str) -> list[SessionProcess]:
+        models = self.sql_session.scalars(
+            select(SessionProcessModel)
+            .where(SessionProcessModel.session_id == session_id)
+            .order_by(SessionProcessModel.process_name)
+        ).all()
+        return [_model_to_session_process(model) for model in models]
 
     def start(
         self,

@@ -5,7 +5,6 @@ import typer
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
-from wv.use_cases.device.list import ListDevicesInput, run as run_list_devices
 from wv.use_cases.ingest.ingest import (
     ExplicitIngestIdentity,
     IngestInput,
@@ -23,17 +22,6 @@ from wv.workspace.common import WorkspaceError
 app = typer.Typer(help="Ingest photos from SD cards and other source locations.")
 
 logger = get_logger(__name__)
-
-
-def _complete_device(incomplete: str) -> list[str]:
-    try:
-        return [
-            device.id
-            for device in run_list_devices(ListDevicesInput()).items
-            if device.id.startswith(incomplete)
-        ]
-    except WorkspaceError:
-        return []
 
 
 def _complete_monitoring_site(incomplete: str) -> list[str]:
@@ -136,10 +124,6 @@ def ingest_folder(
             readable=True,
         ),
     ],
-    device: Annotated[
-        str,
-        typer.Option(help="Registered device ID.", autocompletion=_complete_device),
-    ],
     monitoring_site: Annotated[
         str,
         typer.Option(
@@ -170,9 +154,8 @@ def ingest_folder(
     ] = False,
 ):
     logger.info(
-        "Starting folder ingest from %s (device=%s, monitoring_site=%s, mode=%s, dry_run=%s, recursive=%s)",
+        "Starting folder ingest from %s (monitoring_site=%s, mode=%s, dry_run=%s, recursive=%s)",
         display_path(source),
-        device,
         monitoring_site,
         mode,
         dry_run,
@@ -185,7 +168,6 @@ def ingest_folder(
                 source=source,
                 mode=mode,
                 identity=ExplicitIngestIdentity(
-                    device_id=device,
                     monitoring_site_id=monitoring_site,
                 ),
                 dry_run=dry_run,

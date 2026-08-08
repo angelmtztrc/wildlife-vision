@@ -5,8 +5,8 @@ from sqlalchemy import engine_from_config, pool
 
 from wv.persistence.base import Base
 from wv.persistence.models import (
-    DeploymentModel,
     DeviceModel,
+    MonitoringAreaModel,
     MonitoringSiteModel,
     SessionImageModel,
     SessionProcessModel,

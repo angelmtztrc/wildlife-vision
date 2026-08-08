@@ -100,9 +100,18 @@ wv config validate # it verifies if the active config is valid for use
 wv config path # it returns the path of the config
 ```
 
-### Monitoring sites
+### Monitoring areas and sites
 
-Wildlife Vision lets you define the monitoring sites you have; this is useful to determine and help you organise where a certain image was obtained.
+Monitoring areas are large geographic catalogs such as ranches, reserves, or properties. Each monitoring site is one fixed geographic location inside exactly one area and must include latitude and longitude.
+
+```bash
+wv monitoring-area create RANCHO_EL_CASCABEL --name "Rancho El Cascabel"
+wv monitoring-site create CASCABEL_FALLEN_TREE_RIVERBANK \
+  --area RANCHO_EL_CASCABEL \
+  --name "Fallen tree in riverbank" \
+  --latitude 28.550981 \
+  --longitude -101.140348
+```
 
 A monitoring site can be created using the following command and options.
 
@@ -119,16 +128,14 @@ wv site create <ID> \
 To manage monitoring sites, we provide the following commands:
 
 ```bash
-wv site create <ID> --name <DISPLAY_NAME> # creates the monitoring site
-wv site list # returns the available monitoring sites
-wv site show <ID> # returns the information of a certain monitoring site
-wv site update <ID> --name <DISPLAY_NAME> # updates the monitoring site information
-wv site delete <ID> # soft-deletes a monitoring site, only if not being used
+wv monitoring-area {create,list,show,update}
+wv monitoring-site {create,list,show,update}
+wv monitoring-site list --area <AREA_ID>
 ```
 
 ### Devices
 
-The devices feature allows you to register the cameras you have available for use; this is useful because it lets you relate an SD card to a device and also to determine where the device is located at the moment.
+The devices feature is an independent equipment catalog. Devices are not required for ingestion or SD-card metadata.
 
 To create a device, the following command is available:
 
@@ -152,23 +159,21 @@ wv device delete <ID> # soft-deletes a device
 
 ### SD
 
-The SD feature allows you to prepare an SD card with the proper metadata information for its use. The primary command is the `init` which initializes a configuration file in the SD card containing information about the devices that would be using the SD card and the monitoring site in which it is deployed. The created file would be stored inside `.wv/config.yml`
+The SD feature stores the monitoring site represented by a card. The created file is stored inside `.wv/config.yml`.
 
 The purpose of this command is to pair it with the `wv ingest sd` command, which would automatically read the information under the `config.yml` to recover the information of the device and monitoring site, saving time by not having to write those values manually.
 
 To initialize an SD card, you must run:
 
 ```bash
-wv sd init <PATH> \
-	--device <DEVICE_ID> \ # from registered devices
-	--monitoring-site <MONITORING_SITE_ID>  # from registered monitoring sites
+wv sd init <PATH> --monitoring-site <MONITORING_SITE_ID>
 ```
 
 We also provide additional helpful commands:
 
 ```bash
 wv sd show <PATH> # returns the information of the SD card
-wv sd update <PATH> --device <DEVICE_ID> # it allows you to update the information of the SD card
+wv sd update <PATH> --monitoring-site <MONITORING_SITE_ID>
 wv sd clear <PATH> # it clears the configuration file
 ```
 
@@ -183,7 +188,7 @@ When a file is a valid image file, the system will then proceed to prepare the n
 
 Once the image file has been prepared, the following will happen:
 
-1. A folder within the workspace sessions will be created; this session folder MUST be created using the name: `YYYYMMDD_HHMMSS__DEVICE`
+1. A folder within the workspace sessions will be created using the name: `YYYYMMDD_HHMMSS__MONITORING_SITE`
 2. The image will be safely copied into the generated session folder under the `init/` folder.
 3. Once the image file has been copied, verify that it was copied correctly. If it is, the following outcomes can happen depending on what mode was selected: `drain` or `copy`
    1. When `drain` mode, the system will remove the original file from the input path once the image file has been copied and verified.
@@ -193,7 +198,7 @@ Available commands for this feature are:
 
 ```bash
 wv ingest sd <PATH> --mode <drain | copy> # automatically reads the .wv/config.yml of an SD card
-wv ingest folder <PATH> --device <DEVICE> --monitoring-site <MONITORING_SITE> --mode <drain | copy>
+wv ingest folder <PATH> --monitoring-site <MONITORING_SITE> --mode <drain | copy>
 ```
 
 Complete list of available options
@@ -228,14 +233,39 @@ wv pipeline run <SESSION_ID> --until <STAGE> # run the pipeline before reaching 
 
 ### Managed session cleanup
 
-Ingested sessions can record ordered cleanup progress in the workspace database.
-These commands require an active workspace and use the session identifier created
-by ingestion:
+Ingested sessions and their processing progress are recorded in the active
+workspace database. Recent sessions can be discovered with:
+
+```bash
+wv session list
+wv session list --device <DEVICE_ID>
+wv session list --monitoring-site <MONITORING_SITE_ID>
+wv session list --ingest-status <STATUS> --limit 20
+```
+
+Sessions are shown newest first. Filters can be combined and the default result
+limit is 20. Available ingest statuses are `in_progress`, `completed`,
+`completed_with_failures`, and `failed`.
+
+Use the session identifier from that list to inspect its operational state:
+
+```bash
+wv session status <SESSION_ID>
+```
+
+The status command reports ingest counts, ordered processing stages, current
+database inventory counts, the next eligible processing action, and filesystem
+health. Missing or invalid session paths are reported as diagnostics so failed
+or interrupted database records remain inspectable.
+
+Database-tracked cleanup and detection commands require an active workspace and
+use that session identifier:
 
 ```bash
 wv session clean corrupted <SESSION_ID>
 wv session clean overexposed-ir <SESSION_ID>
 wv session clean bursts <SESSION_ID>
+wv session detect content <SESSION_ID>
 ```
 
 The order is enforced: corrupted cleanup precedes overexposed cleanup, which

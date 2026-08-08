@@ -36,7 +36,6 @@ def _create_session_inventory(
         SessionRepository(sql_session).create(
             IngestSession(
                 id=SESSION_ID,
-                device_id="HNT001",
                 monitoring_site_id="SITE001",
                 source_path="/Volumes/SD",
                 mode="copy",

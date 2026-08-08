@@ -14,6 +14,10 @@ class SymlinkPathError(ValueError):
     """Raised when a managed filesystem path contains a symbolic link."""
 
 
+def _raise_walk_error(error: OSError) -> None:
+    raise error
+
+
 def ensure_not_symlink(path: Path) -> None:
     """Require that a path entry is not a symbolic link.
 
@@ -41,11 +45,15 @@ def ensure_tree_has_no_symlinks(root: Path) -> None:
         SymlinkPathError: If ``root`` or an entry below it is a symbolic link.
         FileNotFoundError: If ``root`` does not exist.
         NotADirectoryError: If ``root`` is not a directory.
+        OSError: If an entry in the directory tree cannot be inspected.
     """
     ensure_not_symlink(root)
     ensure_directory(root)
 
-    for directory, directory_names, file_names in root.walk(follow_symlinks=False):
+    for directory, directory_names, file_names in root.walk(
+        follow_symlinks=False,
+        on_error=_raise_walk_error,
+    ):
         for name in [*directory_names, *file_names]:
             ensure_not_symlink(directory / name)
 

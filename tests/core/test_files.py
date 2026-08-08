@@ -83,6 +83,19 @@ def test_ensure_tree_has_no_symlinks_rejects_links(tmp_path: Path, link_kind: st
         ensure_tree_has_no_symlinks(tmp_path)
 
 
+def test_ensure_tree_has_no_symlinks_propagates_walk_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    def fail_walk(path, *, follow_symlinks, on_error):
+        on_error(PermissionError("denied"))
+        return iter(())
+
+    monkeypatch.setattr(Path, "walk", fail_walk)
+
+    with pytest.raises(PermissionError, match="denied"):
+        ensure_tree_has_no_symlinks(tmp_path)
+
+
 def test_get_file_id_is_stable_for_identical_content(tmp_path: Path):
     first = tmp_path / "first.jpg"
     second = tmp_path / "second.jpg"

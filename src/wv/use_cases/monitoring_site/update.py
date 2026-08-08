@@ -43,6 +43,11 @@ def run(input_data: UpdateMonitoringSiteInput) -> UpdateMonitoringSiteResult:
     if not updates:
         raise WorkspaceError("At least one field must be provided for update.")
 
+    if input_data.latitude is not None and not -90 <= input_data.latitude <= 90:
+        raise WorkspaceError("Latitude must be between -90 and 90.")
+    if input_data.longitude is not None and not -180 <= input_data.longitude <= 180:
+        raise WorkspaceError("Longitude must be between -180 and 180.")
+
     try:
         with sql_session_scope(require_workspace_database_path()) as sql_session:
             monitoring_site = MonitoringSiteRepository(sql_session).update(

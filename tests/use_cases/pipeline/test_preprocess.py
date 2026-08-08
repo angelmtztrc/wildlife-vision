@@ -102,7 +102,7 @@ def test_run_rejects_invalid_session_folder_name(tmp_path: Path):
     session_path = tmp_path / "not-a-session"
     (session_path / "init").mkdir(parents=True)
 
-    with pytest.raises(ValueError, match="YYYYMMDD_HHMMSS__CAMERA"):
+    with pytest.raises(ValueError, match="YYYYMMDD_HHMMSS__MONITORING_SITE"):
         run(PipelinePreprocessInput(session_path=session_path))
 
 

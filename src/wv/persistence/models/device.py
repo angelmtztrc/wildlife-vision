@@ -11,4 +11,3 @@ class DeviceModel(Base):
     manufacturer: Mapped[str | None]
     serial_number: Mapped[str | None]
     notes: Mapped[str | None]
-    monitoring_site_id: Mapped[str | None]

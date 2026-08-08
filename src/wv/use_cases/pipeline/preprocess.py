@@ -33,7 +33,7 @@ from wv.use_cases.detect.content import (
 from wv.use_cases.detect.content import run as run_detect_content
 
 SESSION_NAME_PATTERN = re.compile(
-    r"(?P<timestamp>\d{8}_\d{6})__(?P<camera>[A-Za-z0-9_]+)"
+    r"(?P<timestamp>\d{8}_\d{6})__(?P<monitoring_site>[A-Za-z0-9_]+)"
 )
 
 
@@ -76,7 +76,7 @@ def _validate_session_path(session_path: Path) -> None:
     match = SESSION_NAME_PATTERN.fullmatch(session_path.name)
     if match is None:
         raise ValueError(
-            "session path must match YYYYMMDD_HHMMSS__CAMERA with a camera segment using only letters, numbers, and underscores"
+            "session path must match YYYYMMDD_HHMMSS__MONITORING_SITE with a site segment using only letters, numbers, and underscores"
         )
 
     try:

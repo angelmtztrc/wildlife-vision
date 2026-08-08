@@ -9,11 +9,10 @@ from wv.use_cases.sd._shared import SdError
 from wv.use_cases.sd.clear import SdClearInput, run as run_clear
 from wv.use_cases.sd.initialize import SdInitializeInput, run as run_initialize
 from wv.use_cases.sd.show import SdShowInput, run as run_show
-from wv.use_cases.sd.sync import SdSyncInput, run as run_sync
 from wv.use_cases.sd.update import SdUpdateInput, run as run_update
 from wv.workspace.common import WorkspaceError
 
-app = typer.Typer(help="Manage SD card metadata and deployment assignment.")
+app = typer.Typer(help="Manage SD card monitoring-site metadata.")
 
 logger = get_logger(__name__)
 
@@ -31,7 +30,6 @@ def init_sd(
             writable=True,
         ),
     ],
-    device: Annotated[str, typer.Option("--device", help="Registered device ID.")],
     monitoring_site: Annotated[
         str,
         typer.Option("--monitoring-site", help="Registered monitoring site ID."),
@@ -41,7 +39,6 @@ def init_sd(
         result = run_initialize(
             SdInitializeInput(
                 path=path,
-                device_id=device,
                 monitoring_site_id=monitoring_site,
             )
         )
@@ -50,9 +47,8 @@ def init_sd(
         raise typer.Exit(code=1) from exc
 
     logger.done(
-        "SD initialized at %s (device=%s, monitoring_site=%s)",
+        "SD initialized at %s (monitoring_site=%s)",
         display_path(result.path),
-        result.config.device_id,
         result.config.monitoring_site_id,
     )
     return None
@@ -79,44 +75,9 @@ def show_sd(
 
     typer.echo(f"path: {result.path}")
     typer.echo(f"config_path: {result.config_path}")
-    typer.echo(f"device_id: {result.config.device_id}")
     typer.echo(f"monitoring_site_id: {result.config.monitoring_site_id}")
     typer.echo(f"created_at: {result.config.created_at}")
     typer.echo(f"updated_at: {result.config.updated_at}")
-    return None
-
-
-@app.command("sync")
-def sync_sd(
-    path: Annotated[
-        Path,
-        typer.Argument(
-            help="Mounted SD card path whose config should synchronize the workspace database.",
-            exists=True,
-            file_okay=False,
-            dir_okay=True,
-            readable=True,
-        ),
-    ],
-):
-    try:
-        result = run_sync(SdSyncInput(path=path))
-    except (WorkspaceError, SdError) as exc:
-        logger.error("SD synchronization failed: %s", exc)
-        raise typer.Exit(code=1) from exc
-
-    if result.database_updated:
-        logger.done(
-            "Synchronized workspace database from SD config at %s (device=%s, monitoring_site=%s)",
-            display_path(result.path),
-            result.config.device_id,
-            result.config.monitoring_site_id,
-        )
-    else:
-        logger.done(
-            "Workspace database already matches SD config at %s",
-            display_path(result.path),
-        )
     return None
 
 
@@ -133,17 +94,15 @@ def update_sd(
             writable=True,
         ),
     ],
-    device: Annotated[str | None, typer.Option("--device", help="Registered device ID.")] = None,
     monitoring_site: Annotated[
-        str | None,
+        str,
         typer.Option("--monitoring-site", help="Registered monitoring site ID."),
-    ] = None,
+    ],
 ):
     try:
         result = run_update(
             SdUpdateInput(
                 path=path,
-                device_id=device,
                 monitoring_site_id=monitoring_site,
             )
         )
@@ -152,9 +111,8 @@ def update_sd(
         raise typer.Exit(code=1) from exc
 
     logger.done(
-        "SD updated at %s (device=%s, monitoring_site=%s)",
+        "SD updated at %s (monitoring_site=%s)",
         display_path(result.path),
-        result.config.device_id,
         result.config.monitoring_site_id,
     )
     return None
@@ -181,8 +139,7 @@ def clear_sd(
         raise typer.Exit(code=1) from exc
 
     logger.done(
-        "SD cleared at %s (device=%s)",
+        "SD cleared at %s",
         display_path(result.path),
-        result.cleared_device_id,
     )
     return None

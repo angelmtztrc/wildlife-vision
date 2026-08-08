@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 from wv.cli.commands import ingest
-from wv.use_cases.device.list import ListDevicesResult
 from wv.use_cases.ingest.ingest import (
     ExplicitIngestIdentity,
     IngestResult,
@@ -108,8 +107,6 @@ def test_ingest_folder_forwards_option_identity(
         [
             "folder",
             str(source),
-            "--device",
-            "HNT001",
             "--monitoring-site",
             "SITE001",
             "--mode",
@@ -120,7 +117,6 @@ def test_ingest_folder_forwards_option_identity(
 
     assert result.exit_code == 0
     assert isinstance(captured_input.identity, ExplicitIngestIdentity)
-    assert captured_input.identity.device_id == "HNT001"
     assert captured_input.identity.monitoring_site_id == "SITE001"
     assert captured_input.mode == "copy"
     assert captured_input.recursive is True
@@ -183,20 +179,6 @@ def test_ingest_sd_forwards_recursive_option(
     assert captured_input.recursive is True
 
 
-def test_complete_device_matches_registered_ids(monkeypatch: pytest.MonkeyPatch):
-    class Device:
-        def __init__(self, device_id: str):
-            self.id = device_id
-
-    monkeypatch.setattr(
-        ingest,
-        "run_list_devices",
-        lambda input_data: ListDevicesResult(items=[Device("HNT001"), Device("CAM001")]),
-    )
-
-    assert ingest._complete_device("HNT") == ["HNT001"]
-
-
 def test_complete_monitoring_site_matches_registered_ids(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -221,8 +203,6 @@ def test_completion_returns_no_suggestions_without_workspace(
     def raise_workspace_error(input_data):
         raise WorkspaceError("No workspace configured")
 
-    monkeypatch.setattr(ingest, "run_list_devices", raise_workspace_error)
     monkeypatch.setattr(ingest, "run_list_monitoring_sites", raise_workspace_error)
 
-    assert ingest._complete_device("") == []
     assert ingest._complete_monitoring_site("") == []

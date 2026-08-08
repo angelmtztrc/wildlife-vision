@@ -28,7 +28,6 @@ class SdConfigDurabilityError(SdConfigError):
 class SdConfigRecord:
     """Configuration stored on an initialized SD card."""
 
-    device_id: str
     monitoring_site_id: str
     created_at: str
     updated_at: str
@@ -99,7 +98,7 @@ def load_sd_config(config_path: Path) -> SdConfigRecord:
 
     missing_keys = [
         key
-        for key in ("device_id", "monitoring_site_id", "created_at", "updated_at")
+        for key in ("monitoring_site_id", "created_at", "updated_at")
         if not isinstance(value.get(key), str) or not value.get(key)
     ]
     if missing_keys:
@@ -108,7 +107,6 @@ def load_sd_config(config_path: Path) -> SdConfigRecord:
         )
 
     return SdConfigRecord(
-        device_id=value["device_id"],
         monitoring_site_id=value["monitoring_site_id"],
         created_at=value["created_at"],
         updated_at=value["updated_at"],
@@ -163,7 +161,6 @@ def write_sd_config(config_path: Path, config: SdConfigRecord) -> Path:
         with temporary_path.open("w", encoding="utf-8") as file_handle:
             yaml.safe_dump(
                 {
-                    "device_id": config.device_id,
                     "monitoring_site_id": config.monitoring_site_id,
                     "created_at": config.created_at,
                     "updated_at": config.updated_at,

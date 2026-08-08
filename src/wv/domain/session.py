@@ -1,10 +1,16 @@
 from dataclasses import dataclass
 
+INGEST_STATUSES = (
+    "in_progress",
+    "completed",
+    "completed_with_failures",
+    "failed",
+)
+
 
 @dataclass(frozen=True)
 class IngestSession:
     id: str
-    device_id: str
     monitoring_site_id: str
     source_path: str
     mode: str
@@ -33,6 +39,12 @@ class SessionImage:
     content_size_bytes: int
     captured_at: str
     ingested_at: str
+
+
+@dataclass(frozen=True)
+class SessionImageStateCount:
+    state: str
+    count: int
 
 
 @dataclass(frozen=True)

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session as SqlSession
 
 from wv.core.files import copy_file_preserving_metadata, get_file_id
 from wv.persistence.common import RecordNotFoundError
-from wv.persistence.repositories import DeviceRepository, MonitoringSiteRepository
+from wv.persistence.repositories import MonitoringSiteRepository
 
 
 class IngestError(ValueError):
@@ -16,21 +16,18 @@ class IngestError(ValueError):
 
 @dataclass(frozen=True)
 class ResolvedIngestIdentity:
-    device_id: str
     monitoring_site_id: str
 
 
 def validate_explicit_identity(
-    sql_session: SqlSession, device_id: str, monitoring_site_id: str
+    sql_session: SqlSession, monitoring_site_id: str
 ) -> ResolvedIngestIdentity:
     try:
-        DeviceRepository(sql_session).get(device_id)
         MonitoringSiteRepository(sql_session).get(monitoring_site_id)
     except RecordNotFoundError as exc:
         raise IngestError(str(exc)) from exc
 
     return ResolvedIngestIdentity(
-        device_id=device_id,
         monitoring_site_id=monitoring_site_id,
     )
 
@@ -38,32 +35,24 @@ def validate_explicit_identity(
 def validate_sd_identity(
     sql_session: SqlSession,
     source: Path,
-    device_id: str,
     monitoring_site_id: str,
 ) -> ResolvedIngestIdentity:
     try:
-        device = DeviceRepository(sql_session).get(device_id)
         MonitoringSiteRepository(sql_session).get(monitoring_site_id)
     except RecordNotFoundError as exc:
         raise IngestError(str(exc)) from exc
 
-    if device.monitoring_site_id != monitoring_site_id:
-        raise IngestError(
-            "SD card deployment does not match the workspace database. "
-            f"Run 'wv sd sync {source.resolve()}' to synchronize the workspace from this SD card."
-        )
     return ResolvedIngestIdentity(
-        device_id=device_id,
         monitoring_site_id=monitoring_site_id,
     )
 
 
-def get_session_path(workspace_path: Path, device_id: str, dry_run: bool) -> Path:
+def get_session_path(workspace_path: Path, monitoring_site_id: str, dry_run: bool) -> Path:
     timestamp = datetime.now()
 
     while True:
         session_path = workspace_path / "sessions" / (
-            f"{timestamp.strftime('%Y%m%d_%H%M%S')}__{device_id}"
+            f"{timestamp.strftime('%Y%m%d_%H%M%S')}__{monitoring_site_id}"
         )
         if dry_run:
             if not session_path.exists():

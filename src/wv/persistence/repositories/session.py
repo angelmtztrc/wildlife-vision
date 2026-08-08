@@ -1,10 +1,11 @@
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SqlSession
 
 from wv.domain.session import IngestSession
-from wv.persistence.common import RecordAlreadyExistsError, RecordNotFoundError
+from wv.persistence.common import PersistenceError, RecordAlreadyExistsError, RecordNotFoundError
 from wv.persistence.models.session import SessionModel
+from wv.persistence.models.monitoring_site import MonitoringSiteModel
 
 
 class SessionRepository:
@@ -14,7 +15,6 @@ class SessionRepository:
     def create(self, session: IngestSession) -> IngestSession:
         model = SessionModel(
             id=session.id,
-            device_id=session.device_id,
             monitoring_site_id=session.monitoring_site_id,
             source_path=session.source_path,
             mode=session.mode,
@@ -36,6 +36,8 @@ class SessionRepository:
             self.sql_session.flush()
         except IntegrityError as exc:
             self.sql_session.rollback()
+            if "UNIQUE constraint failed: sessions.id" not in str(exc.orig):
+                raise PersistenceError(str(exc.orig)) from exc
             raise RecordAlreadyExistsError(f"Session already exists: {session.id}") from exc
 
         return _model_to_session(model)
@@ -46,10 +48,39 @@ class SessionRepository:
             raise RecordNotFoundError(f"Session not found: {session_id}")
         return _model_to_session(model)
 
-    def list(self) -> list[IngestSession]:
-        models = self.sql_session.scalars(
-            select(SessionModel).order_by(SessionModel.started_at, SessionModel.id)
-        ).all()
+    def list(
+        self,
+        *,
+        monitoring_area_id: str | None = None,
+        monitoring_site_id: str | None = None,
+        ingest_status: str | None = None,
+        limit: int | None = None,
+        newest_first: bool = False,
+    ) -> list[IngestSession]:
+        query = select(SessionModel)
+        if monitoring_area_id is not None:
+            query = query.join(
+                MonitoringSiteModel,
+                SessionModel.monitoring_site_id == MonitoringSiteModel.id,
+            ).where(MonitoringSiteModel.monitoring_area_id == monitoring_area_id)
+        if monitoring_site_id is not None:
+            query = query.where(
+                SessionModel.monitoring_site_id == monitoring_site_id
+            )
+        if ingest_status is not None:
+            query = query.where(SessionModel.ingest_status == ingest_status)
+
+        if newest_first:
+            query = query.order_by(
+                desc(SessionModel.started_at), desc(SessionModel.id)
+            )
+        else:
+            query = query.order_by(SessionModel.started_at, SessionModel.id)
+
+        if limit is not None:
+            query = query.limit(limit)
+
+        models = self.sql_session.scalars(query).all()
         return [_model_to_session(model) for model in models]
 
     def update(
@@ -69,7 +100,6 @@ class SessionRepository:
 def _model_to_session(model: SessionModel) -> IngestSession:
     return IngestSession(
         id=model.id,
-        device_id=model.device_id,
         monitoring_site_id=model.monitoring_site_id,
         source_path=model.source_path,
         mode=model.mode,
