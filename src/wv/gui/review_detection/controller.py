@@ -1,14 +1,13 @@
 from dataclasses import dataclass
 from pathlib import Path
-
-from wv.gui.review.state import ReviewSessionState, StagedDecision
-from wv.use_cases.review.apply import (
-    ApplyReviewDecision,
-    ApplyReviewInput,
-    ApplyReviewResult,
-    run as apply_review,
+from wv.gui.review_detection.state import ReviewSessionState, StagedDecision
+from wv.use_cases.session.review_detection_apply import (
+    ApplyReviewDetectionDecision,
+    ApplyReviewDetectionInput,
+    ApplyReviewDetectionResult,
+    run as apply_review_detection,
 )
-from wv.use_cases.review.load import ReviewItem
+from wv.use_cases.session.review_detection_load import ReviewDetectionItem
 
 
 @dataclass(frozen=True)
@@ -27,7 +26,7 @@ class ReviewController:
     def has_items(self) -> bool:
         return bool(self.state.items)
 
-    def current_item(self) -> ReviewItem | None:
+    def current_item(self) -> ReviewDetectionItem | None:
         if not self.state.items:
             return None
 
@@ -39,25 +38,25 @@ class ReviewController:
             return (0, 0)
         return (self.state.current_index + 1, len(self.state.items))
 
-    def staged_decision_for(self, file_path: Path) -> StagedDecision | None:
-        return self.state.decisions_by_path.get(file_path)
+    def staged_decision_for(self, image_id: str) -> StagedDecision | None:
+        return self.state.decisions_by_image_id.get(image_id)
 
     def staged_label_for_current(self) -> str | None:
         item = self.current_item()
         if item is None:
             return None
-        decision = self.staged_decision_for(item.file_path)
+        decision = self.staged_decision_for(item.image_id)
         return None if decision is None else decision.target_label
 
     def has_unsaved_changes(self) -> bool:
-        return bool(self.state.decisions_by_path)
+        return bool(self.state.decisions_by_image_id)
 
     def assign_label(self, target_label: str) -> None:
         item = self.current_item()
         if item is None:
             return
 
-        self.state.decisions_by_path[item.file_path] = StagedDecision(target_label=target_label)
+        self.state.decisions_by_image_id[item.image_id] = StagedDecision(target_label=target_label)
         self.next_image()
 
     def skip_current(self) -> None:
@@ -87,7 +86,7 @@ class ReviewController:
         relabel_reviews = 0
 
         for item in self.state.items:
-            decision = self.state.decisions_by_path.get(item.file_path)
+            decision = self.state.decisions_by_image_id.get(item.image_id)
             if decision is None:
                 continue
             if decision.target_label == item.original_label:
@@ -96,44 +95,44 @@ class ReviewController:
                 relabel_reviews += 1
 
         return ReviewSummary(
-            staged_decisions=len(self.state.decisions_by_path),
+            staged_decisions=len(self.state.decisions_by_image_id),
             same_label_reviews=same_label_reviews,
             relabel_reviews=relabel_reviews,
             move_count=relabel_reviews,
             metadata_only_count=same_label_reviews,
         )
 
-    def commit(self) -> ApplyReviewResult:
+    def commit(self) -> ApplyReviewDetectionResult:
         decisions = [
-            ApplyReviewDecision(
-                file_path=item.file_path,
+            ApplyReviewDetectionDecision(
+                image_id=item.image_id,
                 source_label=item.original_label,
                 target_label=decision.target_label,
             )
             for item in self.state.items
-            for decision in [self.state.decisions_by_path.get(item.file_path)]
+            for decision in [self.state.decisions_by_image_id.get(item.image_id)]
             if decision is not None
         ]
 
-        result = apply_review(
-            ApplyReviewInput(session_path=self.state.session_path, decisions=decisions)
+        result = apply_review_detection(
+            ApplyReviewDetectionInput(session_id=self.state.session_id, decisions=decisions)
         )
 
         if not result.item_results:
             return result
 
-        successful_paths: dict[Path, Path] = {}
+        successful_paths: dict[str, Path] = {}
         for item_result in result.item_results:
             if not item_result.success:
                 continue
-            successful_paths[item_result.original_path] = item_result.final_path
+            successful_paths[item_result.image_id] = item_result.final_path
 
         for item in self.state.items:
-            new_path = successful_paths.get(item.file_path)
+            new_path = successful_paths.get(item.image_id)
             if new_path is None:
                 continue
 
-            decision = self.state.decisions_by_path.pop(item.file_path, None)
+            decision = self.state.decisions_by_image_id.pop(item.image_id, None)
             item.file_path = new_path
             if decision is not None:
                 item.original_label = decision.target_label
@@ -142,10 +141,12 @@ class ReviewController:
         return result
 
 
-def build_controller(session_path: Path, source_label: str, items: list[ReviewItem]) -> ReviewController:
+def build_controller(
+    session_id: str, source_label: str, items: list[ReviewDetectionItem]
+) -> ReviewController:
     return ReviewController(
         ReviewSessionState(
-            session_path=session_path,
+            session_id=session_id,
             source_label=source_label,
             items=items,
         )

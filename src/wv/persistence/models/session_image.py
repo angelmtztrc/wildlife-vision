@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, Index, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from wv.persistence.base import Base
@@ -31,3 +31,6 @@ class SessionImageModel(Base):
     content_size_bytes: Mapped[int]
     captured_at: Mapped[str]
     ingested_at: Mapped[str]
+    detection_reviewed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_favorite: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    favorite_reviewed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

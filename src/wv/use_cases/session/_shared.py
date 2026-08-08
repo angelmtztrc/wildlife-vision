@@ -115,6 +115,18 @@ def resolve_managed_session(session_id: str) -> ManagedSession:
     )
 
 
+def require_completed_detection(managed_session: ManagedSession) -> None:
+    """Require content detection to have completed for a managed session."""
+    with sql_session_scope(managed_session.database_path) as sql_session:
+        process = SessionProcessRepository(sql_session).get_optional(
+            managed_session.session.id, "detect_content"
+        )
+    if process is None or process.status not in SUCCESSFUL_PROCESS_STATUSES:
+        raise SessionProcessError(
+            "Detection must complete before reviewing or exporting session images."
+        )
+
+
 def validate_process_attempt(
     repository: SessionProcessRepository,
     session_id: str,

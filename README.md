@@ -271,25 +271,26 @@ uv run wv session detect content <SESSION_ID>
 
 ## 8. Review Detection Results
 
-The review GUIs operate on a session directory after detection. Use the session
-path shown by `session status`:
+The review GUIs operate on a managed session after content detection completes:
 
 ```bash
-uv run wv gui review <SESSION_PATH> --detection animal --pending-only
-uv run wv gui research-grade <SESSION_PATH> --pending-only
+uv run wv gui review-detection <SESSION_ID> --detection animal --pending-only
+uv run wv gui favorites <SESSION_ID> --pending-only
 ```
 
-`gui review` updates detection buckets and EXIF review metadata. `gui
-research-grade` marks animal images with the `Research_Grade` EXIF value.
+`gui review-detection` records the verified detection in the session database
+and moves a relabeled image into its corresponding detection directory. `gui
+favorites` records a favorite decision for animal images in the session database
+without modifying or moving the image files.
 
 ## 9. Export Curated Images
 
-Export animal images marked research grade:
+Export favorited animal images:
 
 ```bash
-uv run wv export research-grade <SESSION_PATH>
-uv run wv export research-grade <SESSION_PATH> --output ~/Exports/cascabel
-uv run wv export research-grade <SESSION_PATH> --dry-run
+uv run wv export favorites <SESSION_ID>
+uv run wv export favorites <SESSION_ID> --output ~/Exports/cascabel
+uv run wv export favorites <SESSION_ID> --dry-run
 ```
 
 ## Standalone Filesystem Commands
@@ -339,8 +340,8 @@ wv sd {init,show,update,clear}
 wv ingest {sd,folder}
 wv session {list,status,clean,detect}
 wv pipeline run
-wv gui {review,research-grade}
-wv export research-grade
+wv gui {review-detection,favorites}
+wv export favorites
 wv clean {corrupted,overexposed-ir,bursts}
 wv detect content
 wv setup

@@ -1,27 +1,17 @@
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from wv.gui.research_grade.app import launch_research_grade_app
-from wv.gui.review.app import launch_review_app
+from wv.gui.favorites.app import launch_favorites_app
+from wv.gui.review_detection.app import launch_review_detection_app
 from wv.core.session import DETECTION_LABELS, normalize_detection_label
 
 app = typer.Typer(help="Launch interactive GUI review tools.")
 
 
-@app.command("review")
-def review(
-    session_path: Annotated[
-        Path,
-        typer.Argument(
-            help="Session/output directory containing detection/<label> folders.",
-            exists=True,
-            file_okay=False,
-            dir_okay=True,
-            readable=True,
-        ),
-    ],
+@app.command("review-detection")
+def review_detection(
+    session_id: Annotated[str, typer.Argument(help="Managed session identifier.")],
     detection: Annotated[
         str,
         typer.Option(
@@ -34,7 +24,7 @@ def review(
         bool,
         typer.Option(
             "--pending-only",
-            help="Only load images that do not already have Reviewed=true in EXIF metadata.",
+            help="Only load images that have not been reviewed in the database.",
         ),
     ] = False,
 ):
@@ -46,8 +36,8 @@ def review(
             f"Unknown detection label '{detection}'. Expected one of: {', '.join(DETECTION_LABELS)}."
         ) from exc
 
-    launch_review_app(
-        session_path=session_path,
+    launch_review_detection_app(
+        session_id=session_id,
         detection_label=normalized_detection,
         pending_only=pending_only,
     )
@@ -55,29 +45,20 @@ def review(
     return None
 
 
-@app.command("research-grade")
-def research_grade(
-    session_path: Annotated[
-        Path,
-        typer.Argument(
-            help="Session/output directory containing detection/animal.",
-            exists=True,
-            file_okay=False,
-            dir_okay=True,
-            readable=True,
-        ),
-    ],
+@app.command("favorites")
+def favorites(
+    session_id: Annotated[str, typer.Argument(help="Managed session identifier.")],
     pending_only: Annotated[
         bool,
         typer.Option(
             "--pending-only",
-            help="Only load images that do not already have a Research_Grade EXIF value.",
+            help="Only load animal images that have not had their favorite state reviewed.",
         ),
     ] = False,
 ):
-    """Launch the interactive research-grade reviewer for animal detections."""
-    launch_research_grade_app(
-        session_path=session_path,
+    """Launch the interactive favorites reviewer for animal detections."""
+    launch_favorites_app(
+        session_id=session_id,
         pending_only=pending_only,
     )
 

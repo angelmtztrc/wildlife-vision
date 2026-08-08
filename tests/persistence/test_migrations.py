@@ -63,6 +63,19 @@ def test_initialize_database_records_applied_migration(tmp_path: Path):
     assert _get_migration_version(database_path) == get_database_head_revision()
 
 
+def test_initialize_database_adds_session_image_review_columns(tmp_path: Path):
+    database_path = tmp_path / ".wv" / "database.sqlite"
+    initialize_database(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(session_images)").fetchall()
+        }
+
+    assert {"detection_reviewed", "is_favorite", "favorite_reviewed"} <= columns
+
+
 def test_initialize_database_is_idempotent(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
 

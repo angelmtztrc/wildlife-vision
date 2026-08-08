@@ -6,10 +6,13 @@ from PIL import Image, ImageTk
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
-from wv.gui.review.bindings import register_bindings
-from wv.gui.review.controller import ReviewController, build_controller
-from wv.use_cases.review.apply import ApplyReviewResult
-from wv.use_cases.review.load import LoadReviewSessionInput, run as load_review_session
+from wv.gui.review_detection.bindings import register_bindings
+from wv.gui.review_detection.controller import ReviewController, build_controller
+from wv.use_cases.session.review_detection_apply import ApplyReviewDetectionResult
+from wv.use_cases.session.review_detection_load import (
+    LoadReviewDetectionInput,
+    run as load_review_detection,
+)
 
 logger = get_logger(__name__)
 
@@ -18,7 +21,7 @@ class ReviewApp:
     def __init__(self, controller: ReviewController):
         self.controller = controller
         self.root = tk.Tk()
-        self.root.title("Wildlife Vision Review")
+        self.root.title("Wildlife Vision Detection Review")
         self.root.geometry("1280x900")
         self.root.minsize(800, 600)
 
@@ -155,7 +158,7 @@ class ReviewApp:
             f"Metadata-only updates: {summary.metadata_only_count}"
         )
 
-    def _format_commit_result(self, result: ApplyReviewResult) -> str:
+    def _format_commit_result(self, result: ApplyReviewDetectionResult) -> str:
         failures = [
             f"- {item_result.original_path.name}: {item_result.failure}"
             for item_result in result.item_results
@@ -165,7 +168,6 @@ class ReviewApp:
             f"Reviewed: {result.files_reviewed}",
             f"Relabeled: {result.files_reassigned}",
             f"Moved: {result.files_moved}",
-            f"Replaced: {result.files_replaced}",
             f"Failed: {result.files_failed}",
         ]
         if failures:
@@ -205,10 +207,10 @@ class ReviewApp:
         self.root.mainloop()
 
 
-def launch_review_app(session_path: Path, detection_label: str, pending_only: bool) -> None:
-    result = load_review_session(
-        LoadReviewSessionInput(
-            session_path=session_path,
+def launch_review_detection_app(session_id: str, detection_label: str, pending_only: bool) -> None:
+    result = load_review_detection(
+        LoadReviewDetectionInput(
+            session_id=session_id,
             detection_label=detection_label,
             pending_only=pending_only,
         )
@@ -229,7 +231,7 @@ def launch_review_app(session_path: Path, detection_label: str, pending_only: bo
     )
     app = ReviewApp(
         controller=build_controller(
-            session_path=session_path,
+            session_id=session_id,
             source_label=detection_label,
             items=result.items,
         )

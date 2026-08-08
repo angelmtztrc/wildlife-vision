@@ -39,6 +39,9 @@ class SessionImage:
     content_size_bytes: int
     captured_at: str
     ingested_at: str
+    detection_reviewed: bool = False
+    is_favorite: bool = False
+    favorite_reviewed: bool = False
 
 
 @dataclass(frozen=True)

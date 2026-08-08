@@ -42,6 +42,35 @@ class SessionImageRepository:
         ).all()
         return [_model_to_session_image(model) for model in models]
 
+    def list_for_session_state(
+        self,
+        session_id: str,
+        state: str,
+        *,
+        detection_reviewed: bool | None = None,
+        favorite_reviewed: bool | None = None,
+        favorites_only: bool = False,
+    ) -> list[SessionImage]:
+        statement = select(SessionImageModel).where(
+            SessionImageModel.session_id == session_id,
+            SessionImageModel.state == state,
+        )
+        if detection_reviewed is not None:
+            statement = statement.where(
+                SessionImageModel.detection_reviewed == detection_reviewed
+            )
+        if favorite_reviewed is not None:
+            statement = statement.where(
+                SessionImageModel.favorite_reviewed == favorite_reviewed
+            )
+        if favorites_only:
+            statement = statement.where(SessionImageModel.is_favorite.is_(True))
+
+        models = self.sql_session.scalars(
+            statement.order_by(SessionImageModel.current_relative_path, SessionImageModel.id)
+        ).all()
+        return [_model_to_session_image(model) for model in models]
+
     def count_by_state_for_session(
         self, session_id: str
     ) -> list[SessionImageStateCount]:
@@ -92,6 +121,37 @@ class SessionImageRepository:
         self.sql_session.flush()
         return _model_to_session_image(model)
 
+    def mark_detection_reviewed(self, image_id: str) -> SessionImage:
+        model = self._get_model(image_id)
+        model.detection_reviewed = True
+        self.sql_session.flush()
+        return _model_to_session_image(model)
+
+    def relocate_reviewed(
+        self, image_id: str, current_relative_path: str, state: str
+    ) -> SessionImage:
+        model = self._get_model(image_id)
+        model.current_relative_path = current_relative_path
+        model.state = state
+        model.detection_reviewed = True
+        model.is_favorite = False
+        model.favorite_reviewed = False
+        self.sql_session.flush()
+        return _model_to_session_image(model)
+
+    def set_favorite(self, image_id: str, is_favorite: bool) -> SessionImage:
+        model = self._get_model(image_id)
+        model.is_favorite = is_favorite
+        model.favorite_reviewed = True
+        self.sql_session.flush()
+        return _model_to_session_image(model)
+
+    def _get_model(self, image_id: str) -> SessionImageModel:
+        model = self.sql_session.get(SessionImageModel, image_id)
+        if model is None:
+            raise RecordNotFoundError(f"Session image not found: {image_id}")
+        return model
+
 
 def _model_to_session_image(model: SessionImageModel) -> SessionImage:
     return SessionImage(
@@ -105,4 +165,7 @@ def _model_to_session_image(model: SessionImageModel) -> SessionImage:
         content_size_bytes=model.content_size_bytes,
         captured_at=model.captured_at,
         ingested_at=model.ingested_at,
+        detection_reviewed=model.detection_reviewed,
+        is_favorite=model.is_favorite,
+        favorite_reviewed=model.favorite_reviewed,
     )

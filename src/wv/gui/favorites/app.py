@@ -6,22 +6,22 @@ from PIL import Image, ImageTk
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
-from wv.gui.research_grade.bindings import register_bindings
-from wv.gui.research_grade.controller import ResearchGradeController, build_controller
-from wv.use_cases.research_grade.apply import ApplyResearchGradeResult
-from wv.use_cases.research_grade.load import (
-    LoadResearchGradeSessionInput,
-    run as load_research_grade_session,
+from wv.gui.favorites.bindings import register_bindings
+from wv.gui.favorites.controller import FavoriteController, build_controller
+from wv.use_cases.session.favorites_apply import ApplyFavoritesResult
+from wv.use_cases.session.favorites_load import (
+    LoadFavoritesInput,
+    run as load_favorites,
 )
 
 logger = get_logger(__name__)
 
 
-class ResearchGradeApp:
-    def __init__(self, controller: ResearchGradeController):
+class FavoritesApp:
+    def __init__(self, controller: FavoriteController):
         self.controller = controller
         self.root = tk.Tk()
-        self.root.title("Wildlife Vision Research Grade")
+        self.root.title("Wildlife Vision Favorites")
         self.root.geometry("1280x900")
         self.root.minsize(800, 600)
 
@@ -76,10 +76,10 @@ class ResearchGradeApp:
         footer = tk.Frame(self.root, padx=12, pady=12)
         footer.grid(row=2, column=0, sticky="ew")
 
-        tk.Button(footer, text="Flag", command=self._flag_and_refresh).pack(
+        tk.Button(footer, text="Favorite", command=self._favorite_and_refresh).pack(
             side="left", padx=(0, 6)
         )
-        tk.Button(footer, text="Unflag", command=self._unflag_and_refresh).pack(
+        tk.Button(footer, text="Unfavorite", command=self._unfavorite_and_refresh).pack(
             side="left", padx=(0, 6)
         )
         tk.Button(footer, text="Prev", command=self._previous_and_refresh).pack(
@@ -105,12 +105,12 @@ class ResearchGradeApp:
             side="right"
         )
 
-    def _flag_and_refresh(self) -> None:
-        self.controller.flag_current()
+    def _favorite_and_refresh(self) -> None:
+        self.controller.favorite_current()
         self.refresh()
 
-    def _unflag_and_refresh(self) -> None:
-        self.controller.unflag_current()
+    def _unfavorite_and_refresh(self) -> None:
+        self.controller.unfavorite_current()
         self.refresh()
 
     def _previous_and_refresh(self) -> None:
@@ -167,11 +167,11 @@ class ResearchGradeApp:
             return
 
         current, total = self.controller.current_position()
-        staged_value = self.controller.staged_research_grade_for_current()
+        staged_value = self.controller.staged_favorite_for_current()
         self.header_var.set(f"{current}/{total}  {item.file_path.name}")
         self.detail_var.set(
-            f"Research Grade: {self._format_grade(item.research_grade)}    "
-            f"Staged: {self._format_grade(staged_value)}"
+            f"Favorite: {self._format_favorite(item.is_favorite)}    "
+            f"Staged: {self._format_favorite(staged_value)}"
         )
         self.zoom_var.set(f"Zoom {int(self.controller.state.zoom_scale * 100)}%")
         self._render_image(item.file_path)
@@ -180,11 +180,11 @@ class ResearchGradeApp:
         summary = self.controller.summary()
         return (
             f"Staged decisions: {summary.staged_decisions}\n"
-            f"Flagged: {summary.flagged_count}\n"
-            f"Unflagged: {summary.unflagged_count}"
+            f"Favorited: {summary.favorited_count}\n"
+            f"Unfavorited: {summary.unfavorited_count}"
         )
 
-    def _format_commit_result(self, result: ApplyResearchGradeResult) -> str:
+    def _format_commit_result(self, result: ApplyFavoritesResult) -> str:
         failures = [
             f"- {item_result.file_path.name}: {item_result.failure}"
             for item_result in result.item_results
@@ -192,8 +192,8 @@ class ResearchGradeApp:
         ]
         lines = [
             f"Updated: {result.files_updated}",
-            f"Flagged: {result.files_flagged}",
-            f"Unflagged: {result.files_unflagged}",
+            f"Favorited: {result.files_favorited}",
+            f"Unfavorited: {result.files_unfavorited}",
             f"Failed: {result.files_failed}",
         ]
         if failures:
@@ -220,7 +220,7 @@ class ResearchGradeApp:
     def handle_close(self) -> None:
         if self.controller.has_unsaved_changes() and not messagebox.askyesno(
             "Discard changes",
-            "You have unsaved staged research-grade decisions. Discard them and exit?",
+            "You have unsaved staged favorite decisions. Discard them and exit?",
         ):
             return
 
@@ -230,36 +230,36 @@ class ResearchGradeApp:
         self.root.mainloop()
 
     @staticmethod
-    def _format_grade(value: bool | None) -> str:
+    def _format_favorite(value: bool | None) -> str:
         if value is True:
-            return "flagged"
+            return "favorited"
         if value is False:
-            return "unflagged"
+            return "not favorited"
         return "unset"
 
 
-def launch_research_grade_app(session_path: Path, pending_only: bool) -> None:
-    result = load_research_grade_session(
-        LoadResearchGradeSessionInput(
-            session_path=session_path,
+def launch_favorites_app(session_id: str, pending_only: bool) -> None:
+    result = load_favorites(
+        LoadFavoritesInput(
+            session_id=session_id,
             pending_only=pending_only,
         )
     )
 
     if not result.items:
         logger.info(
-            "No research-grade images found in %s",
+            "No favorite-review images found in %s",
             display_path(result.source_directory),
         )
         return
 
     logger.info(
-        "Launching research-grade GUI for %s with %s images%s",
+        "Launching favorites GUI for %s with %s images%s",
         display_path(result.source_directory),
         len(result.items),
         " (pending only)" if pending_only else "",
     )
-    app = ResearchGradeApp(
-        controller=build_controller(session_path=session_path, items=result.items)
+    app = FavoritesApp(
+        controller=build_controller(session_id=session_id, items=result.items)
     )
     app.run()
