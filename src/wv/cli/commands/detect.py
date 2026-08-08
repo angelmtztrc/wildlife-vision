@@ -68,7 +68,7 @@ def detect_content(
         typer.Option(
             "--batch-size",
             min=1,
-            help="Number of images to send to the detector per inference batch.",
+            help="Number of images to send to the detector per inference batch (default: 4).",
         ),
     ] = DEFAULT_BATCH_SIZE,
     dry_run: Annotated[

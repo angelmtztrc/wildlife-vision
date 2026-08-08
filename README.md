@@ -257,7 +257,7 @@ uv run wv pipeline run <SESSION_ID> \
   --model MDV5A \
   --confidence-threshold 0.7 \
   --ambiguity-gap 0.2 \
-  --batch-size 16
+  --batch-size 4
 ```
 
 Individual managed stages remain available when a targeted operation is useful:

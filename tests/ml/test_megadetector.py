@@ -40,6 +40,50 @@ class FakeBatchDetector:
         return self.per_image_results[image_id]
 
 
+class FakeCompactPtDetector:
+    def __init__(self, batch_results: dict[str, object]):
+        self.batch_results = batch_results
+        self.batch_inputs: list[dict[str, object]] = []
+
+    def preprocess_image(self, image, image_id, image_size):
+        assert image_size is None
+        return {
+            "file": image_id,
+            "img_processed": object(),
+            "img_original": type("Original", (), {"shape": (4000, 3000, 3)})(),
+            "img_original_pil": image,
+            "scaling_shape": (4000, 3000, 3),
+            "letterbox_pad": (0, 0),
+        }
+
+    def generate_detections_one_batch(self, images, image_id, detection_threshold):
+        import torch
+
+        assert torch.is_inference_mode_enabled()
+        assert image_id is None
+        self.batch_inputs = images
+        return [self.batch_results[image["file"]] for image in images]
+
+
+FakeCompactPtDetector.__module__ = "megadetector.detection.pytorch_detector"
+
+
+class FakeUnsupportedCompactPtDetector:
+    def __init__(self, batch_results: dict[str, object]):
+        self.batch_results = batch_results
+        self.generic_image_ids: list[str] | None = None
+
+    def preprocess_image(self, image, image_id, image_size):
+        return {}
+
+    def generate_detections_one_batch(self, images, image_id, detection_threshold):
+        self.generic_image_ids = image_id
+        return [self.batch_results[file_path] for file_path in image_id]
+
+
+FakeUnsupportedCompactPtDetector.__module__ = "megadetector.detection.pytorch_detector"
+
+
 def _raw_result(file_path: Path, detections: list[dict[str, object]]) -> dict[str, object]:
     return {
         "file": str(file_path),
@@ -126,6 +170,43 @@ def test_evaluate_images_normalizes_and_preserves_detections_for_routing(
     assert results[1].detections == [
         megadetector.MlDetection(label="other", confidence=0.83)
     ]
+
+
+def test_evaluate_images_compacts_pytorch_preprocessing_before_batch_inference(
+    make_image,
+    tmp_path: Path,
+    monkeypatch,
+):
+    image_path = make_image(tmp_path / "image.jpg")
+    detector = FakeCompactPtDetector(
+        {str(image_path): _raw_result(image_path, [{"category": "1", "conf": 0.91}])}
+    )
+    monkeypatch.setattr(megadetector, "_load_detector", lambda model, force_download=False: detector)
+
+    results = megadetector.evaluate_images("MDV5A", [image_path], 0.8, 1)
+
+    assert results[0].detections == [megadetector.MlDetection("animal", 0.91)]
+    assert len(detector.batch_inputs) == 1
+    compact_input = detector.batch_inputs[0]
+    assert "img_original_pil" not in compact_input
+    assert compact_input["img_original"].shape == (4000, 3000, 3)
+
+
+def test_evaluate_images_falls_back_when_pytorch_preprocessing_schema_is_unknown(
+    make_image,
+    tmp_path: Path,
+    monkeypatch,
+):
+    image_path = make_image(tmp_path / "image.jpg")
+    detector = FakeUnsupportedCompactPtDetector(
+        {str(image_path): _raw_result(image_path, [])}
+    )
+    monkeypatch.setattr(megadetector, "_load_detector", lambda model, force_download=False: detector)
+
+    results = megadetector.evaluate_images("MDV5A", [image_path], 0.8, 1)
+
+    assert results[0].failure is None
+    assert detector.generic_image_ids == [str(image_path)]
 
 
 def test_evaluate_images_falls_back_to_per_image_inference_when_batch_fails(

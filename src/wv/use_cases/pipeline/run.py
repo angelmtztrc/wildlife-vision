@@ -149,7 +149,18 @@ def _run_stage(input_data: PipelineRunInput, process_name: str, stage: SessionSt
                 model=str(_value(provided=input_data.model, stored=stored, key="model", default=DEFAULT_MODEL)),
                 confidence_threshold=float(_value(provided=input_data.confidence_threshold, stored=stored, key="confidence_threshold", default=DEFAULT_CONFIDENCE_THRESHOLD)),
                 ambiguity_gap=float(_value(provided=input_data.ambiguity_gap, stored=stored, key="ambiguity_gap", default=DEFAULT_AMBIGUITY_GAP)),
-                batch_size=int(_value(provided=input_data.batch_size, stored=stored, key="batch_size", default=DEFAULT_BATCH_SIZE)),
+                batch_size=(
+                    int(
+                        _value(
+                            provided=input_data.batch_size,
+                            stored=stored,
+                            key="batch_size",
+                            default=DEFAULT_BATCH_SIZE,
+                        )
+                    )
+                    if input_data.batch_size is not None or "batch_size" in stored
+                    else None
+                ),
                 recover=recover,
             )
         )

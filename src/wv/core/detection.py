@@ -8,7 +8,7 @@ from wv.ml.megadetector import MlDetection
 
 DEFAULT_CONFIDENCE_THRESHOLD = 0.8
 DEFAULT_AMBIGUITY_GAP = 0.3
-DEFAULT_BATCH_SIZE = 32
+DEFAULT_BATCH_SIZE = 4
 
 
 @dataclass(frozen=True)

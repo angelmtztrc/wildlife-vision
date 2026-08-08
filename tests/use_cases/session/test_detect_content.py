@@ -95,7 +95,7 @@ def test_run_persists_detection_plan_and_updates_inventory(
     _mock_model(monkeypatch)
     monkeypatch.setattr(
         session_detection,
-        "evaluate_images",
+        "iter_evaluate_images",
         lambda **kwargs: [
             MlImageResult(animal, [MlDetection("animal", 0.91)]),
             MlImageResult(empty, []),
@@ -144,7 +144,7 @@ def test_dry_run_does_not_persist_plan_or_move_files(
     _mock_model(monkeypatch)
     monkeypatch.setattr(
         session_detection,
-        "evaluate_images",
+        "iter_evaluate_images",
         lambda **kwargs: [MlImageResult(path, [MlDetection("animal", 0.91)])],
     )
 
@@ -169,10 +169,10 @@ def test_recovery_replays_saved_plan_without_model(
     _mock_model(monkeypatch)
     monkeypatch.setattr(
         session_detection,
-        "evaluate_images",
+        "iter_evaluate_images",
         lambda **kwargs: [MlImageResult(path, [MlDetection("animal", 0.91)])],
     )
-    first = run(SessionDetectContentInput(session_id=SESSION_ID))
+    first = run(SessionDetectContentInput(session_id=SESSION_ID, batch_size=32))
 
     with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
         repository = SessionProcessRepository(sql_session)
@@ -190,7 +190,7 @@ def test_recovery_replays_saved_plan_without_model(
     )
     monkeypatch.setattr(
         session_detection,
-        "evaluate_images",
+        "iter_evaluate_images",
         lambda **kwargs: pytest.fail("recovery must not run inference"),
     )
 

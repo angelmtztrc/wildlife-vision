@@ -1,6 +1,10 @@
 import pytest
 
-from wv.core.detection import classify_detections, validate_detection_settings
+from wv.core.detection import (
+    DEFAULT_BATCH_SIZE,
+    classify_detections,
+    validate_detection_settings,
+)
 from wv.ml.megadetector import MlDetection
 
 
@@ -9,6 +13,10 @@ def test_classify_detections_uses_configured_ambiguity_gap():
 
     assert classify_detections(detections, 0.7, 0.3).label == "other"
     assert classify_detections(detections, 0.7, 0.2).label == "animal"
+
+
+def test_default_batch_size_is_conservative():
+    assert DEFAULT_BATCH_SIZE == 4
 
 
 @pytest.mark.parametrize(

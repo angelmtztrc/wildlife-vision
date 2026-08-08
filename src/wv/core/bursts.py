@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from collections.abc import Callable
 
 import imagehash
 from PIL import Image, ImageFilter, ImageOps, ImageStat
@@ -118,6 +119,7 @@ def build_burst_reduction_plan(
     candidates: list[BurstCandidate],
     burst_gap_threshold: int,
     similarity_threshold: int,
+    on_candidate_processed: Callable[[], None] | None = None,
 ) -> BurstReductionPlan:
     """Build deterministic keep and move decisions for burst candidates.
 
@@ -131,6 +133,8 @@ def build_burst_reduction_plan(
         candidates: Images with already-resolved capture identity.
         burst_gap_threshold: Maximum consecutive capture-time gap in seconds.
         similarity_threshold: Maximum perceptual-hash distance for an edge.
+        on_candidate_processed: Optional callback invoked once after each
+            candidate has been analyzed or retained as a singleton.
 
     Returns:
         Complete candidate decisions, image-level analysis failures, temporal
@@ -163,6 +167,8 @@ def build_burst_reduction_plan(
             candidate = burst[0]
             decisions[candidate.id] = BurstDecision(candidate.id, candidate.path, "keep")
             processed += 1
+            if on_candidate_processed is not None:
+                on_candidate_processed()
             continue
 
         analyses: list[BurstAnalysis] = []
@@ -177,6 +183,9 @@ def build_burst_reduction_plan(
                 decisions[candidate.id] = BurstDecision(
                     candidate.id, candidate.path, "keep"
                 )
+            finally:
+                if on_candidate_processed is not None:
+                    on_candidate_processed()
 
         for cluster in _build_similarity_clusters(analyses, similarity_threshold):
             ranked_cluster = sorted(

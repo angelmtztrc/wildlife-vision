@@ -391,7 +391,14 @@ def detect_content(
         float,
         typer.Option("--ambiguity-gap", min=0.0, max=1.0),
     ] = DEFAULT_AMBIGUITY_GAP,
-    batch_size: Annotated[int, typer.Option("--batch-size", min=1)] = DEFAULT_BATCH_SIZE,
+    batch_size: Annotated[
+        int | None,
+        typer.Option(
+            "--batch-size",
+            min=1,
+            help="Detector inference batch size; defaults to 4 for new sessions and reuses the recorded value on retries.",
+        ),
+    ] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     recover: Annotated[bool, typer.Option("--recover")] = False,
 ):

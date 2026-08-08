@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Callable
 
 from wv.core.bursts import (
     BurstCandidate,
@@ -12,7 +13,7 @@ from wv.core.bursts import (
 )
 from wv.core.display import display_file
 from wv.core.files import get_content_digest, is_allowed_image_file, move_file_with_staged_copy
-from wv.core.logger import get_logger
+from wv.core.logger import get_logger, get_progress
 from wv.core.session import get_ignored_bursts_path
 from wv.domain.session import SessionImage, SessionProcess, SessionProcessImagePlan
 from wv.persistence.repositories import (
@@ -97,7 +98,10 @@ def _parameters_json(input_data: SessionCleanBurstsInput) -> str:
 
 
 def _load_planning_input(
-    managed_session: ManagedSession, repository: SessionImageRepository
+    managed_session: ManagedSession,
+    repository: SessionImageRepository,
+    source_files: list[Path],
+    on_file_scanned: Callable[[], None] | None = None,
 ) -> _PlanningInput:
     images = repository.list_for_session(managed_session.session.id)
     images_by_path = {image.current_relative_path: image for image in images}
@@ -106,10 +110,12 @@ def _load_planning_input(
     unsupported_files = 0
     scan_failures = 0
 
-    for file_path in managed_session.init_path.iterdir():
+    for file_path in source_files:
         files_discovered += 1
         if not file_path.is_file() or not is_allowed_image_file(file_path):
             unsupported_files += 1
+            if on_file_scanned is not None:
+                on_file_scanned()
             continue
 
         relative_path = _relative_path(managed_session.session_path, file_path)
@@ -128,6 +134,8 @@ def _load_planning_input(
         except Exception:
             scan_failures += 1
             logger.exception("Failed to scan burst candidate %s", display_file(file_path))
+        if on_file_scanned is not None:
+            on_file_scanned()
 
     for image in images:
         current_path = _resolve_session_path(
@@ -298,6 +306,7 @@ def _apply_plan(
     managed_session: ManagedSession,
     plans: list[SessionProcessImagePlan],
     result: _CleanBurstsSummary,
+    on_plan_applied: Callable[[], None] | None = None,
 ) -> None:
     with sql_session_scope(managed_session.database_path) as sql_session:
         images = {
@@ -323,6 +332,8 @@ def _apply_plan(
                     f"Burst keep decision is inconsistent for {image.id}: {source_path}"
                 )
             _require_inventory_match(source_path, image)
+            if on_plan_applied is not None:
+                on_plan_applied()
             continue
 
         if plan.decision != "move" or plan.target_relative_path is None:
@@ -349,6 +360,8 @@ def _apply_plan(
                     f"{destination_path}"
                 )
             result.files_moved += 1
+            if on_plan_applied is not None:
+                on_plan_applied()
             continue
 
         source_exists = source_path.exists()
@@ -378,6 +391,8 @@ def _apply_plan(
                         image.id, plan.target_relative_path, BURSTS_STATE
                     )
             result.files_moved += 1
+            if on_plan_applied is not None:
+                on_plan_applied()
             continue
 
         if image.state != "init" or not source_path.is_file():
@@ -401,6 +416,8 @@ def _apply_plan(
         except Exception:
             result.files_failed += 1
             logger.exception("Failed to move reduced burst image %s", display_file(source_path))
+        if on_plan_applied is not None:
+            on_plan_applied()
 
 
 def _matches_inventory(path: Path, image: SessionImage) -> bool:
@@ -514,15 +531,30 @@ def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
                 dry_run=input_data.dry_run,
             )
         else:
-            with sql_session_scope(managed_session.database_path) as sql_session:
-                planning_input = _load_planning_input(
-                    managed_session, SessionImageRepository(sql_session)
+            source_files = list(managed_session.init_path.iterdir())
+            with get_progress() as progress:
+                scan_task = progress.add_task(
+                    "Scanning burst candidates", total=len(source_files)
                 )
-            plan = build_burst_reduction_plan(
-                planning_input.candidates,
-                input_data.burst_gap_threshold,
-                input_data.similarity_threshold,
-            )
+                with sql_session_scope(managed_session.database_path) as sql_session:
+                    planning_input = _load_planning_input(
+                        managed_session,
+                        SessionImageRepository(sql_session),
+                        source_files,
+                        on_file_scanned=lambda: progress.update(scan_task, advance=1),
+                    )
+                analysis_task = progress.add_task(
+                    "Analyzing burst candidates",
+                    total=len(planning_input.candidates),
+                )
+                plan = build_burst_reduction_plan(
+                    planning_input.candidates,
+                    input_data.burst_gap_threshold,
+                    input_data.similarity_threshold,
+                    on_candidate_processed=lambda: progress.update(
+                        analysis_task, advance=1
+                    ),
+                )
             result = _build_result(planning_input, plan, input_data.dry_run)
 
         result.destination = get_ignored_bursts_path(managed_session.session_path)
@@ -559,7 +591,16 @@ def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
                     )
 
         try:
-            _apply_plan(managed_session, existing_plans, result)
+            with get_progress() as progress:
+                apply_task = progress.add_task(
+                    "Applying burst cleanup plan", total=len(existing_plans)
+                )
+                _apply_plan(
+                    managed_session,
+                    existing_plans,
+                    result,
+                    on_plan_applied=lambda: progress.update(apply_task, advance=1),
+                )
             process = _complete_process(managed_session, result)
         except Exception as exc:
             try:

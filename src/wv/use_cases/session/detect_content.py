@@ -1,7 +1,7 @@
 import json
 import shutil
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib.metadata import version
 from pathlib import Path
 
@@ -17,7 +17,12 @@ from wv.core.detection import (
 from wv.core.exif import read_exif, write_exif_image_description
 from wv.core.files import get_content_digest, is_allowed_image_file, move_file_with_staged_copy
 from wv.core.session import get_detection_path
-from wv.ml.megadetector import DEFAULT_MODEL, MlImageResult, evaluate_images, resolve_model
+from wv.ml.megadetector import (
+    DEFAULT_MODEL,
+    MlImageResult,
+    iter_evaluate_images,
+    resolve_model,
+)
 from wv.domain.session import SessionImage, SessionProcess, SessionProcessImagePlan
 from wv.persistence.repositories import (
     SessionImageRepository,
@@ -46,7 +51,7 @@ class SessionDetectContentInput:
     model: str = DEFAULT_MODEL
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
     ambiguity_gap: float = DEFAULT_AMBIGUITY_GAP
-    batch_size: int = DEFAULT_BATCH_SIZE
+    batch_size: int | None = None
     dry_run: bool = False
     recover: bool = False
 
@@ -98,6 +103,31 @@ def _parameters_json(input_data: SessionDetectContentInput) -> str:
             "minimum_detection_threshold": 0.01,
         }
     )
+
+
+def _resolve_batch_size(
+    managed_session: ManagedSession, input_data: SessionDetectContentInput
+) -> SessionDetectContentInput:
+    if input_data.batch_size is not None:
+        return input_data
+
+    with sql_session_scope(managed_session.database_path) as sql_session:
+        existing = SessionProcessRepository(sql_session).get_optional(
+            managed_session.session.id, PROCESS_NAME
+        )
+    if existing is None or existing.parameters_json is None:
+        return replace(input_data, batch_size=DEFAULT_BATCH_SIZE)
+
+    try:
+        parameters = json.loads(existing.parameters_json)
+        batch_size = parameters["batch_size"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise SessionProcessError(
+            "Session detection process has invalid recorded batch size."
+        ) from exc
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int):
+        raise SessionProcessError("Session detection process has invalid recorded batch size.")
+    return replace(input_data, batch_size=batch_size)
 
 
 def _read_description(path: Path) -> str | None:
@@ -166,14 +196,12 @@ def _build_plan(
         _resolve_session_path(managed_session.session_path, image.current_relative_path)
         for image in candidates
     ]
-    inference_results = evaluate_images(
+    inference_results = iter_evaluate_images(
         model=str(resolved_model.resolved_path),
         image_paths=source_paths,
         confidence_threshold=input_data.confidence_threshold,
         batch_size=input_data.batch_size,
     )
-    if len(inference_results) != len(candidates):
-        raise SessionProcessError("MegaDetector did not return one result per candidate.")
 
     result = _DetectContentSummary(
         files_discovered=len(candidates),
@@ -201,10 +229,13 @@ def _build_plan(
             description = build_detection_description(_read_description(source_path), decision)
             destination = get_detection_path(managed_session.session_path, decision.label) / source_path.name
             temporary_path = temporary_root / source_path.name
-            shutil.copy2(source_path, temporary_path)
-            write_exif_image_description(temporary_path, description)
-            target_digest = get_content_digest(temporary_path)
-            target_size = temporary_path.stat().st_size
+            try:
+                shutil.copy2(source_path, temporary_path)
+                write_exif_image_description(temporary_path, description)
+                target_digest = get_content_digest(temporary_path)
+                target_size = temporary_path.stat().st_size
+            finally:
+                temporary_path.unlink(missing_ok=True)
             details = canonical_process_parameters(
                 {
                     "schema_version": 1,
@@ -424,11 +455,12 @@ def _result(
 
 def run(input_data: SessionDetectContentInput) -> SessionDetectContentResult:
     """Run plan-backed MegaDetector content classification for a session."""
+    managed_session = resolve_managed_session(input_data.session_id)
+    input_data = _resolve_batch_size(managed_session, input_data)
     validate_detection_settings(
         input_data.confidence_threshold, input_data.ambiguity_gap, input_data.batch_size
     )
     parameters_json = _parameters_json(input_data)
-    managed_session = resolve_managed_session(input_data.session_id)
     with _exclusive_session_lock(managed_session.session_path, input_data.dry_run):
         existing, plans = _load_existing_plans(managed_session, input_data, parameters_json)
         if plans:
