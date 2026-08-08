@@ -1,0 +1,213 @@
+import json
+from dataclasses import dataclass, field
+
+from wv.core.bursts import DEFAULT_BURST_GAP_THRESHOLD, DEFAULT_SIMILARITY_THRESHOLD
+from wv.core.detection import (
+    DEFAULT_AMBIGUITY_GAP,
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_CONFIDENCE_THRESHOLD,
+)
+from wv.core.logger import get_logger
+from wv.core.images import (
+    DEFAULT_HIGH_LEVEL,
+    DEFAULT_MEAN_THRESHOLD,
+    DEFAULT_PTC_HIGH_THRESHOLD,
+    DEFAULT_STD_THRESHOLD,
+)
+from wv.ml.megadetector import DEFAULT_MODEL
+from wv.use_cases.session.clean_bursts import SessionCleanBurstsInput
+from wv.use_cases.session.clean_bursts import run as run_clean_bursts
+from wv.use_cases.session.clean_corrupted import SessionCleanCorruptedInput
+from wv.use_cases.session.clean_corrupted import run as run_clean_corrupted
+from wv.use_cases.session.clean_overexposed_ir import SessionCleanOverexposedIrInput
+from wv.use_cases.session.clean_overexposed_ir import run as run_clean_overexposed_ir
+from wv.use_cases.session.detect_content import SessionDetectContentInput
+from wv.use_cases.session.detect_content import run as run_detect_content
+from wv.use_cases.session.status import SessionStageStatus, SessionStatusInput
+from wv.use_cases.session.status import run as run_session_status
+from wv.use_cases.session._shared import PROCESS_NAMES, resolve_managed_session, session_workflow_lock
+
+PROCESS_ALIASES = dict(
+    zip(
+        ("corrupted", "overexposed-ir", "bursts", "detect-content"),
+        PROCESS_NAMES,
+        strict=True,
+    )
+)
+
+logger = get_logger(__name__)
+
+
+class PipelineRunError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class PipelineRunInput:
+    session_id: str
+    recover: bool = False
+    next_only: bool = False
+    until: str | None = None
+    mean_threshold: float | None = None
+    std_threshold: float | None = None
+    high_level: int | None = None
+    ptc_high_threshold: float | None = None
+    burst_gap_threshold: int | None = None
+    similarity_threshold: int | None = None
+    model: str | None = None
+    confidence_threshold: float | None = None
+    ambiguity_gap: float | None = None
+    batch_size: int | None = None
+
+
+@dataclass(frozen=True)
+class PipelineStageResult:
+    process_name: str
+    status: str
+    files_failed: int
+
+
+@dataclass(frozen=True)
+class PipelineRunResult:
+    session_id: str
+    stages: list[PipelineStageResult] = field(default_factory=list)
+    final_status: str = "completed"
+    stopped_at: str | None = None
+
+
+def _until_process(until: str | None) -> str | None:
+    if until is None:
+        return None
+    try:
+        return PROCESS_ALIASES[until]
+    except KeyError as exc:
+        expected = ", ".join(PROCESS_ALIASES)
+        raise PipelineRunError(f"Unknown pipeline stage: {until}. Expected one of: {expected}.") from exc
+
+
+def _stage(status, process_name: str) -> SessionStageStatus:
+    return next(stage for stage in status.stages if stage.name == process_name)
+
+
+def _parameters(stage: SessionStageStatus) -> dict[str, object]:
+    if stage.parameters_json is None:
+        return {}
+    try:
+        value = json.loads(stage.parameters_json)
+    except json.JSONDecodeError as exc:
+        raise PipelineRunError(
+            f"Session process has invalid recorded parameters: {stage.name}"
+        ) from exc
+    if not isinstance(value, dict):
+        raise PipelineRunError(f"Session process has invalid recorded parameters: {stage.name}")
+    return value
+
+
+def _value(
+    *, provided: object | None, stored: dict[str, object], key: str, default: object
+) -> object:
+    if key in stored:
+        if provided is not None and provided != stored[key]:
+            raise PipelineRunError(
+                f"Pipeline retry must use the recorded parameter {key}: {stored[key]!r}."
+            )
+        return stored[key]
+    return default if provided is None else provided
+
+
+def _run_stage(input_data: PipelineRunInput, process_name: str, stage: SessionStageStatus):
+    stored = _parameters(stage)
+    recover = input_data.recover if stage.status == "in_progress" else False
+    if process_name == "clean_corrupted":
+        return run_clean_corrupted(
+            SessionCleanCorruptedInput(session_id=input_data.session_id, recover=recover)
+        )
+    if process_name == "clean_overexposed_ir":
+        return run_clean_overexposed_ir(
+            SessionCleanOverexposedIrInput(
+                session_id=input_data.session_id,
+                mean_threshold=float(_value(provided=input_data.mean_threshold, stored=stored, key="mean_threshold", default=DEFAULT_MEAN_THRESHOLD)),
+                std_threshold=float(_value(provided=input_data.std_threshold, stored=stored, key="std_threshold", default=DEFAULT_STD_THRESHOLD)),
+                high_level=int(_value(provided=input_data.high_level, stored=stored, key="high_level", default=DEFAULT_HIGH_LEVEL)),
+                ptc_high_threshold=float(_value(provided=input_data.ptc_high_threshold, stored=stored, key="ptc_high_threshold", default=DEFAULT_PTC_HIGH_THRESHOLD)),
+                recover=recover,
+            )
+        )
+    if process_name == "clean_bursts":
+        return run_clean_bursts(
+            SessionCleanBurstsInput(
+                session_id=input_data.session_id,
+                burst_gap_threshold=int(_value(provided=input_data.burst_gap_threshold, stored=stored, key="burst_gap_threshold", default=DEFAULT_BURST_GAP_THRESHOLD)),
+                similarity_threshold=int(_value(provided=input_data.similarity_threshold, stored=stored, key="similarity_threshold", default=DEFAULT_SIMILARITY_THRESHOLD)),
+                recover=recover,
+            )
+        )
+    if process_name == "detect_content":
+        return run_detect_content(
+            SessionDetectContentInput(
+                session_id=input_data.session_id,
+                model=str(_value(provided=input_data.model, stored=stored, key="model", default=DEFAULT_MODEL)),
+                confidence_threshold=float(_value(provided=input_data.confidence_threshold, stored=stored, key="confidence_threshold", default=DEFAULT_CONFIDENCE_THRESHOLD)),
+                ambiguity_gap=float(_value(provided=input_data.ambiguity_gap, stored=stored, key="ambiguity_gap", default=DEFAULT_AMBIGUITY_GAP)),
+                batch_size=int(_value(provided=input_data.batch_size, stored=stored, key="batch_size", default=DEFAULT_BATCH_SIZE)),
+                recover=recover,
+            )
+        )
+    raise PipelineRunError(f"Unknown session process: {process_name}")
+
+
+def run(input_data: PipelineRunInput) -> PipelineRunResult:
+    if input_data.next_only and input_data.until is not None:
+        raise PipelineRunError("--next and --until cannot be used together.")
+    until_process = _until_process(input_data.until)
+    managed_session = resolve_managed_session(input_data.session_id)
+    stages: list[PipelineStageResult] = []
+
+    with session_workflow_lock(managed_session.session_path):
+        while True:
+            status = run_session_status(SessionStatusInput(session_id=input_data.session_id))
+            if status.overall_status == "completed":
+                return PipelineRunResult(input_data.session_id, stages, "completed")
+
+            if status.next_process is None or status.next_action is None:
+                raise PipelineRunError(
+                    f"Pipeline cannot continue: {status.overall_status}."
+                )
+            process_name = status.next_process
+            process_index = PROCESS_NAMES.index(process_name)
+            if until_process is not None and process_index > PROCESS_NAMES.index(until_process):
+                return PipelineRunResult(
+                    input_data.session_id,
+                    stages,
+                    "stopped",
+                    stopped_at=until_process,
+                )
+            if status.next_action == "recover" and not input_data.recover:
+                raise PipelineRunError(
+                    f"Pipeline recovery is required for {process_name}. Use --recover after confirming the prior command stopped."
+                )
+            if status.next_action not in {"run", "retry", "recover"}:
+                raise PipelineRunError(f"Pipeline cannot perform action: {status.next_action}")
+
+            logger.info("Running pipeline stage %s for session %s", process_name, input_data.session_id)
+            result = _run_stage(input_data, process_name, _stage(status, process_name))
+            stage_result = PipelineStageResult(
+                process_name=process_name,
+                status=result.process.status if result.process is not None else "completed",
+                files_failed=result.files_failed,
+            )
+            stages.append(stage_result)
+            if result.files_failed:
+                return PipelineRunResult(
+                    input_data.session_id,
+                    stages,
+                    "completed_with_failures",
+                    stopped_at=process_name,
+                )
+            if input_data.next_only or process_name == until_process:
+                return PipelineRunResult(
+                    input_data.session_id,
+                    stages,
+                    "completed" if process_name == PROCESS_NAMES[-1] else "stopped",
+                    stopped_at=process_name,
+                )

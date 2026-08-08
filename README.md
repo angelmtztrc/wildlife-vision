@@ -229,11 +229,17 @@ It’s important to clarify that the pipeline feature is heavily related to sess
 To execute a pipeline, we provide the following commands:
 
 ```bash
-wv pipeline run <SESSION_ID> # run the pipeline within a session
-wv pipeline run latest # run the pipeline with the last created session
-wv pipeline run <SESSION_ID> --next # runs the pipeline from the next available stage
-wv pipeline run <SESSION_ID> --until <STAGE> # run the pipeline before reaching the provided stage
+wv pipeline run <SESSION_ID> # resumes and runs all eligible stages
+wv pipeline run <SESSION_ID> --next # runs exactly one eligible stage
+wv pipeline run <SESSION_ID> --until bursts # runs inclusively through burst cleanup
+wv pipeline run <SESSION_ID> --recover # resumes an interrupted stage
 ```
+
+The managed pipeline records each stage in the workspace database and stops when
+a stage has file failures. Retry that stage before proceeding. `--recover` is
+required for an `in_progress` stage; it reuses its durable processing plan.
+`--next` and `--until` cannot be combined. Available `--until` stages are
+`corrupted`, `overexposed-ir`, `bursts`, and `detect-content`.
 
 ### Managed session cleanup
 
@@ -242,7 +248,7 @@ workspace database. Recent sessions can be discovered with:
 
 ```bash
 wv session list
-wv session list --device <DEVICE_ID>
+wv session list --area <AREA_ID>
 wv session list --monitoring-site <MONITORING_SITE_ID>
 wv session list --ingest-status <STATUS> --limit 20
 ```

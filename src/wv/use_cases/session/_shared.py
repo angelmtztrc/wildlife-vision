@@ -1,6 +1,7 @@
 import fcntl
 import json
 from collections.abc import Iterator
+from contextvars import ContextVar
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -32,6 +33,7 @@ PROCESS_NAMES = (
     "detect_content",
 )
 SUCCESSFUL_PROCESS_STATUSES = {"completed", "completed_with_failures"}
+_workflow_lock_path: ContextVar[Path | None] = ContextVar("workflow_lock_path", default=None)
 
 
 class SessionError(ValueError):
@@ -222,7 +224,7 @@ def _resolve_session_path(session_path: Path, relative_path: str) -> Path:
 
 @contextmanager
 def _exclusive_session_lock(session_path: Path, dry_run: bool) -> Iterator[None]:
-    if dry_run:
+    if dry_run or _workflow_lock_path.get() == session_path:
         yield
         return
 
@@ -237,6 +239,28 @@ def _exclusive_session_lock(session_path: Path, dry_run: bool) -> Iterator[None]
             yield
         finally:
             fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+
+@contextmanager
+def session_workflow_lock(session_path: Path) -> Iterator[None]:
+    """Hold a session lock across an orchestrated managed workflow.
+
+    Managed stages acquire the same lock independently. While this context is
+    active in the current execution context, their nested lock acquisitions are
+    skipped, while commands in other processes continue to be excluded.
+
+    Args:
+        session_path: Root directory of the managed session to lock.
+
+    Raises:
+        SessionProcessError: If another managed process owns the session lock.
+    """
+    with _exclusive_session_lock(session_path, dry_run=False):
+        token = _workflow_lock_path.set(session_path)
+        try:
+            yield
+        finally:
+            _workflow_lock_path.reset(token)
 
 
 def _reconcile_moved_init_inventory(

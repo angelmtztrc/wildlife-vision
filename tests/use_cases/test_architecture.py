@@ -4,7 +4,7 @@ from pathlib import Path
 
 USE_CASES_ROOT = Path(__file__).parents[2] / "src" / "wv" / "use_cases"
 WORKFLOW_MODULES = {
-    USE_CASES_ROOT / "pipeline" / "preprocess.py",
+    USE_CASES_ROOT / "pipeline" / "run.py",
 }
 
 

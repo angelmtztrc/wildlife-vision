@@ -70,7 +70,7 @@ one module inside its group and represents exactly one application operation.
 - A use-case module exposes one public operation entry point named `run()`.
 - Each operation must define an input dataclass and an explicit result dataclass.
 - Use cases must not call another use case for implementation reuse, including use cases in the same group.
-- Workflow use cases may orchestrate lower-level use cases when that workflow is an application requirement. `src/wv/use_cases/pipeline/preprocess.py` is the approved example: it owns one `run()` workflow and preserves the required clean/detect ordering.
+- Workflow use cases may orchestrate lower-level use cases when that workflow is an application requirement. `src/wv/use_cases/pipeline/run.py` is the approved example: it owns one `run()` workflow and preserves the required clean/detect ordering.
 - Use-case-private helpers must use a leading `_` prefix and stay in the same module.
 - Logic shared by multiple use cases in the same group belongs in that group's private `_shared.py` module.
 - Logic shared across use-case groups belongs in `src/wv/core/` only when it is genuinely reusable and has a stable responsibility.
@@ -101,7 +101,7 @@ src/wv/use_cases/device/
 
 ## Current State
 
-- Implemented command paths worth verifying are `setup`, `ingest {sd,folder}`, `pipeline preprocess`, `detect content`, and `clean {corrupted,overexposed-ir,bursts}`.
+- Implemented command paths worth verifying are `setup`, `ingest {sd,folder}`, `pipeline run`, `detect content`, and `clean {corrupted,overexposed-ir,bursts}`.
 - `src/wv/cli/commands/export.py` exists but is not registered in the root app.
 - `wv setup` calls MegaDetector model preparation (`src/wv/use_cases/setup.py`, `src/wv/ml/megadetector.py`) and can trigger model resolution/download, so prefer help or tests for routine smoke checks.
 
