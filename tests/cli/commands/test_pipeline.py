@@ -1,4 +1,5 @@
 from wv.cli.main import app
+from wv.use_cases.session.list import ListSessionsResult
 from wv.use_cases.pipeline.run import PipelineRunResult, PipelineStageResult
 
 
@@ -44,3 +45,20 @@ def test_pipeline_run_returns_failure_for_stage_file_failures(cli_runner, monkey
 
     assert result.exit_code == 1
     assert "completed_with_failures" in result.output
+
+
+def test_pipeline_session_completion_filters_persisted_ids(monkeypatch):
+    class Session:
+        def __init__(self, session_id: str):
+            self.id = session_id
+
+    monkeypatch.setattr(
+        "wv.cli.commands.pipeline.run_list_sessions",
+        lambda input_data: ListSessionsResult(
+            items=[Session("20260808_120000__SITE001"), Session("20260809_120000__SITE002")]
+        ),
+    )
+
+    from wv.cli.commands.pipeline import _complete_session
+
+    assert _complete_session("20260808") == ["20260808_120000__SITE001"]

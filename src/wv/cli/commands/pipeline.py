@@ -6,15 +6,34 @@ from wv.core.logger import get_logger
 from wv.use_cases.pipeline.run import PipelineRunError, PipelineRunInput
 from wv.use_cases.pipeline.run import run as run_pipeline
 from wv.use_cases.session._shared import SessionError
+from wv.use_cases.session.list import ListSessionsInput
+from wv.use_cases.session.list import run as run_list_sessions
 from wv.workspace.common import WorkspaceError
 
 app = typer.Typer(help="Run database-tracked preprocessing for ingested sessions.")
 logger = get_logger(__name__)
 
 
+def _complete_session(incomplete: str) -> list[str]:
+    try:
+        return [
+            session.id
+            for session in run_list_sessions(ListSessionsInput(limit=100)).items
+            if session.id.startswith(incomplete)
+        ]
+    except (SessionError, WorkspaceError):
+        return []
+
+
 @app.command("run")
 def run(
-    session_id: Annotated[str, typer.Argument(help="ID of an ingested session.")],
+    session_id: Annotated[
+        str,
+        typer.Argument(
+            help="ID of an ingested session.",
+            autocompletion=_complete_session,
+        ),
+    ],
     recover: Annotated[
         bool,
         typer.Option("--recover", help="Recover an interrupted in-progress stage."),
