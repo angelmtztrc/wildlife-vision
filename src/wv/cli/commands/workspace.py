@@ -65,16 +65,19 @@ def migrate_workspace():
 
     if result.migrated:
         logger.done(
-            "Workspace database migrated at %s (%s -> %s)",
-            display_path(result.database_path),
-            result.previous_revision,
-            result.current_revision,
+            "Workspace migrated at %s (config=%s -> %s, database=%s -> %s)",
+            display_path(result.workspace_path),
+            result.previous_config_version,
+            result.current_config_version,
+            result.previous_database_revision,
+            result.current_database_revision,
         )
     else:
         logger.done(
-            "Workspace database is already up to date at %s (revision=%s)",
-            display_path(result.database_path),
-            result.current_revision,
+            "Workspace is already up to date at %s (config=%s, database=%s)",
+            display_path(result.workspace_path),
+            result.current_config_version,
+            result.current_database_revision,
         )
 
     return None

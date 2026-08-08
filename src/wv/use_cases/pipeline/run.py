@@ -1,20 +1,7 @@
 import json
 from dataclasses import dataclass, field
 
-from wv.core.bursts import DEFAULT_BURST_GAP_THRESHOLD, DEFAULT_SIMILARITY_THRESHOLD
-from wv.core.detection import (
-    DEFAULT_AMBIGUITY_GAP,
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_CONFIDENCE_THRESHOLD,
-)
 from wv.core.logger import get_logger
-from wv.core.images import (
-    DEFAULT_HIGH_LEVEL,
-    DEFAULT_MEAN_THRESHOLD,
-    DEFAULT_PTC_HIGH_THRESHOLD,
-    DEFAULT_STD_THRESHOLD,
-)
-from wv.ml.megadetector import DEFAULT_MODEL
 from wv.use_cases.session.clean_bursts import SessionCleanBurstsInput
 from wv.use_cases.session.clean_bursts import run as run_clean_bursts
 from wv.use_cases.session.clean_corrupted import SessionCleanCorruptedInput
@@ -26,6 +13,7 @@ from wv.use_cases.session.detect_content import run as run_detect_content
 from wv.use_cases.session.status import SessionStageStatus, SessionStatusInput
 from wv.use_cases.session.status import run as run_session_status
 from wv.use_cases.session._shared import PROCESS_NAMES, resolve_managed_session, session_workflow_lock
+from wv.workspace.workspace_config import load_processing_config
 
 PROCESS_ALIASES = dict(
     zip(
@@ -51,7 +39,7 @@ class PipelineRunInput:
     mean_threshold: float | None = None
     std_threshold: float | None = None
     high_level: int | None = None
-    ptc_high_threshold: float | None = None
+    pct_high_threshold: float | None = None
     burst_gap_threshold: int | None = None
     similarity_threshold: int | None = None
     model: str | None = None
@@ -115,7 +103,7 @@ def _value(
     return default if provided is None else provided
 
 
-def _run_stage(input_data: PipelineRunInput, process_name: str, stage: SessionStageStatus):
+def _run_stage(input_data: PipelineRunInput, process_name: str, stage: SessionStageStatus, settings):
     stored = _parameters(stage)
     recover = input_data.recover if stage.status == "in_progress" else False
     if process_name == "clean_corrupted":
@@ -126,10 +114,10 @@ def _run_stage(input_data: PipelineRunInput, process_name: str, stage: SessionSt
         return run_clean_overexposed_ir(
             SessionCleanOverexposedIrInput(
                 session_id=input_data.session_id,
-                mean_threshold=float(_value(provided=input_data.mean_threshold, stored=stored, key="mean_threshold", default=DEFAULT_MEAN_THRESHOLD)),
-                std_threshold=float(_value(provided=input_data.std_threshold, stored=stored, key="std_threshold", default=DEFAULT_STD_THRESHOLD)),
-                high_level=int(_value(provided=input_data.high_level, stored=stored, key="high_level", default=DEFAULT_HIGH_LEVEL)),
-                ptc_high_threshold=float(_value(provided=input_data.ptc_high_threshold, stored=stored, key="ptc_high_threshold", default=DEFAULT_PTC_HIGH_THRESHOLD)),
+                mean_threshold=float(_value(provided=input_data.mean_threshold, stored=stored, key="mean_threshold", default=settings.overexposed_ir.mean_threshold)),
+                std_threshold=float(_value(provided=input_data.std_threshold, stored=stored, key="std_threshold", default=settings.overexposed_ir.std_threshold)),
+                high_level=int(_value(provided=input_data.high_level, stored=stored, key="high_level", default=settings.overexposed_ir.high_level)),
+                pct_high_threshold=float(_value(provided=input_data.pct_high_threshold, stored=stored, key="pct_high_threshold", default=settings.overexposed_ir.pct_high_threshold)),
                 recover=recover,
             )
         )
@@ -137,8 +125,8 @@ def _run_stage(input_data: PipelineRunInput, process_name: str, stage: SessionSt
         return run_clean_bursts(
             SessionCleanBurstsInput(
                 session_id=input_data.session_id,
-                burst_gap_threshold=int(_value(provided=input_data.burst_gap_threshold, stored=stored, key="burst_gap_threshold", default=DEFAULT_BURST_GAP_THRESHOLD)),
-                similarity_threshold=int(_value(provided=input_data.similarity_threshold, stored=stored, key="similarity_threshold", default=DEFAULT_SIMILARITY_THRESHOLD)),
+                burst_gap_threshold=int(_value(provided=input_data.burst_gap_threshold, stored=stored, key="burst_gap_threshold", default=settings.bursts.burst_gap_threshold)),
+                similarity_threshold=int(_value(provided=input_data.similarity_threshold, stored=stored, key="similarity_threshold", default=settings.bursts.similarity_threshold)),
                 recover=recover,
             )
         )
@@ -146,16 +134,16 @@ def _run_stage(input_data: PipelineRunInput, process_name: str, stage: SessionSt
         return run_detect_content(
             SessionDetectContentInput(
                 session_id=input_data.session_id,
-                model=str(_value(provided=input_data.model, stored=stored, key="model", default=DEFAULT_MODEL)),
-                confidence_threshold=float(_value(provided=input_data.confidence_threshold, stored=stored, key="confidence_threshold", default=DEFAULT_CONFIDENCE_THRESHOLD)),
-                ambiguity_gap=float(_value(provided=input_data.ambiguity_gap, stored=stored, key="ambiguity_gap", default=DEFAULT_AMBIGUITY_GAP)),
+                model=str(_value(provided=input_data.model, stored=stored, key="model", default=settings.detection.model)),
+                confidence_threshold=float(_value(provided=input_data.confidence_threshold, stored=stored, key="confidence_threshold", default=settings.detection.confidence_threshold)),
+                ambiguity_gap=float(_value(provided=input_data.ambiguity_gap, stored=stored, key="ambiguity_gap", default=settings.detection.ambiguity_gap)),
                 batch_size=(
                     int(
                         _value(
                             provided=input_data.batch_size,
                             stored=stored,
                             key="batch_size",
-                            default=DEFAULT_BATCH_SIZE,
+                            default=settings.detection.batch_size,
                         )
                     )
                     if input_data.batch_size is not None or "batch_size" in stored
@@ -172,6 +160,7 @@ def run(input_data: PipelineRunInput) -> PipelineRunResult:
         raise PipelineRunError("--next and --until cannot be used together.")
     until_process = _until_process(input_data.until)
     managed_session = resolve_managed_session(input_data.session_id)
+    settings = load_processing_config()
     stages: list[PipelineStageResult] = []
 
     with session_workflow_lock(managed_session.session_path):
@@ -201,7 +190,7 @@ def run(input_data: PipelineRunInput) -> PipelineRunResult:
                 raise PipelineRunError(f"Pipeline cannot perform action: {status.next_action}")
 
             logger.info("Running pipeline stage %s for session %s", process_name, input_data.session_id)
-            result = _run_stage(input_data, process_name, _stage(status, process_name))
+            result = _run_stage(input_data, process_name, _stage(status, process_name), settings)
             stage_result = PipelineStageResult(
                 process_name=process_name,
                 status=result.process.status if result.process is not None else "completed",

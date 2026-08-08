@@ -22,7 +22,7 @@ from wv.workspace.workspace_config import require_workspace_database_path
 SESSION_ID = "20240731_120000__HNT001"
 DEFAULT_PARAMETERS = (
     '{"high_level":220,"mean_threshold":200.0,'
-    '"ptc_high_threshold":0.6,"std_threshold":25.0}'
+    '"pct_high_threshold":0.6,"std_threshold":25.0}'
 )
 
 
@@ -165,7 +165,7 @@ def test_run_rejects_changed_recovery_parameters(
             parameters_json=DEFAULT_PARAMETERS,
         )
 
-    with pytest.raises(SessionProcessError, match="recorded parameters"):
+    with pytest.raises(SessionProcessError, match="recorded parameter"):
         run(
             SessionCleanOverexposedIrInput(
                 session_id=SESSION_ID,

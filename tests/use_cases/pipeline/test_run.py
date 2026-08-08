@@ -28,6 +28,25 @@ def bypass_workflow_lock(monkeypatch):
         lambda session_id: SimpleNamespace(session_path=SESSION.id),
     )
     monkeypatch.setattr(pipeline, "session_workflow_lock", lambda session_path: nullcontext())
+    monkeypatch.setattr(
+        pipeline,
+        "load_processing_config",
+        lambda: SimpleNamespace(
+            overexposed_ir=SimpleNamespace(
+                mean_threshold=200.0,
+                std_threshold=25.0,
+                high_level=220,
+                pct_high_threshold=0.6,
+            ),
+            bursts=SimpleNamespace(burst_gap_threshold=60, similarity_threshold=5),
+            detection=SimpleNamespace(
+                model="MDV5A",
+                confidence_threshold=0.8,
+                ambiguity_gap=0.3,
+                batch_size=4,
+            ),
+        ),
+    )
 
 
 def _status(overall: str, process: str | None, action: str | None, stages=None):
@@ -165,7 +184,7 @@ def test_retry_uses_recorded_parameters(monkeypatch):
     stages[1] = SessionStageStatus(
         name="clean_overexposed_ir",
         status="failed",
-        parameters_json='{"high_level":221,"mean_threshold":201.0,"ptc_high_threshold":0.7,"std_threshold":20.0}',
+        parameters_json='{"high_level":221,"mean_threshold":201.0,"pct_high_threshold":0.7,"std_threshold":20.0}',
     )
     monkeypatch.setattr(
         pipeline,

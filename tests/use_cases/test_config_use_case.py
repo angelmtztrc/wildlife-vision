@@ -17,7 +17,7 @@ from wv.workspace.common import WorkspaceError
 from wv.workspace.workspace_config import load_workspace_config
 
 
-def test_run_init_overwrites_existing_workspace_config(tmp_path: Path, monkeypatch):
+def test_run_init_rejects_existing_workspace_config(tmp_path: Path, monkeypatch):
     config_dir = tmp_path / "user-config"
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
@@ -26,10 +26,9 @@ def test_run_init_overwrites_existing_workspace_config(tmp_path: Path, monkeypat
     config_file = workspace_path / ".wv" / "config.yml"
     config_file.write_text("workspace:\n  version: 999\n")
 
-    result = run_initialize(ConfigInitializeInput())
-
-    assert result.path == config_file
-    assert load_workspace_config(config_file)["workspace"]["version"] == 1
+    with pytest.raises(WorkspaceError, match="already exists"):
+        run_initialize(ConfigInitializeInput())
+    assert load_workspace_config(config_file)["workspace"]["version"] == 999
 
 
 def test_run_get_returns_known_config_value(tmp_path: Path, monkeypatch):
@@ -41,7 +40,7 @@ def test_run_get_returns_known_config_value(tmp_path: Path, monkeypatch):
 
     result = run_get(GetConfigValueInput(key="workspace.version"))
 
-    assert result.value == 1
+    assert result.value == 2
 
 
 def test_run_set_updates_known_value_and_preserves_unknown_keys(

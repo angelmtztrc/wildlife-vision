@@ -124,7 +124,7 @@ def test_workspace_migrate_upgrades_active_database(cli_runner, tmp_path: Path, 
     result = cli_runner.invoke(workspace.app, ["migrate"])
 
     assert result.exit_code == 0
-    assert "Workspace database migrated" in result.output
+    assert "Workspace migrated" in result.output
     assert "0003_session_processes" in result.output
 
 

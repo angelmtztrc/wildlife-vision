@@ -17,7 +17,9 @@ def require_workspace_path() -> Path:
 
 def load_validated_config_value() -> tuple[dict[str, Any], Path]:
     workspace_path = require_workspace_path()
-    return load_workspace_config(), workspace_path
+    value = load_workspace_config()
+    validate_workspace_config(value, workspace_path)
+    return value, workspace_path
 
 
 def write_config_update(value: dict[str, Any], workspace_path: Path) -> None:

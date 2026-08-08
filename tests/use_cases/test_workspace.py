@@ -165,8 +165,8 @@ def test_migrate_upgrades_active_workspace_database(tmp_path: Path, monkeypatch)
     result = run_migrate(WorkspaceMigrateInput())
 
     assert result.database_path == database_path
-    assert result.previous_revision == "0003_session_processes"
-    assert result.current_revision == get_database_head_revision()
+    assert result.previous_database_revision == "0003_session_processes"
+    assert result.current_database_revision == get_database_head_revision()
     assert result.migrated is True
 
 
@@ -179,8 +179,8 @@ def test_migrate_is_a_no_op_for_current_workspace_database(tmp_path: Path, monke
 
     result = run_migrate(WorkspaceMigrateInput())
 
-    assert result.previous_revision == get_database_head_revision()
-    assert result.current_revision == get_database_head_revision()
+    assert result.previous_database_revision == get_database_head_revision()
+    assert result.current_database_revision == get_database_head_revision()
     assert result.migrated is False
 
 

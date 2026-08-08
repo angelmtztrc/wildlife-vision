@@ -10,7 +10,7 @@ from wv.core.exif import read_exif
 DEFAULT_MEAN_THRESHOLD = 200.0
 DEFAULT_STD_THRESHOLD = 25.0
 DEFAULT_HIGH_LEVEL = 220
-DEFAULT_PTC_HIGH_THRESHOLD = 0.60
+DEFAULT_PCT_HIGH_THRESHOLD = 0.60
 
 
 @dataclass(frozen=True)
@@ -19,7 +19,7 @@ class ImageExposureMetrics:
 
     mean: float
     std: float
-    ptc_high: float
+    pct_high: float
 
 
 def get_image_datetime(file_path: Path) -> datetime:
@@ -78,7 +78,7 @@ def validate_exposure_thresholds(
     mean_threshold: float,
     std_threshold: float,
     high_level: int,
-    ptc_high_threshold: float,
+    pct_high_threshold: float,
 ) -> None:
     """Validate values used for grayscale overexposure classification.
 
@@ -86,7 +86,7 @@ def validate_exposure_thresholds(
         mean_threshold: Minimum grayscale mean for bright, uniform images.
         std_threshold: Maximum grayscale standard deviation for uniform images.
         high_level: Inclusive grayscale cutoff for near-white histogram pixels.
-        ptc_high_threshold: Minimum near-white pixel fraction.
+        pct_high_threshold: Minimum near-white pixel fraction.
 
     Raises:
         ValueError: If any threshold is outside the supported grayscale or
@@ -98,8 +98,8 @@ def validate_exposure_thresholds(
         raise ValueError("std_threshold must be greater than or equal to 0.0")
     if not 0 <= high_level <= 255:
         raise ValueError("high_level must be between 0 and 255")
-    if not isfinite(ptc_high_threshold) or not 0.0 <= ptc_high_threshold <= 1.0:
-        raise ValueError("ptc_high_threshold must be between 0.0 and 1.0")
+    if not isfinite(pct_high_threshold) or not 0.0 <= pct_high_threshold <= 1.0:
+        raise ValueError("pct_high_threshold must be between 0.0 and 1.0")
 
 
 def compute_image_exposure_metrics(
@@ -133,16 +133,16 @@ def compute_image_exposure_metrics(
         grayscale_histogram = grayscale.histogram()
         pixels_amount = sum(grayscale_histogram)
         high_pixels = sum(grayscale_histogram[high_level:])
-        ptc_high = (high_pixels / pixels_amount) if pixels_amount > 0 else 0.0
+        pct_high = (high_pixels / pixels_amount) if pixels_amount > 0 else 0.0
 
-    return ImageExposureMetrics(mean=mean, std=std, ptc_high=ptc_high)
+    return ImageExposureMetrics(mean=mean, std=std, pct_high=pct_high)
 
 
 def is_image_overexposed(
     image_metrics: ImageExposureMetrics,
     mean_threshold: float,
     std_threshold: float,
-    ptc_high_threshold: float,
+    pct_high_threshold: float,
 ) -> bool:
     """Return whether exposure metrics meet either overexposure condition.
 
@@ -150,7 +150,7 @@ def is_image_overexposed(
         image_metrics: Grayscale metrics calculated for an image.
         mean_threshold: Minimum mean for a bright, uniform image.
         std_threshold: Maximum standard deviation for a uniform image.
-        ptc_high_threshold: Minimum fraction of near-white pixels.
+        pct_high_threshold: Minimum fraction of near-white pixels.
 
     Returns:
         ``True`` when the image is bright and uniform, or has sufficient
@@ -159,5 +159,5 @@ def is_image_overexposed(
     is_bright_and_uniform = (
         image_metrics.mean >= mean_threshold and image_metrics.std <= std_threshold
     )
-    has_many_near_white_pixels = image_metrics.ptc_high >= ptc_high_threshold
+    has_many_near_white_pixels = image_metrics.pct_high >= pct_high_threshold
     return is_bright_and_uniform or has_many_near_white_pixels

@@ -6,9 +6,6 @@ from importlib.metadata import version
 from pathlib import Path
 
 from wv.core.detection import (
-    DEFAULT_AMBIGUITY_GAP,
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_CONFIDENCE_THRESHOLD,
     build_detection_description,
     classify_detections,
     format_detection_confidence,
@@ -18,7 +15,6 @@ from wv.core.exif import read_exif, write_exif_image_description
 from wv.core.files import get_content_digest, is_allowed_image_file, move_file_with_staged_copy
 from wv.core.session import get_detection_path
 from wv.ml.megadetector import (
-    DEFAULT_MODEL,
     MlImageResult,
     iter_evaluate_images,
     resolve_model,
@@ -38,19 +34,21 @@ from ._shared import (
     _resolve_session_path,
     canonical_process_parameters,
     resolve_managed_session,
+    resolve_process_parameters,
     utc_now,
     validate_process_attempt,
     validate_process_parameters,
 )
+from wv.workspace.workspace_config import load_processing_config
 
 PROCESS_NAME = "detect_content"
 ALGORITHM_VERSION = 1
 @dataclass(frozen=True)
 class SessionDetectContentInput:
     session_id: str
-    model: str = DEFAULT_MODEL
-    confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
-    ambiguity_gap: float = DEFAULT_AMBIGUITY_GAP
+    model: str | None = None
+    confidence_threshold: float | None = None
+    ambiguity_gap: float | None = None
     batch_size: int | None = None
     dry_run: bool = False
     recover: bool = False
@@ -105,29 +103,37 @@ def _parameters_json(input_data: SessionDetectContentInput) -> str:
     )
 
 
-def _resolve_batch_size(
+def _resolve_input(
     managed_session: ManagedSession, input_data: SessionDetectContentInput
 ) -> SessionDetectContentInput:
-    if input_data.batch_size is not None:
-        return input_data
-
+    settings = load_processing_config()
     with sql_session_scope(managed_session.database_path) as sql_session:
-        existing = SessionProcessRepository(sql_session).get_optional(
+        process = SessionProcessRepository(sql_session).get_optional(
             managed_session.session.id, PROCESS_NAME
         )
-    if existing is None or existing.parameters_json is None:
-        return replace(input_data, batch_size=DEFAULT_BATCH_SIZE)
-
-    try:
-        parameters = json.loads(existing.parameters_json)
-        batch_size = parameters["batch_size"]
-    except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise SessionProcessError(
-            "Session detection process has invalid recorded batch size."
-        ) from exc
-    if isinstance(batch_size, bool) or not isinstance(batch_size, int):
-        raise SessionProcessError("Session detection process has invalid recorded batch size.")
-    return replace(input_data, batch_size=batch_size)
+    values = resolve_process_parameters(
+        process,
+        PROCESS_NAME,
+        {
+            "model": input_data.model,
+            "confidence_threshold": input_data.confidence_threshold,
+            "ambiguity_gap": input_data.ambiguity_gap,
+            "batch_size": input_data.batch_size,
+        },
+        {
+            "model": settings.detection.model,
+            "confidence_threshold": settings.detection.confidence_threshold,
+            "ambiguity_gap": settings.detection.ambiguity_gap,
+            "batch_size": settings.detection.batch_size,
+        },
+    )
+    return replace(
+        input_data,
+        model=str(values["model"]),
+        confidence_threshold=float(values["confidence_threshold"]),
+        ambiguity_gap=float(values["ambiguity_gap"]),
+        batch_size=int(values["batch_size"]),
+    )
 
 
 def _read_description(path: Path) -> str | None:
@@ -456,7 +462,7 @@ def _result(
 def run(input_data: SessionDetectContentInput) -> SessionDetectContentResult:
     """Run plan-backed MegaDetector content classification for a session."""
     managed_session = resolve_managed_session(input_data.session_id)
-    input_data = _resolve_batch_size(managed_session, input_data)
+    input_data = _resolve_input(managed_session, input_data)
     validate_detection_settings(
         input_data.confidence_threshold, input_data.ambiguity_gap, input_data.batch_size
     )

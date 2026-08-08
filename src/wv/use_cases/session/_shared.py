@@ -194,6 +194,40 @@ def canonical_process_parameters(parameters: dict[str, object]) -> str:
     return json.dumps(parameters, sort_keys=True, separators=(",", ":"))
 
 
+def resolve_process_parameters(
+    process: SessionProcess | None,
+    process_name: str,
+    provided: dict[str, object | None],
+    defaults: dict[str, object],
+) -> dict[str, object]:
+    """Resolve settings using recorded values, explicit values, then workspace defaults."""
+    stored: dict[str, object] = {}
+    if process is not None:
+        if process.parameters_json is None:
+            raise SessionProcessError(f"Session process has no recorded parameters: {process_name}")
+        try:
+            stored = json.loads(process.parameters_json)
+        except json.JSONDecodeError as exc:
+            raise SessionProcessError(
+                f"Session process has invalid recorded parameters: {process_name}"
+            ) from exc
+        if not isinstance(stored, dict):
+            raise SessionProcessError(
+                f"Session process has invalid recorded parameters: {process_name}"
+            )
+    resolved: dict[str, object] = {}
+    for key, default in defaults.items():
+        if key in stored:
+            if provided[key] is not None and provided[key] != stored[key]:
+                raise SessionProcessError(
+                    f"Session process retry must use the recorded parameter {key}={stored[key]!r} for {process_name}."
+                )
+            resolved[key] = stored[key]
+        else:
+            resolved[key] = default if provided[key] is None else provided[key]
+    return resolved
+
+
 def validate_process_parameters(
     process: SessionProcess | None, parameters_json: str, process_name: str
 ) -> None:

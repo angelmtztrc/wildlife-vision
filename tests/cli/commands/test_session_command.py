@@ -179,7 +179,7 @@ def test_session_clean_overexposed_ir_forwards_options(cli_runner, monkeypatch):
             "20",
             "--high-level",
             "225",
-            "--ptc-high-threshold",
+            "--pct-high-threshold",
             "0.75",
             "--dry-run",
             "--recover",
@@ -190,7 +190,7 @@ def test_session_clean_overexposed_ir_forwards_options(cli_runner, monkeypatch):
     assert received_input.mean_threshold == 210.0
     assert received_input.std_threshold == 20.0
     assert received_input.high_level == 225
-    assert received_input.ptc_high_threshold == 0.75
+    assert received_input.pct_high_threshold == 0.75
     assert received_input.dry_run is True
     assert received_input.recover is True
     assert "Finished managed overexposed cleanup for session-1" in result.output

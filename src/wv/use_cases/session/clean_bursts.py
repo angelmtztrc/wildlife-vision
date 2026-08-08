@@ -1,12 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from collections.abc import Callable
 
 from wv.core.bursts import (
     BurstCandidate,
     BurstReductionPlan,
-    DEFAULT_BURST_GAP_THRESHOLD,
-    DEFAULT_SIMILARITY_THRESHOLD,
     build_burst_reduction_plan,
     create_burst_candidate,
     validate_burst_thresholds,
@@ -30,10 +28,12 @@ from ._shared import (
     _resolve_session_path,
     canonical_process_parameters,
     resolve_managed_session,
+    resolve_process_parameters,
     utc_now,
     validate_process_attempt,
     validate_process_parameters,
 )
+from wv.workspace.workspace_config import load_processing_config
 
 PROCESS_NAME = "clean_bursts"
 BURSTS_STATE = "ignored/bursts"
@@ -45,8 +45,8 @@ logger = get_logger(__name__)
 @dataclass(frozen=True)
 class SessionCleanBurstsInput:
     session_id: str
-    burst_gap_threshold: int = DEFAULT_BURST_GAP_THRESHOLD
-    similarity_threshold: int = DEFAULT_SIMILARITY_THRESHOLD
+    burst_gap_threshold: int | None = None
+    similarity_threshold: int | None = None
     dry_run: bool = False
     recover: bool = False
 
@@ -94,6 +94,29 @@ def _parameters_json(input_data: SessionCleanBurstsInput) -> str:
             "burst_gap_threshold": input_data.burst_gap_threshold,
             "similarity_threshold": input_data.similarity_threshold,
         }
+    )
+
+
+def _resolve_input(managed_session: ManagedSession, input_data: SessionCleanBurstsInput) -> SessionCleanBurstsInput:
+    settings = load_processing_config()
+    with sql_session_scope(managed_session.database_path) as sql_session:
+        process = SessionProcessRepository(sql_session).get_optional(managed_session.session.id, PROCESS_NAME)
+    values = resolve_process_parameters(
+        process,
+        PROCESS_NAME,
+        {
+            "burst_gap_threshold": input_data.burst_gap_threshold,
+            "similarity_threshold": input_data.similarity_threshold,
+        },
+        {
+            "burst_gap_threshold": settings.bursts.burst_gap_threshold,
+            "similarity_threshold": settings.bursts.similarity_threshold,
+        },
+    )
+    return replace(
+        input_data,
+        burst_gap_threshold=int(values["burst_gap_threshold"]),
+        similarity_threshold=int(values["similarity_threshold"]),
     )
 
 
@@ -501,11 +524,10 @@ def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
         SessionProcessError: If lifecycle, plan, or inventory rules reject work.
         ValueError: If burst thresholds are outside the supported range.
     """
-    validate_burst_thresholds(
-        input_data.burst_gap_threshold, input_data.similarity_threshold
-    )
-    parameters_json = _parameters_json(input_data)
     managed_session = resolve_managed_session(input_data.session_id)
+    input_data = _resolve_input(managed_session, input_data)
+    validate_burst_thresholds(input_data.burst_gap_threshold, input_data.similarity_threshold)
+    parameters_json = _parameters_json(input_data)
 
     with _exclusive_session_lock(managed_session.session_path, input_data.dry_run):
         existing_process, existing_plans = _get_existing_plans(

@@ -91,15 +91,12 @@ def test_initialize_workspace_config_writes_expected_defaults(tmp_path: Path):
     written_path = initialize_workspace_config(workspace_path, config_file=config_file)
 
     assert written_path == config_file
-    assert load_workspace_config(config_file) == {
-        "workspace": {
-            "version": 1,
-            "path": str(workspace_path.resolve()),
-        },
-        "database": {
-            "path": str((workspace_path / ".wv" / "database.sqlite").resolve()),
-        },
-    }
+    config = load_workspace_config(config_file)
+    assert config["workspace"] == {"version": 2, "path": str(workspace_path.resolve())}
+    assert config["database"] == {"path": str((workspace_path / ".wv" / "database.sqlite").resolve())}
+    assert config["processing"]["overexposed_ir"]["pct_high_threshold"] == 0.6
+    assert config["processing"]["bursts"] == {"burst_gap_threshold": 60, "similarity_threshold": 5}
+    assert config["processing"]["detection"]["batch_size"] == 4
 
 
 def test_set_and_reset_config_property_preserves_unknown_keys(tmp_path: Path):
@@ -113,7 +110,7 @@ def test_set_and_reset_config_property_preserves_unknown_keys(tmp_path: Path):
     updated_value = set_config_property(value, "workspace.version", 2)
     reset_value = reset_config_property(updated_value, "workspace.version", workspace_path)
 
-    assert get_config_property(reset_value, "workspace.version") == 1
+    assert get_config_property(reset_value, "workspace.version") == 2
     assert get_config_property(reset_value, "custom.unknown") is True
 
 

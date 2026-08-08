@@ -8,7 +8,7 @@ from wv.core.display import display_path
 from wv.core.images import (
     DEFAULT_HIGH_LEVEL,
     DEFAULT_MEAN_THRESHOLD,
-    DEFAULT_PTC_HIGH_THRESHOLD,
+    DEFAULT_PCT_HIGH_THRESHOLD,
     DEFAULT_STD_THRESHOLD,
 )
 from wv.core.logger import get_logger
@@ -131,15 +131,15 @@ def clean_overexposed_ir(
             help="Grayscale value used as the cutoff for counting near-white pixels in the image histogram.",
         ),
     ] = DEFAULT_HIGH_LEVEL,
-    ptc_high_threshold: Annotated[
+    pct_high_threshold: Annotated[
         float,
         typer.Option(
-            "--ptc-high-threshold",
+            "--pct-high-threshold",
             min=0.0,
             max=1.0,
             help="Minimum fraction of pixels at or above --high-level required to flag an image as overexposed.",
         ),
-    ] = DEFAULT_PTC_HIGH_THRESHOLD,
+    ] = DEFAULT_PCT_HIGH_THRESHOLD,
     dry_run: Annotated[
         bool,
         typer.Option(
@@ -150,13 +150,13 @@ def clean_overexposed_ir(
 ):
     """Move likely washed-out infrared images into an ignored/overexposed folder."""
     logger.info(
-        "Starting overexposed IR cleanup from %s to %s (mean_threshold=%s, std_threshold=%s, high_level=%s, ptc_high_threshold=%s, dry_run=%s)",
+        "Starting overexposed IR cleanup from %s to %s (mean_threshold=%s, std_threshold=%s, high_level=%s, pct_high_threshold=%s, dry_run=%s)",
         display_path(source),
         display_path(output),
         mean_threshold,
         std_threshold,
         high_level,
-        ptc_high_threshold,
+        pct_high_threshold,
         dry_run,
     )
 
@@ -167,7 +167,7 @@ def clean_overexposed_ir(
             mean_threshold=mean_threshold,
             std_threshold=std_threshold,
             high_level=high_level,
-            ptc_high_threshold=ptc_high_threshold,
+            pct_high_threshold=pct_high_threshold,
             dry_run=dry_run,
         )
     )

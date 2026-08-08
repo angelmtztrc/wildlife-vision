@@ -2,21 +2,8 @@ from typing import Annotated
 
 import typer
 
-from wv.core.bursts import DEFAULT_BURST_GAP_THRESHOLD, DEFAULT_SIMILARITY_THRESHOLD
-from wv.core.detection import (
-    DEFAULT_AMBIGUITY_GAP,
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_CONFIDENCE_THRESHOLD,
-)
-from wv.core.images import (
-    DEFAULT_HIGH_LEVEL,
-    DEFAULT_MEAN_THRESHOLD,
-    DEFAULT_PTC_HIGH_THRESHOLD,
-    DEFAULT_STD_THRESHOLD,
-)
 from wv.core.logger import get_logger
 from wv.domain.session import INGEST_STATUSES
-from wv.ml.megadetector import DEFAULT_MODEL
 from wv.use_cases.session.clean_corrupted import SessionCleanCorruptedInput
 from wv.use_cases.session.clean_corrupted import run as run_clean_corrupted
 from wv.use_cases.session.clean_overexposed_ir import (
@@ -66,7 +53,7 @@ def list_sessions(
         ),
     ] = None,
     limit: Annotated[
-        int,
+        int | None,
         typer.Option("--limit", min=1, help="Maximum number of sessions to show."),
     ] = 20,
 ):
@@ -221,40 +208,40 @@ def clean_overexposed_ir(
         typer.Argument(help="ID of an ingested session in the active workspace."),
     ],
     mean_threshold: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--mean-threshold",
             min=0.0,
             max=255.0,
             help="Minimum average grayscale brightness required to flag an image as overexposed.",
         ),
-    ] = DEFAULT_MEAN_THRESHOLD,
+    ] = None,
     std_threshold: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--std-threshold",
             min=0.0,
             help="Maximum grayscale standard deviation for bright, uniform images.",
         ),
-    ] = DEFAULT_STD_THRESHOLD,
+    ] = None,
     high_level: Annotated[
-        int,
+        int | None,
         typer.Option(
             "--high-level",
             min=0,
             max=255,
             help="Grayscale cutoff used to count near-white pixels.",
         ),
-    ] = DEFAULT_HIGH_LEVEL,
-    ptc_high_threshold: Annotated[
-        float,
+    ] = None,
+    pct_high_threshold: Annotated[
+        float | None,
         typer.Option(
-            "--ptc-high-threshold",
+            "--pct-high-threshold",
             min=0.0,
             max=1.0,
             help="Minimum near-white pixel fraction required to flag an image.",
         ),
-    ] = DEFAULT_PTC_HIGH_THRESHOLD,
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option(
@@ -278,7 +265,7 @@ def clean_overexposed_ir(
                 mean_threshold=mean_threshold,
                 std_threshold=std_threshold,
                 high_level=high_level,
-                ptc_high_threshold=ptc_high_threshold,
+                pct_high_threshold=pct_high_threshold,
                 dry_run=dry_run,
                 recover=recover,
             )
@@ -312,22 +299,22 @@ def clean_bursts(
         typer.Argument(help="ID of an ingested session in the active workspace."),
     ],
     burst_gap_threshold: Annotated[
-        int,
+        int | None,
         typer.Option(
             "--burst-gap-threshold",
             min=0,
             help="Maximum time gap in seconds between consecutive burst images.",
         ),
-    ] = DEFAULT_BURST_GAP_THRESHOLD,
+    ] = None,
     similarity_threshold: Annotated[
-        int,
+        int | None,
         typer.Option(
             "--similarity-threshold",
             min=0,
             max=64,
             help="Maximum 64-bit perceptual-hash distance for similar images.",
         ),
-    ] = DEFAULT_SIMILARITY_THRESHOLD,
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option(
@@ -382,15 +369,15 @@ def detect_content(
         str,
         typer.Argument(help="ID of an ingested session in the active workspace."),
     ],
-    model: Annotated[str, typer.Option(help="MegaDetector model name or path.")] = DEFAULT_MODEL,
+    model: Annotated[str | None, typer.Option(help="MegaDetector model name or path; defaults to the active workspace configuration.")] = None,
     confidence_threshold: Annotated[
-        float,
+        float | None,
         typer.Option("--confidence-threshold", min=0.0, max=1.0),
-    ] = DEFAULT_CONFIDENCE_THRESHOLD,
+    ] = None,
     ambiguity_gap: Annotated[
-        float,
+        float | None,
         typer.Option("--ambiguity-gap", min=0.0, max=1.0),
-    ] = DEFAULT_AMBIGUITY_GAP,
+    ] = None,
     batch_size: Annotated[
         int | None,
         typer.Option(

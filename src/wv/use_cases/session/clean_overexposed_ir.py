@@ -1,13 +1,9 @@
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from wv.core.files import is_allowed_image_file
 from wv.core.images import (
-    DEFAULT_HIGH_LEVEL,
-    DEFAULT_MEAN_THRESHOLD,
-    DEFAULT_PTC_HIGH_THRESHOLD,
-    DEFAULT_STD_THRESHOLD,
     compute_image_exposure_metrics,
     is_image_overexposed,
     validate_exposure_thresholds,
@@ -26,10 +22,12 @@ from ._shared import (
     _exclusive_session_lock,
     _reconcile_moved_init_inventory,
     resolve_managed_session,
+    resolve_process_parameters,
     utc_now,
     validate_process_parameters,
     validate_process_attempt,
 )
+from wv.workspace.workspace_config import load_processing_config
 
 PROCESS_NAME = "clean_overexposed_ir"
 OVEREXPOSED_STATE = "ignored/overexposed"
@@ -40,10 +38,10 @@ logger = get_logger(__name__)
 @dataclass(frozen=True)
 class SessionCleanOverexposedIrInput:
     session_id: str
-    mean_threshold: float = DEFAULT_MEAN_THRESHOLD
-    std_threshold: float = DEFAULT_STD_THRESHOLD
-    high_level: int = DEFAULT_HIGH_LEVEL
-    ptc_high_threshold: float = DEFAULT_PTC_HIGH_THRESHOLD
+    mean_threshold: float | None = None
+    std_threshold: float | None = None
+    high_level: int | None = None
+    pct_high_threshold: float | None = None
     dry_run: bool = False
     recover: bool = False
 
@@ -79,7 +77,7 @@ def _parameters_json(input_data: SessionCleanOverexposedIrInput) -> str:
         {
             "high_level": input_data.high_level,
             "mean_threshold": input_data.mean_threshold,
-            "ptc_high_threshold": input_data.ptc_high_threshold,
+            "pct_high_threshold": input_data.pct_high_threshold,
             "std_threshold": input_data.std_threshold,
         },
     )
@@ -90,7 +88,38 @@ def _validate_input(input_data: SessionCleanOverexposedIrInput) -> None:
         input_data.mean_threshold,
         input_data.std_threshold,
         input_data.high_level,
-        input_data.ptc_high_threshold,
+        input_data.pct_high_threshold,
+    )
+
+
+def _resolve_input(
+    managed_session: ManagedSession, input_data: SessionCleanOverexposedIrInput
+) -> SessionCleanOverexposedIrInput:
+    settings = load_processing_config()
+    with sql_session_scope(managed_session.database_path) as sql_session:
+        process = SessionProcessRepository(sql_session).get_optional(managed_session.session.id, PROCESS_NAME)
+    values = resolve_process_parameters(
+        process,
+        PROCESS_NAME,
+        {
+            "mean_threshold": input_data.mean_threshold,
+            "std_threshold": input_data.std_threshold,
+            "high_level": input_data.high_level,
+            "pct_high_threshold": input_data.pct_high_threshold,
+        },
+        {
+            "mean_threshold": settings.overexposed_ir.mean_threshold,
+            "std_threshold": settings.overexposed_ir.std_threshold,
+            "high_level": settings.overexposed_ir.high_level,
+            "pct_high_threshold": settings.overexposed_ir.pct_high_threshold,
+        },
+    )
+    return replace(
+        input_data,
+        mean_threshold=float(values["mean_threshold"]),
+        std_threshold=float(values["std_threshold"]),
+        high_level=int(values["high_level"]),
+        pct_high_threshold=float(values["pct_high_threshold"]),
     )
 
 
@@ -201,7 +230,7 @@ def _clean_overexposed_images(
                     metrics,
                     input_data.mean_threshold,
                     input_data.std_threshold,
-                    input_data.ptc_high_threshold,
+                    input_data.pct_high_threshold,
                 ):
                     result.files_ignored += 1
                     continue
@@ -258,9 +287,10 @@ def run(
             reject the operation.
         ValueError: If an exposure threshold is invalid.
     """
+    managed_session = resolve_managed_session(input_data.session_id)
+    input_data = _resolve_input(managed_session, input_data)
     _validate_input(input_data)
     parameters_json = _parameters_json(input_data)
-    managed_session = resolve_managed_session(input_data.session_id)
 
     with _exclusive_session_lock(managed_session.session_path, input_data.dry_run):
         recovered_moves = _prepare_attempt(

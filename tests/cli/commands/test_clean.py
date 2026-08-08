@@ -93,8 +93,8 @@ def test_clean_overexposed_ir_prints_summary_for_success(
         ("--std-threshold", "-1"),
         ("--high-level", "-1"),
         ("--high-level", "256"),
-        ("--ptc-high-threshold", "-0.1"),
-        ("--ptc-high-threshold", "1.1"),
+        ("--pct-high-threshold", "-0.1"),
+        ("--pct-high-threshold", "1.1"),
     ],
 )
 def test_clean_overexposed_ir_rejects_invalid_threshold_options(

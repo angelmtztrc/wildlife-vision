@@ -91,17 +91,17 @@ def test_compute_image_exposure_metrics_and_classification(make_image, tmp_path:
 
     assert metrics.mean == 255.0
     assert metrics.std == 0.0
-    assert metrics.ptc_high == 1.0
+    assert metrics.pct_high == 1.0
     assert is_image_overexposed(
         metrics,
         mean_threshold=200.0,
         std_threshold=25.0,
-        ptc_high_threshold=0.6,
+        pct_high_threshold=0.6,
     )
 
 
 @pytest.mark.parametrize(
-    ("mean_threshold", "std_threshold", "high_level", "ptc_high_threshold"),
+    ("mean_threshold", "std_threshold", "high_level", "pct_high_threshold"),
     [
         (-1.0, 25.0, 220, 0.6),
         (200.0, -1.0, 220, 0.6),
@@ -114,12 +114,12 @@ def test_validate_exposure_thresholds_rejects_invalid_values(
     mean_threshold: float,
     std_threshold: float,
     high_level: int,
-    ptc_high_threshold: float,
+    pct_high_threshold: float,
 ):
     with pytest.raises(ValueError):
         validate_exposure_thresholds(
             mean_threshold,
             std_threshold,
             high_level,
-            ptc_high_threshold,
+            pct_high_threshold,
         )

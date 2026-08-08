@@ -6,6 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from wv.core.files import SymlinkPathError, ensure_tree_has_no_symlinks
 from wv.persistence.database import get_database_head_revision, get_database_revision
 from wv.workspace.common import WorkspaceError
+from wv.workspace.workspace_config import load_workspace_config, validate_workspace_config
 
 from ._shared import WorkspaceStatus, get_workspace_status
 
@@ -44,6 +45,10 @@ def run(input_data: WorkspaceValidateInput) -> WorkspaceValidateResult:
         raise WorkspaceError("Missing workspace database file: .wv/database.sqlite")
     if not status.workspace_config_exists:
         raise WorkspaceError("Missing workspace config file: .wv/config.yml")
+    config = load_workspace_config(status.workspace_path / ".wv" / "config.yml")
+    validate_workspace_config(config, status.workspace_path)
+    if config["workspace"]["version"] != 2:
+        raise WorkspaceError("Workspace config is version 1. Run 'wv workspace migrate'.")
 
     database_path = status.workspace_path / ".wv" / "database.sqlite"
     try:

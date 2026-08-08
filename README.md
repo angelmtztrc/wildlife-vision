@@ -318,8 +318,29 @@ uv run wv config validate
 uv run wv config path
 ```
 
-Processing thresholds are supplied directly to `pipeline run` or the individual
-managed stage commands. They are not currently read from workspace configuration.
+Managed processing defaults are stored in `.wv/config.yml` and may be changed
+with `wv config set`. A command option overrides the workspace value for a new
+stage. Retries and recovery always use their recorded process parameters.
+
+```yaml
+processing:
+  overexposed_ir:
+    mean_threshold: 200.0
+    std_threshold: 25.0
+    high_level: 220
+    pct_high_threshold: 0.6
+  bursts:
+    burst_gap_threshold: 60
+    similarity_threshold: 5
+  detection:
+    model: MDV5A
+    confidence_threshold: 0.8
+    ambiguity_gap: 0.3
+    batch_size: 4
+```
+
+Existing version 1 workspaces must be upgraded with `uv run wv workspace migrate`.
+The standalone filesystem commands do not read workspace processing settings.
 
 Prepare the local MegaDetector model when required. This command can resolve or
 download a model:

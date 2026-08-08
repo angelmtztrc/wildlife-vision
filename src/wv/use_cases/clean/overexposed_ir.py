@@ -7,7 +7,7 @@ from wv.core.files import ensure_directory, is_allowed_image_file
 from wv.core.images import (
     DEFAULT_HIGH_LEVEL,
     DEFAULT_MEAN_THRESHOLD,
-    DEFAULT_PTC_HIGH_THRESHOLD,
+    DEFAULT_PCT_HIGH_THRESHOLD,
     DEFAULT_STD_THRESHOLD,
     compute_image_exposure_metrics,
     is_image_overexposed,
@@ -26,7 +26,7 @@ class CleanOverexposedIrInput:
     mean_threshold: float = DEFAULT_MEAN_THRESHOLD
     std_threshold: float = DEFAULT_STD_THRESHOLD
     high_level: int = DEFAULT_HIGH_LEVEL
-    ptc_high_threshold: float = DEFAULT_PTC_HIGH_THRESHOLD
+    pct_high_threshold: float = DEFAULT_PCT_HIGH_THRESHOLD
     dry_run: bool = False
 
 
@@ -47,7 +47,7 @@ def _validate_input(input_data: CleanOverexposedIrInput) -> None:
         input_data.mean_threshold,
         input_data.std_threshold,
         input_data.high_level,
-        input_data.ptc_high_threshold,
+        input_data.pct_high_threshold,
     )
 
 
@@ -66,13 +66,13 @@ def run(input_data: CleanOverexposedIrInput) -> CleanOverexposedIrResult:
     result.files_discovered = len(source_files)
 
     logger.info(
-        "Discovered %s entries for overexposed IR cleanup; destination is %s (mean_threshold=%s, std_threshold=%s, high_level=%s, ptc_high_threshold=%s, dry_run=%s)",
+        "Discovered %s entries for overexposed IR cleanup; destination is %s (mean_threshold=%s, std_threshold=%s, high_level=%s, pct_high_threshold=%s, dry_run=%s)",
         result.files_discovered,
         display_path(destination),
         input_data.mean_threshold,
         input_data.std_threshold,
         input_data.high_level,
-        input_data.ptc_high_threshold,
+        input_data.pct_high_threshold,
         input_data.dry_run,
     )
     logger.info("Processing overexposed IR candidates")
@@ -101,16 +101,16 @@ def run(input_data: CleanOverexposedIrInput) -> CleanOverexposedIrResult:
                     image_metrics=image_metrics,
                     mean_threshold=input_data.mean_threshold,
                     std_threshold=input_data.std_threshold,
-                    ptc_high_threshold=input_data.ptc_high_threshold,
+                    pct_high_threshold=input_data.pct_high_threshold,
                 )
                 result.files_processed += 1
 
                 logger.debug(
-                    "Classified %s: mean=%.2f std=%.2f ptc_high=%.3f overexposed=%s",
+                    "Classified %s: mean=%.2f std=%.2f pct_high=%.3f overexposed=%s",
                     display_file(file),
                     image_metrics.mean,
                     image_metrics.std,
-                    image_metrics.ptc_high,
+                    image_metrics.pct_high,
                     is_overexposed,
                 )
 
