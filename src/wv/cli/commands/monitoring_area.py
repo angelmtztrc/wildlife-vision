@@ -19,11 +19,12 @@ def create(
     name: Annotated[str, typer.Option(help="Monitoring area name.")],
     area_id: Annotated[
         str | None,
-        typer.Option("--id", help="Optional identifier; defaults to a normalized name."),
+        typer.Option("--id", help="Identifier; defaults to the normalized name."),
     ] = None,
     description: Annotated[str | None, typer.Option(help="Monitoring area description.")] = None,
     notes: Annotated[str | None, typer.Option(help="Monitoring area notes.")] = None,
 ):
+    """Create a monitoring area in the active workspace."""
     try:
         result = run_create(
             CreateMonitoringAreaInput(
@@ -41,6 +42,7 @@ def create(
 
 @app.command("list")
 def list_items():
+    """List monitoring areas in the active workspace."""
     try:
         result = run_list(ListMonitoringAreasInput())
     except WorkspaceError as exc:
@@ -52,6 +54,7 @@ def list_items():
 
 @app.command("show")
 def show(area_id: Annotated[str, typer.Argument(help="Monitoring area ID.")]):
+    """Show one monitoring area."""
     try:
         result = run_show(ShowMonitoringAreaInput(area_id))
     except (WorkspaceError, MonitoringAreaError) as exc:
@@ -68,6 +71,7 @@ def update(
     description: Annotated[str | None, typer.Option(help="Monitoring area description.")] = None,
     notes: Annotated[str | None, typer.Option(help="Monitoring area notes.")] = None,
 ):
+    """Update one or more fields on a monitoring area."""
     try:
         result = run_update(UpdateMonitoringAreaInput(area_id, name, description, notes))
     except (WorkspaceError, MonitoringAreaError) as exc:

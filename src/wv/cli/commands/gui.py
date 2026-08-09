@@ -6,17 +6,17 @@ from wv.gui.favorites.app import launch_favorites_app
 from wv.gui.review_detection.app import launch_review_detection_app
 from wv.core.session import DETECTION_LABELS, normalize_detection_label
 
-app = typer.Typer(help="Launch interactive GUI review tools.")
+app = typer.Typer(help="Launch interactive review tools for managed sessions.")
 
 
 @app.command("review-detection")
 def review_detection(
-    session_id: Annotated[str, typer.Argument(help="Managed session identifier.")],
+    session_id: Annotated[str, typer.Argument(help="Managed session ID with completed content detection.")],
     detection: Annotated[
         str,
         typer.Option(
             "--detection",
-            help="Detection bucket to review.",
+            help="Bucket to review: animal, human, vehicle, empty, or other.",
             case_sensitive=False,
         ),
     ],
@@ -24,11 +24,11 @@ def review_detection(
         bool,
         typer.Option(
             "--pending-only",
-            help="Only load images that have not been reviewed in the database.",
+            help="Load only images whose detection label has not been reviewed.",
         ),
     ] = False,
 ):
-    """Launch the interactive reviewer for one detection bucket."""
+    """Review and relabel images in one completed detection bucket."""
     try:
         normalized_detection = normalize_detection_label(detection)
     except ValueError as exc:
@@ -47,16 +47,16 @@ def review_detection(
 
 @app.command("favorites")
 def favorites(
-    session_id: Annotated[str, typer.Argument(help="Managed session identifier.")],
+    session_id: Annotated[str, typer.Argument(help="Managed session ID with completed content detection.")],
     pending_only: Annotated[
         bool,
         typer.Option(
             "--pending-only",
-            help="Only load animal images that have not had their favorite state reviewed.",
+            help="Load only animal images whose favorite status has not been reviewed.",
         ),
     ] = False,
 ):
-    """Launch the interactive favorites reviewer for animal detections."""
+    """Review favorite status for animal detections."""
     launch_favorites_app(
         session_id=session_id,
         pending_only=pending_only,

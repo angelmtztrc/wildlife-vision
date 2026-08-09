@@ -1,7 +1,7 @@
 [project]
 name = "wildlife-vision"
 version = "0.1.0"
-description = "Add your description here"
+description = "Offline-first tools for ingesting, processing, reviewing, and exporting trail-camera images."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

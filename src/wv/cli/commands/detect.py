@@ -16,7 +16,7 @@ from wv.use_cases.detect.content import (
 )
 from wv.use_cases.detect.content import run as run_detect_content
 
-app = typer.Typer(help="Run content detection on photos.")
+app = typer.Typer(help="Run standalone MegaDetector classification on JPEG files.")
 
 logger = get_logger(__name__)
 
@@ -26,7 +26,7 @@ def detect_content(
     source: Annotated[
         Path,
         typer.Argument(
-            help="Directory containing images to evaluate with MegaDetector.",
+            help="Directory whose immediate .jpg and .jpeg files are evaluated; subdirectories are not searched.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -36,7 +36,7 @@ def detect_content(
     output: Annotated[
         Path,
         typer.Option(
-            help="Base output directory where detected images are moved into output/detection/<label>.",
+            help="Base directory for detection/animal, human, vehicle, empty, and other.",
             file_okay=False,
             dir_okay=True,
         ),
@@ -51,7 +51,7 @@ def detect_content(
             "--confidence-threshold",
             min=0.0,
             max=1.0,
-            help="Minimum confidence required to route an image to animal, human, or vehicle; weaker or ambiguous detections go to other.",
+            help="Minimum confidence for animal, human, or vehicle; weaker results become other.",
         ),
     ] = DEFAULT_CONFIDENCE_THRESHOLD,
     ambiguity_gap: Annotated[
@@ -60,7 +60,7 @@ def detect_content(
             "--ambiguity-gap",
             min=0.0,
             max=1.0,
-            help="Minimum lead over the second label required to avoid other.",
+            help="Minimum lead over the second label; closer results become other.",
         ),
     ] = DEFAULT_AMBIGUITY_GAP,
     batch_size: Annotated[
@@ -68,18 +68,18 @@ def detect_content(
         typer.Option(
             "--batch-size",
             min=1,
-            help="Number of images to send to the detector per inference batch (default: 4).",
+            help="Number of images evaluated per inference batch.",
         ),
     ] = DEFAULT_BATCH_SIZE,
     dry_run: Annotated[
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview the detection operation without moving files or writing metadata.",
+            help="Run model inference and report classifications without moving files or writing EXIF metadata.",
         ),
     ] = False,
-): 
-    """Classify images into animal, human, vehicle, empty, or other using MegaDetector."""
+):
+    """Classify and move JPEGs as animal, human, vehicle, empty, or other."""
     logger.info(
         "Starting content detection from %s to %s (model=%s, confidence_threshold=%s, batch_size=%s, dry_run=%s)",
         display_path(source),

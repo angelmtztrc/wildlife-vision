@@ -8,19 +8,19 @@ from wv.core.logger import get_logger
 from wv.use_cases.session.export_favorites import ExportFavoritesInput
 from wv.use_cases.session.export_favorites import run as run_export_favorites
 
-app = typer.Typer(help="Export curated images.")
+app = typer.Typer(help="Export curated images from managed sessions.")
 
 logger = get_logger(__name__)
 
 
 @app.command("favorites")
 def export_favorites(
-    session_id: Annotated[str, typer.Argument(help="Managed session identifier.")],
+    session_id: Annotated[str, typer.Argument(help="Managed session ID with completed content detection.")],
     output: Annotated[
         Path | None,
         typer.Option(
             "--output",
-            help="Destination directory for exported favorite images.",
+            help="Destination directory; defaults to exports/SESSION_ID/favorites in the active workspace.",
             file_okay=False,
             dir_okay=True,
         ),
@@ -29,11 +29,11 @@ def export_favorites(
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview the export operation without copying any files.",
+            help="Validate candidates and report planned copies and replacements without writing files.",
         ),
     ] = False,
 ):
-    """Copy favorited animal detections into the export folder."""
+    """Copy favorited animal detections from a completed managed session."""
     logger.info(
         "Starting favorite export for %s to %s (dry_run=%s)",
         session_id,

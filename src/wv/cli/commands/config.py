@@ -13,7 +13,7 @@ from wv.use_cases.config.validate import ValidateConfigInput, run as run_validat
 from wv.workspace.common import WorkspaceError
 from wv.workspace.schema import get_known_keys
 
-app = typer.Typer(help="Manage workspace configuration.")
+app = typer.Typer(help="Manage configuration for the active workspace.")
 
 logger = get_logger(__name__)
 
@@ -30,6 +30,7 @@ def _render_value(value: Any) -> str:
 
 @app.command("init")
 def init_config():
+    """Create the default config when the active workspace has no config file."""
     try:
         result = run_initialize_config(ConfigInitializeInput())
     except WorkspaceError as exc:
@@ -44,9 +45,10 @@ def init_config():
 def get_config(
     key: Annotated[
         str,
-        typer.Argument(help="Known workspace config key.", autocompletion=_complete_key),
+        typer.Argument(help="Known dot-separated workspace config key.", autocompletion=_complete_key),
     ],
 ):
+    """Print one value from the active workspace config."""
     try:
         result = run_get_config_value(GetConfigValueInput(key=key))
     except WorkspaceError as exc:
@@ -61,10 +63,11 @@ def get_config(
 def set_config(
     key: Annotated[
         str,
-        typer.Argument(help="Known workspace config key.", autocompletion=_complete_key),
+        typer.Argument(help="Known dot-separated workspace config key.", autocompletion=_complete_key),
     ],
-    value: Annotated[str, typer.Argument(help="Value to assign to the config key.")],
+    value: Annotated[str, typer.Argument(help="YAML value to assign to the config key.")],
 ):
+    """Set and validate one value in the active workspace config."""
     try:
         result = run_set_config_value(SetConfigValueInput(key=key, raw_value=value))
     except WorkspaceError as exc:
@@ -79,9 +82,10 @@ def set_config(
 def reset_config(
     key: Annotated[
         str,
-        typer.Argument(help="Known workspace config key.", autocompletion=_complete_key),
+        typer.Argument(help="Known dot-separated workspace config key.", autocompletion=_complete_key),
     ],
 ):
+    """Reset one active workspace setting to its built-in default."""
     try:
         result = run_reset_config_value(ResetConfigValueInput(key=key))
     except WorkspaceError as exc:
@@ -94,6 +98,7 @@ def reset_config(
 
 @app.command("validate")
 def validate_config():
+    """Validate the active workspace config and processing settings."""
     try:
         result = run_validate_config(ValidateConfigInput())
     except WorkspaceError as exc:
@@ -106,6 +111,7 @@ def validate_config():
 
 @app.command("path")
 def config_path():
+    """Print the active workspace config path."""
     try:
         result = run_show_config_path(ShowConfigPathInput())
     except WorkspaceError as exc:

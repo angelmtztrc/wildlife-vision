@@ -22,7 +22,7 @@ from wv.use_cases.monitoring_site.update import (
 )
 from wv.workspace.common import WorkspaceError
 
-app = typer.Typer(help="Manage monitoring sites.")
+app = typer.Typer(help="Manage monitoring sites within monitoring areas.")
 
 logger = get_logger(__name__)
 
@@ -33,18 +33,19 @@ def _format_value(value: object) -> str:
 
 @app.command("create")
 def create(
-    area: Annotated[str, typer.Option("--area", help="Parent monitoring area ID.")],
+    area: Annotated[str, typer.Option("--area", help="Parent monitoring-area ID.")],
     name: Annotated[str, typer.Option(help="Monitoring site name.")],
-    latitude: Annotated[float, typer.Option(help="Monitoring site latitude.")],
-    longitude: Annotated[float, typer.Option(help="Monitoring site longitude.")],
+    latitude: Annotated[float, typer.Option(help="Monitoring site latitude in decimal degrees.")],
+    longitude: Annotated[float, typer.Option(help="Monitoring site longitude in decimal degrees.")],
     site_id: Annotated[
         str | None,
-        typer.Option("--id", help="Optional identifier; defaults to a normalized name."),
+        typer.Option("--id", help="Identifier; defaults to the normalized name."),
     ] = None,
     description: Annotated[str | None, typer.Option(help="Monitoring site description.")] = None,
     elevation: Annotated[float | None, typer.Option(help="Monitoring site elevation.")] = None,
     notes: Annotated[str | None, typer.Option(help="Monitoring site notes.")] = None,
 ):
+    """Create a monitoring site in the active workspace."""
     try:
         result = run_create_monitoring_site(
             CreateMonitoringSiteInput(
@@ -73,9 +74,10 @@ def create(
 @app.command("list")
 def list_sites(
     area: Annotated[
-        str | None, typer.Option("--area", help="Only show sites in this area.")
+        str | None, typer.Option("--area", help="Show only sites in this monitoring area.")
     ] = None,
 ):
+    """List monitoring sites in the active workspace."""
     try:
         result = run_list_monitoring_sites(ListMonitoringSitesInput(monitoring_area_id=area))
     except WorkspaceError as exc:
@@ -90,6 +92,7 @@ def list_sites(
 
 @app.command("show")
 def show(site_id: Annotated[str, typer.Argument(help="Monitoring site ID.")]):
+    """Show one monitoring site."""
     try:
         result = run_show_monitoring_site(ShowMonitoringSiteInput(id=site_id))
     except (WorkspaceError, MonitoringSiteError) as exc:
@@ -112,11 +115,12 @@ def update(
     site_id: Annotated[str, typer.Argument(help="Monitoring site ID.")],
     name: Annotated[str | None, typer.Option(help="Monitoring site name.")] = None,
     description: Annotated[str | None, typer.Option(help="Monitoring site description.")] = None,
-    latitude: Annotated[float | None, typer.Option(help="Monitoring site latitude.")] = None,
-    longitude: Annotated[float | None, typer.Option(help="Monitoring site longitude.")] = None,
+    latitude: Annotated[float | None, typer.Option(help="Monitoring site latitude in decimal degrees.")] = None,
+    longitude: Annotated[float | None, typer.Option(help="Monitoring site longitude in decimal degrees.")] = None,
     elevation: Annotated[float | None, typer.Option(help="Monitoring site elevation.")] = None,
     notes: Annotated[str | None, typer.Option(help="Monitoring site notes.")] = None,
 ):
+    """Update one or more fields on a monitoring site."""
     try:
         result = run_update_monitoring_site(
             UpdateMonitoringSiteInput(

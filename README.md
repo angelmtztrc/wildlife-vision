@@ -149,6 +149,8 @@ uv run wv sd update /Volumes/TRAIL_CARD \
 uv run wv sd clear /Volumes/TRAIL_CARD
 ```
 
+`sd clear` removes only the card's `.wv/config.yml` file. It does not delete image files.
+
 ## 5. Ingest Images
 
 Ingest creates a persisted session and an `init/` directory under the workspace.
@@ -295,8 +297,11 @@ uv run wv export favorites <SESSION_ID> --dry-run
 
 ## Standalone Filesystem Commands
 
-These commands do not require a workspace or update session inventory/process
-state. Use them only for ad hoc directories outside the managed workflow:
+These commands process only `.jpg` and `.jpeg` files directly inside `SOURCE`; they
+do not search subdirectories. They do not require an active workspace or update
+managed session state. Detection dry runs still load the model and run inference,
+but do not move files or write EXIF metadata. Use them only for ad hoc directories
+outside the managed workflow:
 
 ```bash
 uv run wv clean corrupted <SOURCE> --output <SESSION_PATH>

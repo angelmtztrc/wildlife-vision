@@ -17,7 +17,7 @@ from wv.use_cases.workspace.validate import (
 )
 from wv.workspace.common import WorkspaceError
 
-app = typer.Typer(help="Manage workspace initialization, migration, and validation.")
+app = typer.Typer(help="Initialize, inspect, migrate, and validate the active workspace.")
 
 logger = get_logger(__name__)
 
@@ -27,7 +27,7 @@ def init_workspace(
     path: Annotated[
         Path,
         typer.Argument(
-            help="Existing directory to initialize as a workspace.",
+            help="Existing readable and writable directory to initialize and activate.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -36,6 +36,7 @@ def init_workspace(
         ),
     ],
 ):
+    """Initialize and activate an existing directory as a workspace."""
     logger.info("Initializing workspace at %s", display_path(path))
 
     try:
@@ -56,7 +57,7 @@ def init_workspace(
 
 @app.command("migrate")
 def migrate_workspace():
-    """Apply pending database migrations to the active workspace."""
+    """Upgrade the active workspace config and database to current versions."""
     try:
         result = run_migrate_workspace(WorkspaceMigrateInput())
     except WorkspaceError as exc:
@@ -85,6 +86,7 @@ def migrate_workspace():
 
 @app.command("show")
 def show_workspace():
+    """Show the configured workspace path and required component status."""
     status = run_show_workspace(WorkspaceShowInput()).status
 
     typer.echo(f"global_config: {status.global_config_file}")
@@ -109,6 +111,7 @@ def show_workspace():
 
 @app.command("validate")
 def validate_workspace_command():
+    """Validate the active workspace structure, config, and database revision."""
     try:
         status = run_validate_workspace(WorkspaceValidateInput()).status
     except WorkspaceError as exc:

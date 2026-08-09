@@ -1,3 +1,5 @@
+from typer.main import get_command
+
 from wv.cli.main import app
 
 
@@ -5,6 +7,7 @@ def test_main_help_lists_top_level_commands(cli_runner):
     result = cli_runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
+    assert get_command(app).help == "Offline-first tools for ingesting, processing, reviewing, and exporting trail-camera images."
     assert "--verbose" in result.output
     assert "clean" in result.output
     assert "config" in result.output
@@ -14,6 +17,7 @@ def test_main_help_lists_top_level_commands(cli_runner):
     assert "gui" in result.output
     assert "ingest" in result.output
     assert "monitoring-site" in result.output
+    assert "monitoring-area" in result.output
     assert "pipeline" in result.output
     assert "sd" in result.output
     assert "session" in result.output

@@ -19,7 +19,7 @@ from wv.use_cases.monitoring_site.list import (
 )
 from wv.workspace.common import WorkspaceError
 
-app = typer.Typer(help="Ingest photos from SD cards and other source locations.")
+app = typer.Typer(help="Create managed sessions from SD cards or folders.")
 
 logger = get_logger(__name__)
 
@@ -55,7 +55,7 @@ def ingest_sd(
     source: Annotated[
         Path,
         typer.Argument(
-            help="Directory representing the mounted SD card to ingest from.",
+            help="Mounted SD-card directory containing .wv/config.yml monitoring-site metadata.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -65,24 +65,25 @@ def ingest_sd(
     mode: Annotated[
         Literal["drain", "copy"],
         typer.Option(
-            help="Ingestion mode. Use 'drain' to safely copy files and remove them from the source location, or 'copy' to copy files while leaving the source unchanged.",
+            help="Ingestion mode: drain copies and verifies each JPEG before deleting its source; copy retains sources.",
         ),
     ] = "drain",
     dry_run: Annotated[
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview the ingest operation without copying, moving, or deleting files.",
+            help="Preview counts and destinations without creating a session, copying files, or deleting sources.",
         ),
     ] = False,
     recursive: Annotated[
         bool,
         typer.Option(
             "--recursive",
-            help="Scan all nested folders under the source path, excluding .wv directories.",
+            help="Include files in nested directories, excluding .wv metadata directories.",
         ),
     ] = False,
 ):
+    """Ingest JPEGs from an initialized SD card into the active workspace."""
     logger.info(
         "Starting SD ingest from %s (mode=%s, dry_run=%s, recursive=%s)",
         display_path(source),
@@ -117,7 +118,7 @@ def ingest_folder(
     source: Annotated[
         Path,
         typer.Argument(
-            help="Directory containing photos to ingest.",
+            help="Directory containing .jpg and .jpeg files to ingest.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -128,31 +129,32 @@ def ingest_folder(
         str,
         typer.Option(
             "--monitoring-site",
-            help="Registered monitoring site ID.",
+            help="Registered monitoring-site ID for the new session.",
             autocompletion=_complete_monitoring_site,
         ),
     ],
     mode: Annotated[
         Literal["drain", "copy"],
         typer.Option(
-            help="Ingestion mode. Use 'drain' to safely copy files and remove them from the source location, or 'copy' to copy files while leaving the source unchanged.",
+            help="Ingestion mode: drain copies and verifies each JPEG before deleting its source; copy retains sources.",
         ),
     ] = "drain",
     dry_run: Annotated[
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview the ingest operation without copying, moving, or deleting files.",
+            help="Preview counts and destinations without creating a session, copying files, or deleting sources.",
         ),
     ] = False,
     recursive: Annotated[
         bool,
         typer.Option(
             "--recursive",
-            help="Scan all nested folders under the source path, excluding .wv directories.",
+            help="Include files in nested directories, excluding .wv metadata directories.",
         ),
     ] = False,
 ):
+    """Ingest JPEGs from a folder into a managed session in the active workspace."""
     logger.info(
         "Starting folder ingest from %s (monitoring_site=%s, mode=%s, dry_run=%s, recursive=%s)",
         display_path(source),

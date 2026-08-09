@@ -5,7 +5,7 @@ from wv.core.logger import configure_external_output, set_verbose
 
 app = typer.Typer(
     name="wildlife-vision",
-    help="An offline-first set of automated image pipelines for managing, organizing, reviewing, and curating images captured by trail and hunting cameras.",
+    help="Offline-first tools for ingesting, processing, reviewing, and exporting trail-camera images.",
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
@@ -39,7 +39,7 @@ app.add_typer(session.app, name="session")
 app.add_typer(workspace.app, name="workspace")
 app.command(
     "setup",
-    help="Prepare MegaDetector for local inference by resolving or downloading the configured model.",
+    help="Resolve or download a MegaDetector model for local inference.",
 )(setup.setup)
 
 

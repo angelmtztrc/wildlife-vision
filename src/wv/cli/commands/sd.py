@@ -12,7 +12,7 @@ from wv.use_cases.sd.show import SdShowInput, run as run_show
 from wv.use_cases.sd.update import SdUpdateInput, run as run_update
 from wv.workspace.common import WorkspaceError
 
-app = typer.Typer(help="Manage SD card monitoring-site metadata.")
+app = typer.Typer(help="Manage monitoring-site metadata stored on SD cards.")
 
 logger = get_logger(__name__)
 
@@ -22,7 +22,7 @@ def init_sd(
     path: Annotated[
         Path,
         typer.Argument(
-            help="Mounted SD card path to initialize.",
+            help="Mounted SD-card directory to initialize.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -32,9 +32,10 @@ def init_sd(
     ],
     monitoring_site: Annotated[
         str,
-        typer.Option("--monitoring-site", help="Registered monitoring site ID."),
+        typer.Option("--monitoring-site", help="Registered monitoring-site ID from the active workspace."),
     ],
 ):
+    """Write monitoring-site metadata to an uninitialized SD card."""
     try:
         result = run_initialize(
             SdInitializeInput(
@@ -59,7 +60,7 @@ def show_sd(
     path: Annotated[
         Path,
         typer.Argument(
-            help="Mounted SD card path to inspect.",
+            help="Mounted SD-card directory to inspect.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -67,6 +68,7 @@ def show_sd(
         ),
     ],
 ):
+    """Show monitoring-site metadata stored on an initialized SD card."""
     try:
         result = run_show(SdShowInput(path=path))
     except SdError as exc:
@@ -86,7 +88,7 @@ def update_sd(
     path: Annotated[
         Path,
         typer.Argument(
-            help="Mounted SD card path to update.",
+            help="Mounted SD-card directory to update.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -96,9 +98,10 @@ def update_sd(
     ],
     monitoring_site: Annotated[
         str,
-        typer.Option("--monitoring-site", help="Registered monitoring site ID."),
+        typer.Option("--monitoring-site", help="Registered monitoring-site ID from the active workspace."),
     ],
 ):
+    """Change the monitoring site stored on an initialized SD card."""
     try:
         result = run_update(
             SdUpdateInput(
@@ -123,7 +126,7 @@ def clear_sd(
     path: Annotated[
         Path,
         typer.Argument(
-            help="Mounted SD card path to clear.",
+            help="Mounted SD-card directory whose .wv/config.yml file will be removed.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -132,6 +135,7 @@ def clear_sd(
         ),
     ],
 ):
+    """Remove the SD card's Wildlife Vision config file without deleting images."""
     try:
         result = run_clear(SdClearInput(path=path))
     except (WorkspaceError, SdError) as exc:

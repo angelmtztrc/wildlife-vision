@@ -23,10 +23,10 @@ from wv.use_cases.session.status import run as run_session_status
 from wv.use_cases.session._shared import SessionError, SessionProcessError
 from wv.workspace.common import WorkspaceError
 
-app = typer.Typer(help="Run database-tracked processing for ingested sessions.")
+app = typer.Typer(help="Inspect and process managed ingest sessions.")
 clean_app = typer.Typer(help="Run ordered cleanup stages for an ingested session.")
 app.add_typer(clean_app, name="clean")
-detect_app = typer.Typer(help="Run ordered detection stages for an ingested session.")
+detect_app = typer.Typer(help="Run the ordered content-detection stage for an ingested session.")
 app.add_typer(detect_app, name="detect")
 
 logger = get_logger(__name__)
@@ -36,20 +36,20 @@ logger = get_logger(__name__)
 def list_sessions(
     area: Annotated[
         str | None,
-        typer.Option("--area", help="Only show sessions in this monitoring area."),
+        typer.Option("--area", help="Show only sessions in this monitoring area."),
     ] = None,
     monitoring_site: Annotated[
         str | None,
         typer.Option(
             "--monitoring-site",
-            help="Only show sessions for this monitoring-site ID.",
+            help="Show only sessions for this monitoring-site ID.",
         ),
     ] = None,
     ingest_status: Annotated[
         str | None,
         typer.Option(
             "--ingest-status",
-            help=f"Only show sessions with one of: {', '.join(INGEST_STATUSES)}.",
+            help=f"Show only sessions with status: {', '.join(INGEST_STATUSES)}.",
         ),
     ] = None,
     limit: Annotated[
@@ -84,7 +84,7 @@ def list_sessions(
 def session_status(
     session_id: Annotated[
         str,
-        typer.Argument(help="ID of an ingested session in the active workspace."),
+        typer.Argument(help="Ingest session ID in the active workspace."),
     ],
 ):
     """Show ingest, processing, inventory, and filesystem status for a session."""
@@ -154,24 +154,24 @@ def session_status(
 def clean_corrupted(
     session_id: Annotated[
         str,
-        typer.Argument(help="ID of an ingested session in the active workspace."),
+        typer.Argument(help="Completed ingest session ID in the active workspace."),
     ],
     dry_run: Annotated[
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview corrupted cleanup without moving files or updating the database.",
+            help="Scan images without moving files or updating process and inventory state.",
         ),
     ] = False,
     recover: Annotated[
         bool,
         typer.Option(
             "--recover",
-            help="Resume an interrupted corrupted-cleanup attempt after reconciling its inventory.",
+            help="Recover an interrupted attempt after reconciling moved files with session inventory.",
         ),
     ] = False,
 ):
-    """Clean corrupted images while recording ordered session-process state."""
+    """Run the first managed stage and move unreadable images to ignored/corrupted."""
     try:
         result = run_clean_corrupted(
             SessionCleanCorruptedInput(
@@ -205,7 +205,7 @@ def clean_corrupted(
 def clean_overexposed_ir(
     session_id: Annotated[
         str,
-        typer.Argument(help="ID of an ingested session in the active workspace."),
+        typer.Argument(help="Completed ingest session ID after the corrupted stage."),
     ],
     mean_threshold: Annotated[
         float | None,
@@ -213,7 +213,7 @@ def clean_overexposed_ir(
             "--mean-threshold",
             min=0.0,
             max=255.0,
-            help="Minimum average grayscale brightness required to flag an image as overexposed.",
+            help="Override the workspace grayscale mean for a new stage; retries use the recorded value.",
         ),
     ] = None,
     std_threshold: Annotated[
@@ -221,7 +221,7 @@ def clean_overexposed_ir(
         typer.Option(
             "--std-threshold",
             min=0.0,
-            help="Maximum grayscale standard deviation for bright, uniform images.",
+            help="Override workspace grayscale deviation for a new stage; retries use the recorded value.",
         ),
     ] = None,
     high_level: Annotated[
@@ -230,7 +230,7 @@ def clean_overexposed_ir(
             "--high-level",
             min=0,
             max=255,
-            help="Grayscale cutoff used to count near-white pixels.",
+            help="Override the workspace near-white cutoff for a new stage; retries use the recorded value.",
         ),
     ] = None,
     pct_high_threshold: Annotated[
@@ -239,25 +239,25 @@ def clean_overexposed_ir(
             "--pct-high-threshold",
             min=0.0,
             max=1.0,
-            help="Minimum near-white pixel fraction required to flag an image.",
+            help="Override the workspace near-white fraction for a new stage; retries use the recorded value.",
         ),
     ] = None,
     dry_run: Annotated[
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview overexposed cleanup without moving files or updating the database.",
+            help="Analyze images without moving files or updating process and inventory state.",
         ),
     ] = False,
     recover: Annotated[
         bool,
         typer.Option(
             "--recover",
-            help="Resume an interrupted overexposed-cleanup attempt after reconciling its inventory.",
+            help="Recover an interrupted attempt after reconciling moved files with session inventory.",
         ),
     ] = False,
 ):
-    """Clean overexposed images while recording ordered session-process state."""
+    """Run the second managed stage and move likely overexposed IR images."""
     try:
         result = run_clean_overexposed_ir(
             SessionCleanOverexposedIrInput(
@@ -296,14 +296,14 @@ def clean_overexposed_ir(
 def clean_bursts(
     session_id: Annotated[
         str,
-        typer.Argument(help="ID of an ingested session in the active workspace."),
+        typer.Argument(help="Completed ingest session ID after the overexposed-IR stage."),
     ],
     burst_gap_threshold: Annotated[
         int | None,
         typer.Option(
             "--burst-gap-threshold",
             min=0,
-            help="Maximum time gap in seconds between consecutive burst images.",
+            help="Override the workspace burst gap for a new stage; retries use the recorded value.",
         ),
     ] = None,
     similarity_threshold: Annotated[
@@ -312,25 +312,25 @@ def clean_bursts(
             "--similarity-threshold",
             min=0,
             max=64,
-            help="Maximum 64-bit perceptual-hash distance for similar images.",
+            help="Override workspace hash similarity for a new stage; retries use the recorded value.",
         ),
     ] = None,
     dry_run: Annotated[
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview burst cleanup without moving files or updating the database.",
+            help="Build the reduction plan without moving files or updating process and inventory state.",
         ),
     ] = False,
     recover: Annotated[
         bool,
         typer.Option(
             "--recover",
-            help="Resume an interrupted burst-cleanup attempt using its saved plan.",
+            help="Resume an interrupted attempt from its saved reduction plan.",
         ),
     ] = False,
 ):
-    """Reduce burst images while recording an immutable session decision plan."""
+    """Run the third managed stage and reduce similar image bursts."""
     try:
         result = run_clean_bursts(
             SessionCleanBurstsInput(
@@ -367,29 +367,29 @@ def clean_bursts(
 def detect_content(
     session_id: Annotated[
         str,
-        typer.Argument(help="ID of an ingested session in the active workspace."),
+        typer.Argument(help="Completed ingest session ID after all cleanup stages."),
     ],
-    model: Annotated[str | None, typer.Option(help="MegaDetector model name or path; defaults to the active workspace configuration.")] = None,
+    model: Annotated[str | None, typer.Option(help="Override the workspace model for a new stage; retries use the recorded value.")] = None,
     confidence_threshold: Annotated[
         float | None,
-        typer.Option("--confidence-threshold", min=0.0, max=1.0),
+        typer.Option("--confidence-threshold", min=0.0, max=1.0, help="Override workspace detection confidence for a new stage; retries use the recorded value."),
     ] = None,
     ambiguity_gap: Annotated[
         float | None,
-        typer.Option("--ambiguity-gap", min=0.0, max=1.0),
+        typer.Option("--ambiguity-gap", min=0.0, max=1.0, help="Override workspace detection ambiguity for a new stage; retries use the recorded value."),
     ] = None,
     batch_size: Annotated[
         int | None,
         typer.Option(
             "--batch-size",
             min=1,
-            help="Detector inference batch size; defaults to 4 for new sessions and reuses the recorded value on retries.",
+            help="Override workspace inference batch size for a new stage; retries use the recorded value.",
         ),
     ] = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
-    recover: Annotated[bool, typer.Option("--recover")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview classifications without moving files or updating the database; a new plan still runs inference.")] = False,
+    recover: Annotated[bool, typer.Option("--recover", help="Resume an interrupted attempt from its saved inference plan without rerunning inference.")] = False,
 ):
-    """Detect session content using an immutable, recoverable inference plan."""
+    """Run the final managed stage and classify images as animal, human, vehicle, empty, or other."""
     try:
         result = run_detect_content(
             SessionDetectContentInput(

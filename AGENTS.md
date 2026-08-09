@@ -102,14 +102,14 @@ src/wv/use_cases/device/
 ## Current State
 
 - Implemented command paths worth verifying are `setup`, `ingest {sd,folder}`, `pipeline run`, `detect content`, and `clean {corrupted,overexposed-ir,bursts}`.
-- `src/wv/cli/commands/export.py` exists but is not registered in the root app.
+- `export favorites` is registered in the root app.
 - `wv setup` calls MegaDetector model preparation (`src/wv/use_cases/setup.py`, `src/wv/ml/megadetector.py`) and can trigger model resolution/download, so prefer help or tests for routine smoke checks.
 
 ## Config Gotcha
 
 - `src/wv/config/setup.yml` is deprecated and retained only for compatibility with older tests; ingest does not read it.
-- Ingest requires the active workspace configured globally. Sessions are written under `<workspace>/sessions/<timestamp>__<device>/init`.
-- `ingest sd` reads device and monitoring-site IDs from `<sd>/.wv/config.yml`; `ingest folder` receives them as options. Both validate IDs against the active workspace database.
+- Ingest requires the active workspace configured globally. Sessions are written under `<workspace>/sessions/<timestamp>__<monitoring-site>/init`.
+- `ingest sd` reads the monitoring-site ID from `<sd>/.wv/config.yml`; `ingest folder` receives it as an option. Both validate it against the active workspace database.
 
 ## Logging
 

@@ -19,9 +19,7 @@ from wv.use_cases.clean.corrupted import run as run_clean_corrupted
 from wv.use_cases.clean.overexposed_ir import CleanOverexposedIrInput
 from wv.use_cases.clean.overexposed_ir import run as run_clean_overexposed_ir
 
-app = typer.Typer(
-    help="Identify and clean corrupted, overexposed IR, and burst photos."
-)
+app = typer.Typer(help="Run standalone cleanup on JPEG files outside managed sessions.")
 
 logger = get_logger(__name__)
 
@@ -31,7 +29,7 @@ def clean_corrupted(
     source: Annotated[
         Path,
         typer.Argument(
-            help="Directory to scan for image files and move corrupted photos from.",
+            help="Directory whose immediate .jpg and .jpeg files are scanned; subdirectories are not searched.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -41,7 +39,7 @@ def clean_corrupted(
     output: Annotated[
         Path,
         typer.Option(
-            help="Base output directory where corrupted photos are moved under ignored/corrupted.",
+            help="Base directory for the ignored/corrupted destination.",
             file_okay=False,
             dir_okay=True,
             readable=True,
@@ -51,11 +49,11 @@ def clean_corrupted(
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview the clean operation without moving any files.",
+            help="Scan files and report planned moves without moving them.",
         ),
     ] = False,
 ):
-    """Detect unreadable image files and move them into an ignored/corrupted folder."""
+    """Move unreadable JPEG files directly in SOURCE to ignored/corrupted."""
     logger.info(
         "Starting corrupted cleanup from %s to %s (dry_run=%s)",
         display_path(source),
@@ -89,7 +87,7 @@ def clean_overexposed_ir(
     source: Annotated[
         Path,
         typer.Argument(
-            help="Directory to scan for image files and move overexposed IR photos from.",
+            help="Directory whose immediate .jpg and .jpeg files are analyzed; subdirectories are not searched.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -99,7 +97,7 @@ def clean_overexposed_ir(
     output: Annotated[
         Path,
         typer.Option(
-            help="Base output directory where overexposed IR photos are moved under ignored/overexposed.",
+            help="Base directory for the ignored/overexposed destination.",
             file_okay=False,
             dir_okay=True,
             readable=True,
@@ -111,7 +109,7 @@ def clean_overexposed_ir(
             "--mean-threshold",
             min=0.0,
             max=255.0,
-            help="Minimum average grayscale brightness required to flag an image as overexposed.",
+            help="Minimum grayscale mean for the bright-and-uniform test.",
         ),
     ] = DEFAULT_MEAN_THRESHOLD,
     std_threshold: Annotated[
@@ -119,7 +117,7 @@ def clean_overexposed_ir(
         typer.Option(
             "--std-threshold",
             min=0.0,
-            help="Maximum grayscale standard deviation allowed when treating a bright image as uniformly overexposed.",
+            help="Maximum grayscale standard deviation for the bright-and-uniform test.",
         ),
     ] = DEFAULT_STD_THRESHOLD,
     high_level: Annotated[
@@ -128,7 +126,7 @@ def clean_overexposed_ir(
             "--high-level",
             min=0,
             max=255,
-            help="Grayscale value used as the cutoff for counting near-white pixels in the image histogram.",
+            help="Inclusive grayscale cutoff used to count near-white pixels.",
         ),
     ] = DEFAULT_HIGH_LEVEL,
     pct_high_threshold: Annotated[
@@ -137,18 +135,18 @@ def clean_overexposed_ir(
             "--pct-high-threshold",
             min=0.0,
             max=1.0,
-            help="Minimum fraction of pixels at or above --high-level required to flag an image as overexposed.",
+            help="Minimum near-white pixel fraction for the histogram test.",
         ),
     ] = DEFAULT_PCT_HIGH_THRESHOLD,
     dry_run: Annotated[
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview the clean operation without moving any files.",
+            help="Analyze files and report planned moves without moving them.",
         ),
     ] = False,
 ):
-    """Move likely washed-out infrared images into an ignored/overexposed folder."""
+    """Move likely overexposed IR JPEG files directly in SOURCE to ignored/overexposed."""
     logger.info(
         "Starting overexposed IR cleanup from %s to %s (mean_threshold=%s, std_threshold=%s, high_level=%s, pct_high_threshold=%s, dry_run=%s)",
         display_path(source),
@@ -194,7 +192,7 @@ def clean_bursts(
     source: Annotated[
         Path,
         typer.Argument(
-            help="Directory to scan for images and reduce burst sequences from.",
+            help="Directory whose immediate .jpg and .jpeg files are analyzed; subdirectories are not searched.",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -204,7 +202,7 @@ def clean_bursts(
     output: Annotated[
         Path,
         typer.Option(
-            help="Base output directory where reduced burst images are moved under ignored/bursts.",
+            help="Base directory for the ignored/bursts destination.",
             file_okay=False,
             dir_okay=True,
             readable=True,
@@ -215,7 +213,7 @@ def clean_bursts(
         typer.Option(
             "--burst-gap-threshold",
             min=0,
-            help="Maximum time gap in seconds between consecutive images for grouping them into the same burst.",
+            help="Maximum seconds between consecutive images in the same burst.",
         ),
     ] = DEFAULT_BURST_GAP_THRESHOLD,
     similarity_threshold: Annotated[
@@ -224,18 +222,18 @@ def clean_bursts(
             "--similarity-threshold",
             min=0,
             max=64,
-            help="Maximum perceptual hash distance for treating images inside a burst as visually similar.",
+            help="Maximum perceptual-hash distance for images considered similar.",
         ),
     ] = DEFAULT_SIMILARITY_THRESHOLD,
     dry_run: Annotated[
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview the clean operation without moving any files.",
+            help="Build the reduction plan and report planned moves without moving files.",
         ),
     ] = False,
 ):
-    """Keep the best images from near-duplicate bursts and move the rest into ignored/bursts."""
+    """Keep selected JPEGs from similar bursts and move the rest to ignored/bursts."""
     logger.info(
         "Starting burst cleanup from %s to %s (burst_gap_threshold=%s, similarity_threshold=%s, dry_run=%s)",
         display_path(source),
