@@ -552,10 +552,46 @@ def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
                 files_bursts=existing_process.bursts_count if existing_process else 0,
                 dry_run=input_data.dry_run,
             )
+            result.destination = get_ignored_bursts_path(managed_session.session_path)
+            if input_data.dry_run:
+                return _result(managed_session, None, result)
+
+            with get_progress() as progress:
+                task = progress.add_task(
+                    "Applying burst cleanup plan", total=len(existing_plans)
+                )
+                with sql_session_scope(managed_session.database_path) as sql_session:
+                    SessionProcessRepository(sql_session).start(
+                        managed_session.session.id,
+                        PROCESS_NAME,
+                        utc_now(),
+                        parameters_json=parameters_json,
+                    )
+                    if existing_process is not None:
+                        SessionProcessRepository(sql_session).set_bursts_count(
+                            managed_session.session.id,
+                            PROCESS_NAME,
+                            existing_process.bursts_count,
+                        )
+                try:
+                    _apply_plan(
+                        managed_session,
+                        existing_plans,
+                        result,
+                        on_plan_applied=lambda: progress.update(task, advance=1),
+                    )
+                    process = _complete_process(managed_session, result)
+                except Exception as exc:
+                    try:
+                        _fail_process(managed_session, exc)
+                    except Exception:
+                        logger.exception("Unable to record failed session process %s", PROCESS_NAME)
+                    raise
+            return _result(managed_session, process, result)
         else:
             source_files = list(managed_session.init_path.iterdir())
             with get_progress() as progress:
-                scan_task = progress.add_task(
+                task = progress.add_task(
                     "Scanning burst candidates", total=len(source_files)
                 )
                 with sql_session_scope(managed_session.database_path) as sql_session:
@@ -563,72 +599,58 @@ def run(input_data: SessionCleanBurstsInput) -> SessionCleanBurstsResult:
                         managed_session,
                         SessionImageRepository(sql_session),
                         source_files,
-                        on_file_scanned=lambda: progress.update(scan_task, advance=1),
+                        on_file_scanned=lambda: progress.update(task, advance=1),
                     )
-                analysis_task = progress.add_task(
-                    "Analyzing burst candidates",
+                progress.reset(
+                    task,
+                    description="Analyzing burst candidates",
                     total=len(planning_input.candidates),
+                    completed=0,
                 )
                 plan = build_burst_reduction_plan(
                     planning_input.candidates,
                     input_data.burst_gap_threshold,
                     input_data.similarity_threshold,
                     on_candidate_processed=lambda: progress.update(
-                        analysis_task, advance=1
+                        task, advance=1
                     ),
                 )
-            result = _build_result(planning_input, plan, input_data.dry_run)
+                result = _build_result(planning_input, plan, input_data.dry_run)
+                result.destination = get_ignored_bursts_path(managed_session.session_path)
+                if result.files_failed:
+                    process = None
+                    if not input_data.dry_run:
+                        process = _record_planning_failure(
+                            managed_session, input_data, parameters_json, result
+                        )
+                    return _result(managed_session, process, result)
 
-        result.destination = get_ignored_bursts_path(managed_session.session_path)
-        if result.files_failed:
-            process = None
-            if not input_data.dry_run:
-                process = _record_planning_failure(
-                    managed_session, input_data, parameters_json, result
+                if input_data.dry_run:
+                    return _result(managed_session, None, result)
+
+                _persist_new_plan(managed_session, input_data, parameters_json, plan)
+                with sql_session_scope(managed_session.database_path) as sql_session:
+                    existing_plans = SessionProcessImagePlanRepository(
+                        sql_session
+                    ).list_for_process(managed_session.session.id, PROCESS_NAME)
+                progress.reset(
+                    task,
+                    description="Applying burst cleanup plan",
+                    total=len(existing_plans),
+                    completed=0,
                 )
-            return _result(managed_session, process, result)
-
-        if input_data.dry_run:
-            return _result(managed_session, None, result)
-
-        if not existing_plans:
-            _persist_new_plan(managed_session, input_data, parameters_json, plan)
-            with sql_session_scope(managed_session.database_path) as sql_session:
-                existing_plans = SessionProcessImagePlanRepository(
-                    sql_session
-                ).list_for_process(managed_session.session.id, PROCESS_NAME)
-        else:
-            with sql_session_scope(managed_session.database_path) as sql_session:
-                SessionProcessRepository(sql_session).start(
-                    managed_session.session.id,
-                    PROCESS_NAME,
-                    utc_now(),
-                    parameters_json=parameters_json,
-                )
-                if existing_process is not None:
-                    SessionProcessRepository(sql_session).set_bursts_count(
-                        managed_session.session.id,
-                        PROCESS_NAME,
-                        existing_process.bursts_count,
+                try:
+                    _apply_plan(
+                        managed_session,
+                        existing_plans,
+                        result,
+                        on_plan_applied=lambda: progress.update(task, advance=1),
                     )
-
-        try:
-            with get_progress() as progress:
-                apply_task = progress.add_task(
-                    "Applying burst cleanup plan", total=len(existing_plans)
-                )
-                _apply_plan(
-                    managed_session,
-                    existing_plans,
-                    result,
-                    on_plan_applied=lambda: progress.update(apply_task, advance=1),
-                )
-            process = _complete_process(managed_session, result)
-        except Exception as exc:
-            try:
-                _fail_process(managed_session, exc)
-            except Exception:
-                logger.exception("Unable to record failed session process %s", PROCESS_NAME)
-            raise
-
-    return _result(managed_session, process, result)
+                    process = _complete_process(managed_session, result)
+                except Exception as exc:
+                    try:
+                        _fail_process(managed_session, exc)
+                    except Exception:
+                        logger.exception("Unable to record failed session process %s", PROCESS_NAME)
+                    raise
+            return _result(managed_session, process, result)

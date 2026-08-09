@@ -25,6 +25,31 @@ from wv.workspace.workspace_config import require_workspace_database_path
 SESSION_ID = "20240731_120000__HNT001"
 
 
+class _RecordingProgress:
+    def __init__(self):
+        self.added_tasks: list[tuple[str, int]] = []
+        self.resets: list[dict] = []
+        self.updates: list[tuple[int, int]] = []
+        self.entered = 0
+
+    def __enter__(self):
+        self.entered += 1
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def add_task(self, description: str, *, total: int) -> int:
+        self.added_tasks.append((description, total))
+        return 1
+
+    def reset(self, task_id: int, **kwargs) -> None:
+        self.resets.append({"task_id": task_id, **kwargs})
+
+    def update(self, task_id: int, *, advance: int) -> None:
+        self.updates.append((task_id, advance))
+
+
 def _create_session_inventory(workspace_path: Path, image_paths: list[Path]) -> Path:
     database_path = require_workspace_database_path(workspace_path)
     session_path = workspace_path / "sessions" / SESSION_ID
@@ -139,6 +164,42 @@ def test_run_persists_plan_before_moving_and_updates_inventory(
     assert {plan.decision for plan in plans} == {"keep", "move"}
     assert moved_image.current_relative_path == f"ignored/bursts/{image_paths[1].name}"
     assert (session_path / moved_image.current_relative_path).is_file()
+
+
+def test_run_reuses_one_progress_task_across_fresh_burst_cleanup(
+    configured_workspace: Path, make_image, monkeypatch: pytest.MonkeyPatch
+):
+    image_paths = _make_images(configured_workspace, make_image)
+    _create_session_inventory(configured_workspace, image_paths)
+    _complete_overexposed_process(configured_workspace)
+    progress_instances: list[_RecordingProgress] = []
+
+    def get_progress() -> _RecordingProgress:
+        progress = _RecordingProgress()
+        progress_instances.append(progress)
+        return progress
+
+    def build_plan(candidates, *_, on_candidate_processed=None, **__):
+        for _candidate in candidates:
+            on_candidate_processed()
+        return _three_image_plan(candidates)
+
+    monkeypatch.setattr(managed_bursts, "get_progress", get_progress)
+    monkeypatch.setattr(managed_bursts, "build_burst_reduction_plan", build_plan)
+
+    result = run(SessionCleanBurstsInput(session_id=SESSION_ID))
+
+    assert result.process is not None
+    assert len(progress_instances) == 1
+    progress = progress_instances[0]
+    assert progress.entered == 1
+    assert progress.added_tasks == [("Scanning burst candidates", 3)]
+    assert [reset["description"] for reset in progress.resets] == [
+        "Analyzing burst candidates",
+        "Applying burst cleanup plan",
+    ]
+    assert all(reset["task_id"] == 1 for reset in progress.resets)
+    assert progress.updates == [(1, 1)] * 9
 
 
 def test_run_requires_overexposed_predecessor(configured_workspace: Path, make_image):
