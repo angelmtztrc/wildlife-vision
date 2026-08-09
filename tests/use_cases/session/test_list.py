@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from wv.domain.session import IngestSession
-from wv.persistence.repositories import SessionRepository
+from wv.persistence.repositories import SessionProcessRepository, SessionRepository
 from wv.persistence.sql_session import sql_session_scope
 from wv.use_cases.session._shared import SessionError
 from wv.use_cases.session.list import ListSessionsInput, run
@@ -66,6 +66,48 @@ def test_run_lists_newest_sessions_with_combined_filters(configured_workspace: P
     assert [session.id for session in result.items] == [
         "20260802_120000__SITE001"
     ]
+    assert result.items[0].processing_status == "ready"
+    assert result.items[0].next_action == "run"
+    assert result.items[0].next_process == "clean_corrupted"
+
+
+def test_run_derives_processing_status_from_bulk_process_records(
+    configured_workspace: Path,
+):
+    session_id = "20260801_120000__SITE001"
+    _create_session(
+        configured_workspace,
+        session_id=session_id,
+        monitoring_site_id="SITE001",
+        started_at="2026-08-01T12:00:00+00:00",
+        ingest_status="completed",
+    )
+    with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
+        repository = SessionProcessRepository(sql_session)
+        repository.start(
+            session_id,
+            "clean_corrupted",
+            "2026-08-01T12:01:00+00:00",
+            parameters_json=None,
+        )
+        repository.complete(
+            session_id,
+            "clean_corrupted",
+            status="completed",
+            completed_at="2026-08-01T12:02:00+00:00",
+            files_discovered=0,
+            files_processed=0,
+            files_selected=0,
+            files_moved=0,
+            files_ignored=0,
+            files_failed=0,
+        )
+
+    result = run(ListSessionsInput())
+
+    assert result.items[0].processing_status == "processing"
+    assert result.items[0].next_action == "run"
+    assert result.items[0].next_process == "clean_overexposed_ir"
 
 
 @pytest.mark.parametrize(

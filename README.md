@@ -214,6 +214,16 @@ uv run wv session list --monitoring-site FALLEN_TREE_IN_RIVERBANK
 uv run wv session list --ingest-status completed --limit 20
 ```
 
+`session list` displays a table with these columns:
+
+```text
+SESSION ID  STARTED AT  SITE ID  PROCESSING STATUS
+```
+
+`PROCESSING STATUS` is derived from persisted managed-stage records. Use
+`session status` for ingest status, filesystem health, detailed stage counters,
+and the next permitted action.
+
 Then inspect its status:
 
 ```bash

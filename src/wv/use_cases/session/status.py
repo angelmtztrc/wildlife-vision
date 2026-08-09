@@ -87,61 +87,6 @@ def _to_stage_status(process: SessionProcess) -> SessionStageStatus:
     )
 
 
-def _derive_operational_status(
-    session: IngestSession, stages: list[SessionStageStatus]
-) -> tuple[str, str | None, str | None]:
-    if session.ingest_status == "in_progress":
-        return "ingest_in_progress", None, None
-    if session.ingest_status == "failed":
-        return "ingest_failed", None, None
-    if session.ingest_status not in shared.SUCCESSFUL_PROCESS_STATUSES:
-        return "unknown", None, None
-
-    started_stages = [stage for stage in stages if stage.status != "not_started"]
-    if not started_stages:
-        return "ready", shared.PROCESS_NAMES[0], "run"
-
-    seen_missing = False
-    for stage in stages:
-        if stage.status == "not_started":
-            seen_missing = True
-        elif seen_missing:
-            return "inconsistent", None, None
-
-    for index, stage in enumerate(stages):
-        if stage.status in {"in_progress", "failed"}:
-            has_successor = any(
-                successor.status != "not_started" for successor in stages[index + 1 :]
-            )
-            if has_successor:
-                return "inconsistent", None, None
-            if stage.status == "in_progress":
-                return "process_in_progress", stage.name, "recover"
-            return "processing_failed", stage.name, "retry"
-
-    latest_stage = started_stages[-1]
-    if latest_stage.status == "completed_with_failures":
-        overall = (
-            "completed_with_failures"
-            if len(started_stages) == len(stages)
-            else "processing_with_failures"
-        )
-        return overall, latest_stage.name, "retry"
-
-    if len(started_stages) < len(stages):
-        next_stage = stages[len(started_stages)]
-        overall = (
-            "processing_with_failures"
-            if any(stage.status == "completed_with_failures" for stage in started_stages)
-            else "processing"
-        )
-        return overall, next_stage.name, "run"
-
-    if any(stage.status == "completed_with_failures" for stage in stages):
-        return "completed_with_failures", None, None
-    return "completed", None, None
-
-
 def _inspect_filesystem(workspace_path: Path, session_id: str) -> SessionFilesystemStatus:
     sessions_path = workspace_path / "sessions"
     session_path = sessions_path / session_id
@@ -224,7 +169,10 @@ def run(input_data: SessionStatusInput) -> SessionStatusResult:
         for process_name in shared.PROCESS_NAMES
     ]
     filesystem = _inspect_filesystem(workspace_path, session.id)
-    overall_status, next_process, next_action = _derive_operational_status(session, stages)
+    processing_status = shared.derive_processing_status(session, processes)
+    overall_status = processing_status.status
+    next_process = processing_status.next_process
+    next_action = processing_status.next_action
     if next_action is not None and filesystem.status != "available":
         overall_status = "filesystem_blocked"
         next_process = None

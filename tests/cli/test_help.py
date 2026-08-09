@@ -62,7 +62,7 @@ def test_all_commands_and_parameters_have_help():
         (["sd", "show"], "Show monitoring-site metadata stored on an initialized SD card."),
         (["sd", "update"], "Change the monitoring site stored on an initialized SD card."),
         (["sd", "clear"], "Remove the SD card's Wildlife Vision config file without deleting images."),
-        (["session", "list"], "List recent persisted ingest sessions in the active workspace."),
+        (["session", "list"], "List recent sessions and their database-derived processing status."),
         (["session", "status"], "Show ingest, processing, inventory, and filesystem status for a session."),
         (["session", "clean", "corrupted"], "Run the first managed stage and move unreadable images to ignored/corrupted."),
         (["session", "clean", "overexposed-ir"], "Run the second managed stage and move likely overexposed IR images."),

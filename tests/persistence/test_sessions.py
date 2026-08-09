@@ -314,6 +314,27 @@ def test_list_session_processes_for_session(tmp_path: Path):
     ]
 
 
+def test_list_session_processes_for_sessions(tmp_path: Path):
+    database_path = tmp_path / ".wv" / "database.sqlite"
+    initialize_database(database_path)
+
+    with sql_session_scope(database_path) as sql_session:
+        session = _create_session(SessionRepository(sql_session))
+        repository = SessionProcessRepository(sql_session)
+        repository.start(
+            session.id,
+            "clean_corrupted",
+            "2026-07-26T10:01:00+00:00",
+            parameters_json=None,
+        )
+
+        processes = repository.list_for_sessions([session.id, "missing"])
+
+    assert [(process.session_id, process.process_name) for process in processes] == [
+        (session.id, "clean_corrupted")
+    ]
+
+
 def test_create_and_list_session_process_image_plans(tmp_path: Path):
     database_path = tmp_path / ".wv" / "database.sqlite"
     initialize_database(database_path)

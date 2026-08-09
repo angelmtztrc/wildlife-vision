@@ -1,6 +1,6 @@
 from wv.domain.session import IngestSession, SessionImageStateCount
 from wv.cli.main import app
-from wv.use_cases.session.list import ListSessionsResult
+from wv.use_cases.session.list import ListSessionsResult, SessionListItem
 from wv.use_cases.session.clean_corrupted import SessionCleanCorruptedResult
 from wv.use_cases.session.clean_overexposed_ir import (
     SessionCleanOverexposedIrResult,
@@ -22,14 +22,14 @@ def test_session_list_forwards_filters_and_prints_rows(cli_runner, monkeypatch):
         received_input = input_data
         return ListSessionsResult(
             items=[
-                IngestSession(
+                SessionListItem(
                     id="20260801_120000__SITE001",
                     monitoring_site_id="SITE001",
-                    source_path="/Volumes/SD",
-                    mode="copy",
-                    recursive=False,
                     started_at="2026-08-01T12:00:00+00:00",
                     ingest_status="completed",
+                    processing_status="ready",
+                    next_action="run",
+                    next_process="clean_corrupted",
                 )
             ]
         )
@@ -54,10 +54,16 @@ def test_session_list_forwards_filters_and_prints_rows(cli_runner, monkeypatch):
     assert received_input.monitoring_site_id == "SITE001"
     assert received_input.ingest_status == "completed"
     assert received_input.limit == 5
-    assert result.output.strip() == (
-        "20260801_120000__SITE001\t2026-08-01T12:00:00+00:00\t"
-        "SITE001\tcompleted"
-    )
+    assert "SESSION ID" in result.output
+    assert "STARTED AT" in result.output
+    assert "SITE ID" in result.output
+    assert "PROCESSING STATUS" in result.output
+    assert "20260801_120000__SITE001" in result.output
+    assert "2026-08-01T12:00:00+00:00" in result.output
+    assert "SITE001" in result.output
+    assert "ready" in result.output
+    assert "clean_corrupted" not in result.output
+    assert "\tcompleted\t" not in result.output
 
 
 def test_session_list_reports_session_errors(cli_runner, monkeypatch):

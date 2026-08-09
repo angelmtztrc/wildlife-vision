@@ -44,8 +44,76 @@ class SessionProcessError(SessionError):
     pass
 
 
+@dataclass(frozen=True)
+class ProcessingStatus:
+    status: str
+    next_process: str | None
+    next_action: str | None
+
+
 def to_session_error(exc: PersistenceError) -> SessionError:
     return SessionError(str(exc))
+
+
+def derive_processing_status(
+    session: IngestSession, processes: list[SessionProcess]
+) -> ProcessingStatus:
+    """Derive database-backed processing status for one ingest session.
+
+    This does not inspect the session filesystem. Callers that need filesystem
+    safety or inventory details must perform those checks separately.
+    """
+    if session.ingest_status == "in_progress":
+        return ProcessingStatus("ingest_in_progress", None, None)
+    if session.ingest_status == "failed":
+        return ProcessingStatus("ingest_failed", None, None)
+    if session.ingest_status not in SUCCESSFUL_PROCESS_STATUSES:
+        return ProcessingStatus("unknown", None, None)
+
+    process_by_name = {process.process_name: process for process in processes}
+    stage_statuses = [
+        process_by_name[name].status if name in process_by_name else "not_started"
+        for name in PROCESS_NAMES
+    ]
+    started_stages = [status for status in stage_statuses if status != "not_started"]
+    if not started_stages:
+        return ProcessingStatus("ready", PROCESS_NAMES[0], "run")
+
+    seen_missing = False
+    for status in stage_statuses:
+        if status == "not_started":
+            seen_missing = True
+        elif seen_missing:
+            return ProcessingStatus("inconsistent", None, None)
+
+    for index, status in enumerate(stage_statuses):
+        if status in {"in_progress", "failed"}:
+            if any(successor != "not_started" for successor in stage_statuses[index + 1 :]):
+                return ProcessingStatus("inconsistent", None, None)
+            if status == "in_progress":
+                return ProcessingStatus("process_in_progress", PROCESS_NAMES[index], "recover")
+            return ProcessingStatus("processing_failed", PROCESS_NAMES[index], "retry")
+
+    latest_status = started_stages[-1]
+    if latest_status == "completed_with_failures":
+        status = (
+            "completed_with_failures"
+            if len(started_stages) == len(stage_statuses)
+            else "processing_with_failures"
+        )
+        return ProcessingStatus(status, PROCESS_NAMES[len(started_stages) - 1], "retry")
+
+    if len(started_stages) < len(stage_statuses):
+        status = (
+            "processing_with_failures"
+            if "completed_with_failures" in started_stages
+            else "processing"
+        )
+        return ProcessingStatus(status, PROCESS_NAMES[len(started_stages)], "run")
+
+    if "completed_with_failures" in stage_statuses:
+        return ProcessingStatus("completed_with_failures", None, None)
+    return ProcessingStatus("completed", None, None)
 
 
 @dataclass(frozen=True)

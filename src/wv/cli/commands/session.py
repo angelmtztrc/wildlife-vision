@@ -1,6 +1,8 @@
 from typing import Annotated
 
 import typer
+from rich.console import Console
+from rich.table import Table
 
 from wv.core.logger import get_logger
 from wv.domain.session import INGEST_STATUSES
@@ -30,6 +32,7 @@ detect_app = typer.Typer(help="Run the ordered content-detection stage for an in
 app.add_typer(detect_app, name="detect")
 
 logger = get_logger(__name__)
+console = Console()
 
 
 @app.command("list")
@@ -57,7 +60,7 @@ def list_sessions(
         typer.Option("--limit", min=1, help="Maximum number of sessions to show."),
     ] = 20,
 ):
-    """List recent persisted ingest sessions in the active workspace."""
+    """List recent sessions and their database-derived processing status."""
     try:
         result = run_list_sessions(
             ListSessionsInput(
@@ -71,11 +74,19 @@ def list_sessions(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
+    table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
+    table.add_column("SESSION ID", no_wrap=True, overflow="ellipsis")
+    table.add_column("STARTED AT", no_wrap=True)
+    table.add_column("SITE ID", no_wrap=True, overflow="ellipsis")
+    table.add_column("PROCESSING STATUS", no_wrap=True)
     for item in result.items:
-        typer.echo(
-            f"{item.id}\t{item.started_at}\t{item.monitoring_site_id}\t"
-            f"{item.ingest_status}"
+        table.add_row(
+            item.id,
+            item.started_at,
+            item.monitoring_site_id,
+            item.processing_status,
         )
+    console.print(table)
 
     return None
 

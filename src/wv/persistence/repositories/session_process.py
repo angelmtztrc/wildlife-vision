@@ -30,6 +30,16 @@ class SessionProcessRepository:
         ).all()
         return [_model_to_session_process(model) for model in models]
 
+    def list_for_sessions(self, session_ids: list[str]) -> list[SessionProcess]:
+        if not session_ids:
+            return []
+        models = self.sql_session.scalars(
+            select(SessionProcessModel)
+            .where(SessionProcessModel.session_id.in_(session_ids))
+            .order_by(SessionProcessModel.session_id, SessionProcessModel.process_name)
+        ).all()
+        return [_model_to_session_process(model) for model in models]
+
     def start(
         self,
         session_id: str,
