@@ -5,6 +5,7 @@ import pytest
 
 from wv.use_cases.config.get_value import GetConfigValueInput, run as run_get
 from wv.use_cases.config.initialize import ConfigInitializeInput, run as run_initialize
+from wv.use_cases.config.list import ListConfigInput, run as run_list
 from wv.use_cases.config.reset_value import ResetConfigValueInput, run as run_reset
 from wv.use_cases.config.set_value import SetConfigValueInput, run as run_set
 from wv.use_cases.config.show_path import ShowConfigPathInput, run as run_show_path
@@ -14,6 +15,7 @@ from wv.use_cases.workspace.initialize import (
     run as run_workspace_initialize,
 )
 from wv.workspace.common import WorkspaceError
+from wv.workspace.schema import get_known_keys
 from wv.workspace.workspace_config import load_workspace_config
 
 
@@ -41,6 +43,41 @@ def test_run_get_returns_known_config_value(tmp_path: Path, monkeypatch):
     result = run_get(GetConfigValueInput(key="workspace.version"))
 
     assert result.value == 2
+
+
+def test_run_list_returns_known_config_values_in_schema_order(tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    run_workspace_initialize(WorkspaceInitializeInput(path=workspace_path))
+    config_file = workspace_path / ".wv" / "config.yml"
+    config_file.write_text(
+        config_file.read_text(encoding="utf-8") + "custom:\n  unknown: value\n",
+        encoding="utf-8",
+    )
+
+    result = run_list(ListConfigInput())
+
+    assert [item.key for item in result.items] == get_known_keys()
+    assert result.items[0].value == 2
+    assert result.items[-1].value == 4
+
+
+def test_run_list_rejects_version_one_config(tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    run_workspace_initialize(WorkspaceInitializeInput(path=workspace_path))
+    config_file = workspace_path / ".wv" / "config.yml"
+    config_file.write_text(
+        config_file.read_text(encoding="utf-8").replace("version: 2", "version: 1"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(WorkspaceError, match="wv workspace migrate"):
+        run_list(ListConfigInput())
 
 
 def test_run_set_updates_known_value_and_preserves_unknown_keys(

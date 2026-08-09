@@ -9,6 +9,7 @@ from wv.workspace.workspace_config import (
     validate_workspace_config,
     write_workspace_config,
 )
+from wv.workspace.common import WorkspaceError
 
 
 def require_workspace_path() -> Path:

@@ -328,12 +328,16 @@ Workspace configuration commands manage workspace metadata and validation:
 
 ```bash
 uv run wv config init
+uv run wv config list
 uv run wv config get <KEY>
 uv run wv config set <KEY> <VALUE>
 uv run wv config reset <KEY>
 uv run wv config validate
 uv run wv config path
 ```
+
+`config list` prints the known active-workspace settings and their current values.
+Unknown compatibility keys are not listed.
 
 Managed processing defaults are stored in `.wv/config.yml` and may be changed
 with `wv config set`. A command option overrides the workspace value for a new
@@ -370,7 +374,7 @@ uv run wv setup
 
 ```text
 wv workspace {init,activate,migrate,show,validate}
-wv config {init,get,set,reset,validate,path}
+wv config {init,list,get,set,reset,validate,path}
 wv monitoring-area {create,list,show,update}
 wv monitoring-site {create,list,show,update}
 wv device {create,list,show,update}

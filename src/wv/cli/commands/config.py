@@ -6,6 +6,7 @@ import yaml
 from wv.core.logger import get_logger
 from wv.use_cases.config.get_value import GetConfigValueInput, run as run_get_config_value
 from wv.use_cases.config.initialize import ConfigInitializeInput, run as run_initialize_config
+from wv.use_cases.config.list import ListConfigInput, run as run_list_config
 from wv.use_cases.config.reset_value import ResetConfigValueInput, run as run_reset_config_value
 from wv.use_cases.config.set_value import SetConfigValueInput, run as run_set_config_value
 from wv.use_cases.config.show_path import ShowConfigPathInput, run as run_show_config_path
@@ -38,6 +39,20 @@ def init_config():
         raise typer.Exit(code=1) from exc
 
     logger.done("Workspace config initialized at %s", result.path)
+    return None
+
+
+@app.command("list")
+def list_config():
+    """List known keys and values from the active workspace config."""
+    try:
+        result = run_list_config(ListConfigInput())
+    except WorkspaceError as exc:
+        logger.error("Config list failed: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    for item in result.items:
+        typer.echo(f"{item.key}\t{_render_value(item.value)}")
     return None
 
 

@@ -33,6 +33,7 @@ def test_all_commands_and_parameters_have_help():
         (["clean", "overexposed-ir"], "Move likely overexposed IR JPEG files directly in SOURCE to ignored/overexposed."),
         (["clean", "bursts"], "Keep selected JPEGs from similar bursts and move the rest to ignored/bursts."),
         (["config", "init"], "Create the default config when the active workspace has no config file."),
+        (["config", "list"], "List known keys and values from the active workspace config."),
         (["config", "get"], "Print one value from the active workspace config."),
         (["config", "set"], "Set and validate one value in the active workspace config."),
         (["config", "reset"], "Reset one active workspace setting to its built-in default."),
