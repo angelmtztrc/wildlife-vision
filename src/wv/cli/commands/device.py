@@ -3,6 +3,7 @@ from typing import Annotated
 import typer
 
 from wv.core.logger import get_logger
+from wv.cli.table import print_table
 from wv.use_cases.device._shared import DeviceError
 from wv.use_cases.device.create import CreateDeviceInput, run as run_create_device
 from wv.use_cases.device.list import ListDevicesInput, run as run_list_devices
@@ -57,8 +58,11 @@ def list_items():
         logger.error("Device list failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
-    for device in result.items:
-        typer.echo(f"{device.id}\t{device.name}")
+    print_table(
+        ["DEVICE ID", "NAME"],
+        ((device.id, device.name) for device in result.items),
+        ratios=[2, 3],
+    )
 
     return None
 

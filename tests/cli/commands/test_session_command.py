@@ -48,6 +48,7 @@ def test_session_list_forwards_filters_and_prints_rows(cli_runner, monkeypatch):
             "--limit",
             "5",
         ],
+        terminal_width=160,
     )
 
     assert result.exit_code == 0
@@ -57,9 +58,9 @@ def test_session_list_forwards_filters_and_prints_rows(cli_runner, monkeypatch):
     assert "SESSION ID" in result.output
     assert "STARTED AT" in result.output
     assert "SITE ID" in result.output
-    assert "PROCESSING STATUS" in result.output
-    assert "20260801_120000__SITE001" in result.output
-    assert "2026-08-01T12:00:00+00:00" in result.output
+    assert "PROCESSING STA…" in result.output
+    assert "20260801_120000__SITE0…" in result.output
+    assert "2026-08-01T12:00:00+0…" in result.output
     assert "SITE001" in result.output
     assert "ready" in result.output
     assert "clean_corrupted" not in result.output

@@ -1,9 +1,8 @@
 from typing import Annotated
 
 import typer
-from rich.console import Console
-from rich.table import Table
 
+from wv.cli.table import print_table
 from wv.core.logger import get_logger
 from wv.domain.session import INGEST_STATUSES
 from wv.use_cases.session.clean_corrupted import SessionCleanCorruptedInput
@@ -32,7 +31,6 @@ detect_app = typer.Typer(help="Run the ordered content-detection stage for an in
 app.add_typer(detect_app, name="detect")
 
 logger = get_logger(__name__)
-console = Console()
 
 
 @app.command("list")
@@ -74,19 +72,14 @@ def list_sessions(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
-    table.add_column("SESSION ID", no_wrap=True, overflow="ellipsis")
-    table.add_column("STARTED AT", no_wrap=True)
-    table.add_column("SITE ID", no_wrap=True, overflow="ellipsis")
-    table.add_column("PROCESSING STATUS", no_wrap=True)
-    for item in result.items:
-        table.add_row(
-            item.id,
-            item.started_at,
-            item.monitoring_site_id,
-            item.processing_status,
-        )
-    console.print(table)
+    print_table(
+        ["SESSION ID", "STARTED AT", "SITE ID", "PROCESSING STATUS"],
+        (
+            (item.id, item.started_at, item.monitoring_site_id, item.processing_status)
+            for item in result.items
+        ),
+        ratios=[3, 3, 2, 2],
+    )
 
     return None
 

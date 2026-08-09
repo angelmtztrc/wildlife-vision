@@ -58,10 +58,16 @@ def test_device_list_prints_rows(cli_runner, tmp_path: Path, monkeypatch):
     cli_runner.invoke(device.app, ["create", "HNT002", "--name", "Beta"])
     cli_runner.invoke(device.app, ["create", "HNT001", "--name", "Alpha"])
 
-    result = cli_runner.invoke(device.app, ["list"])
+    result = cli_runner.invoke(device.app, ["list"], terminal_width=120)
 
     assert result.exit_code == 0
-    assert result.output.strip().splitlines() == ["HNT001\tAlpha", "HNT002\tBeta"]
+    assert "DEVICE ID" in result.output
+    assert "NAME" in result.output
+    assert "HNT001" in result.output
+    assert "Alpha" in result.output
+    assert "HNT002" in result.output
+    assert "Beta" in result.output
+    assert result.output.index("HNT001") < result.output.index("HNT002")
 
 
 def test_device_show_prints_device_fields(cli_runner, tmp_path: Path, monkeypatch):

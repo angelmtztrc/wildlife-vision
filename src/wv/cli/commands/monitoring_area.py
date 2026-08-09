@@ -3,6 +3,7 @@ from typing import Annotated
 import typer
 
 from wv.core.logger import get_logger
+from wv.cli.table import print_table
 from wv.use_cases.monitoring_area._shared import MonitoringAreaError
 from wv.use_cases.monitoring_area.create import CreateMonitoringAreaInput, run as run_create
 from wv.use_cases.monitoring_area.list import ListMonitoringAreasInput, run as run_list
@@ -48,8 +49,11 @@ def list_items():
     except WorkspaceError as exc:
         logger.error("Monitoring area list failed: %s", exc)
         raise typer.Exit(code=1) from exc
-    for item in result.items:
-        typer.echo(f"{item.id}\t{item.name}")
+    print_table(
+        ["AREA ID", "NAME"],
+        ((item.id, item.name) for item in result.items),
+        ratios=[2, 3],
+    )
 
 
 @app.command("show")

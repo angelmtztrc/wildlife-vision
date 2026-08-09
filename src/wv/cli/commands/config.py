@@ -4,6 +4,7 @@ import typer
 import yaml
 
 from wv.core.logger import get_logger
+from wv.cli.table import print_table
 from wv.use_cases.config.get_value import GetConfigValueInput, run as run_get_config_value
 from wv.use_cases.config.initialize import ConfigInitializeInput, run as run_initialize_config
 from wv.use_cases.config.list import ListConfigInput, run as run_list_config
@@ -51,8 +52,11 @@ def list_config():
         logger.error("Config list failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
-    for item in result.items:
-        typer.echo(f"{item.key}\t{_render_value(item.value)}")
+    print_table(
+        ["KEY", "VALUE"],
+        ((item.key, _render_value(item.value)) for item in result.items),
+        ratios=[3, 5],
+    )
     return None
 
 

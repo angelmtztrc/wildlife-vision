@@ -349,6 +349,10 @@ uv run wv config path
 `config list` prints the known active-workspace settings and their current values.
 Unknown compatibility keys are not listed.
 
+All list commands render human-readable tables. `config list` shows `KEY` and
+`VALUE`; device and monitoring-area lists show their ID and name; monitoring-site
+lists show site ID, area ID, and name. Long values are ellipsized to fit the terminal.
+
 Managed processing defaults are stored in `.wv/config.yml` and may be changed
 with `wv config set`. A command option overrides the workspace value for a new
 stage. Retries and recovery always use their recorded process parameters.

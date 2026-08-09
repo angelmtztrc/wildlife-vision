@@ -3,6 +3,7 @@ from typing import Annotated
 import typer
 
 from wv.core.logger import get_logger
+from wv.cli.table import print_table
 from wv.use_cases.monitoring_site._shared import MonitoringSiteError
 from wv.use_cases.monitoring_site.create import (
     CreateMonitoringSiteInput,
@@ -84,8 +85,11 @@ def list_sites(
         logger.error("Monitoring site list failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
-    for site in result.items:
-        typer.echo(f"{site.id}\t{site.monitoring_area_id}\t{site.name}")
+    print_table(
+        ["SITE ID", "AREA ID", "NAME"],
+        ((site.id, site.monitoring_area_id, site.name) for site in result.items),
+        ratios=[2, 2, 3],
+    )
 
     return None
 
