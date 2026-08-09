@@ -44,6 +44,43 @@ def test_workspace_init_rejects_existing_workspace(
     assert "already exists" in result.output
 
 
+def test_workspace_activate_switches_active_workspace(cli_runner, tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_a = tmp_path / "workspace-a"
+    workspace_b = tmp_path / "workspace-b"
+    workspace_a.mkdir()
+    workspace_b.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    cli_runner.invoke(workspace.app, ["init", str(workspace_a)])
+    cli_runner.invoke(workspace.app, ["init", str(workspace_b)])
+
+    result = cli_runner.invoke(workspace.app, ["activate", str(workspace_a)])
+    show_result = cli_runner.invoke(workspace.app, ["show"])
+
+    assert result.exit_code == 0
+    assert "Workspace activated" in result.output
+    assert f"workspace_path: {workspace_a.resolve()}" in show_result.output
+
+
+def test_workspace_activate_failure_keeps_previous_workspace_active(
+    cli_runner, tmp_path: Path, monkeypatch
+):
+    config_dir = tmp_path / "user-config"
+    active_workspace_path = tmp_path / "active-workspace"
+    candidate_path = tmp_path / "candidate"
+    active_workspace_path.mkdir()
+    candidate_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    cli_runner.invoke(workspace.app, ["init", str(active_workspace_path)])
+
+    result = cli_runner.invoke(workspace.app, ["activate", str(candidate_path)])
+    show_result = cli_runner.invoke(workspace.app, ["show"])
+
+    assert result.exit_code == 1
+    assert "Workspace activation failed" in result.output
+    assert f"workspace_path: {active_workspace_path.resolve()}" in show_result.output
+
+
 def test_workspace_init_rejects_symlinked_root(cli_runner, tmp_path: Path, monkeypatch):
     config_dir = tmp_path / "user-config"
     workspace_path = tmp_path / "workspace"

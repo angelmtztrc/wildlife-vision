@@ -11,10 +11,12 @@ from wv.persistence.alembic import get_alembic_directory
 from wv.persistence.database import get_database_head_revision
 from wv.persistence.sql_session import build_database_url
 from wv.use_cases.workspace.initialize import WorkspaceInitializeInput, run as run_initialize
+from wv.use_cases.workspace.activate import WorkspaceActivateInput, run as run_activate
 from wv.use_cases.workspace.migrate import WorkspaceMigrateInput, run as run_migrate
 from wv.use_cases.workspace.show import WorkspaceShowInput, run as run_show
 from wv.use_cases.workspace.validate import WorkspaceValidateInput, run as run_validate
 from wv.workspace.common import WorkspaceError
+from wv.workspace.config import get_workspace_path
 
 
 def _get_table_names(database_path: Path) -> set[str]:
@@ -55,7 +57,73 @@ def test_run_init_creates_workspace_structure(tmp_path: Path, monkeypatch):
         "monitoring_areas",
     }
     assert result.global_config_file == config_dir / "config.yml"
-    assert "workspace:" in result.global_config_file.read_text()
+    assert get_workspace_path() == workspace_path.resolve()
+
+
+def test_activate_switches_active_workspace(tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_a = tmp_path / "workspace-a"
+    workspace_b = tmp_path / "workspace-b"
+    workspace_a.mkdir()
+    workspace_b.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    run_initialize(WorkspaceInitializeInput(path=workspace_a))
+    run_initialize(WorkspaceInitializeInput(path=workspace_b))
+
+    result = run_activate(WorkspaceActivateInput(path=workspace_a))
+
+    assert result.workspace_path == workspace_a.resolve()
+    assert result.changed is True
+    assert result.migration_required is False
+    assert get_workspace_path() == workspace_a.resolve()
+    assert run_show(WorkspaceShowInput()).status.workspace_path == workspace_a.resolve()
+
+
+def test_activate_is_idempotent_for_active_workspace(tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    run_initialize(WorkspaceInitializeInput(path=workspace_path))
+
+    result = run_activate(WorkspaceActivateInput(path=workspace_path))
+
+    assert result.changed is False
+    assert get_workspace_path() == workspace_path.resolve()
+
+
+def test_activate_rejects_uninitialized_workspace_without_changing_active_workspace(
+    tmp_path: Path, monkeypatch
+):
+    config_dir = tmp_path / "user-config"
+    active_workspace_path = tmp_path / "active-workspace"
+    candidate_path = tmp_path / "candidate"
+    active_workspace_path.mkdir()
+    candidate_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    run_initialize(WorkspaceInitializeInput(path=active_workspace_path))
+
+    with pytest.raises(WorkspaceError, match="Missing workspace directory: sessions"):
+        run_activate(WorkspaceActivateInput(path=candidate_path))
+
+    assert get_workspace_path() == active_workspace_path.resolve()
+
+
+def test_activate_accepts_workspace_that_requires_migration(tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_a = tmp_path / "workspace-a"
+    workspace_b = tmp_path / "workspace-b"
+    workspace_a.mkdir()
+    workspace_b.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    run_initialize(WorkspaceInitializeInput(path=workspace_a))
+    run_initialize(WorkspaceInitializeInput(path=workspace_b))
+    _downgrade_database(workspace_a / ".wv" / "database.sqlite")
+
+    result = run_activate(WorkspaceActivateInput(path=workspace_a))
+
+    assert result.migration_required is True
+    assert get_workspace_path() == workspace_a.resolve()
 
 
 def test_run_init_rejects_missing_path(tmp_path: Path):

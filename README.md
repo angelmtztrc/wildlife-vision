@@ -35,7 +35,7 @@ command:
 uv run wv --verbose pipeline run <SESSION_ID>
 ```
 
-## 1. Create A Workspace
+## 1. Create Or Activate A Workspace
 
 Initialize an existing writable directory:
 
@@ -53,6 +53,18 @@ The command creates and activates one workspace with:
   models/
   exports/
 ```
+
+Activate another initialized workspace without changing its contents:
+
+```bash
+uv run wv workspace activate ~/AnotherWildlifeWorkspace
+```
+
+Only one workspace is active globally for the current user, including across
+terminals. Activation does not initialize, migrate, or rewrite the selected
+workspace. An older supported workspace can be activated so it can be upgraded
+with `uv run wv workspace migrate`. Do not switch workspaces while ingest,
+pipeline, configuration updates, or review GUIs are running.
 
 Inspect or validate the active workspace:
 
@@ -357,7 +369,7 @@ uv run wv setup
 ## Command Reference
 
 ```text
-wv workspace {init,migrate,show,validate}
+wv workspace {init,activate,migrate,show,validate}
 wv config {init,get,set,reset,validate,path}
 wv monitoring-area {create,list,show,update}
 wv monitoring-site {create,list,show,update}

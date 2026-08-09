@@ -5,7 +5,7 @@ from pathlib import Path
 from wv.core.files import SymlinkPathError, ensure_not_symlink
 from wv.persistence import initialize_database
 from wv.workspace.common import WORKSPACE_DIRECTORIES, WORKSPACE_METADATA_DIRNAME, WorkspaceError
-from wv.workspace.config import write_global_config
+from wv.workspace.config import set_workspace_path
 from wv.workspace.workspace_config import initialize_workspace_config
 
 from ._shared import resolve_workspace_paths
@@ -59,13 +59,7 @@ def run(input_data: WorkspaceInitializeInput) -> WorkspaceInitializeResult:
     initialize_database(paths.database_file)
     initialize_workspace_config(workspace_path, config_file=paths.workspace_config_file)
 
-    global_config_file = write_global_config(
-        {
-            "workspace": {
-                "path": str(workspace_path),
-            }
-        }
-    )
+    global_config_file = set_workspace_path(workspace_path)
 
     return WorkspaceInitializeResult(
         workspace_path=workspace_path,

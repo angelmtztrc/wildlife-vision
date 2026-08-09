@@ -41,6 +41,37 @@ def test_write_and_load_global_config(tmp_path: Path, monkeypatch):
     }
 
 
+def test_set_workspace_path_preserves_other_global_settings(tmp_path: Path, monkeypatch):
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    config.write_global_config(
+        {"workspace": {"path": "/old", "custom": "value"}, "telemetry": False}
+    )
+
+    config.set_workspace_path(workspace_path)
+
+    assert config.load_global_config() == {
+        "workspace": {"path": str(workspace_path.resolve()), "custom": "value"},
+        "telemetry": False,
+    }
+
+
+def test_set_workspace_path_preserves_previous_config_when_replace_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    config_dir = tmp_path / "user-config"
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    config.write_global_config({"workspace": {"path": "/old"}})
+    original_contents = config.get_global_config_file().read_text()
+    monkeypatch.setattr(config.os, "replace", lambda *_: (_ for _ in ()).throw(OSError("replace failed")))
+
+    with pytest.raises(WorkspaceError, match="Unable to write global workspace config"):
+        config.set_workspace_path(tmp_path / "workspace")
+
+    assert config.get_global_config_file().read_text() == original_contents
+
+
 def test_get_workspace_path_returns_none_for_missing_config(
     tmp_path: Path, monkeypatch
 ):

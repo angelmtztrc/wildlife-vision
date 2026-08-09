@@ -68,6 +68,7 @@ def test_all_commands_and_parameters_have_help():
         (["session", "clean", "bursts"], "Run the third managed stage and reduce similar image bursts."),
         (["session", "detect", "content"], "Run the final managed stage and classify images as animal, human, vehicle, empty, or other."),
         (["workspace", "init"], "Initialize and activate an existing directory as a workspace."),
+        (["workspace", "activate"], "Make an existing initialized workspace active."),
         (["workspace", "migrate"], "Upgrade the active workspace config and database to current versions."),
         (["workspace", "show"], "Show the configured workspace path and required component status."),
         (["workspace", "validate"], "Validate the active workspace structure, config, and database revision."),
@@ -89,6 +90,7 @@ def test_command_help_includes_summary(command: list[str], summary: str):
         (["session", "detect", "content"], "a new plan still runs inference."),
         (["gui", "review-detection"], "animal, human, vehicle, empty, or other."),
         (["config", "set"], "YAML value to assign to the config key."),
+        (["workspace", "activate"], "Existing initialized workspace directory to activate."),
     ],
 )
 def test_command_help_includes_important_parameter_guidance(command: list[str], text: str):

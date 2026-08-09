@@ -101,7 +101,7 @@ src/wv/use_cases/device/
 
 ## Current State
 
-- Implemented command paths worth verifying are `setup`, `ingest {sd,folder}`, `pipeline run`, `detect content`, and `clean {corrupted,overexposed-ir,bursts}`.
+- Implemented command paths worth verifying are `workspace {init,activate,migrate,show,validate}`, `setup`, `ingest {sd,folder}`, `pipeline run`, `detect content`, and `clean {corrupted,overexposed-ir,bursts}`.
 - `export favorites` is registered in the root app.
 - `wv setup` calls MegaDetector model preparation (`src/wv/use_cases/setup.py`, `src/wv/ml/megadetector.py`) and can trigger model resolution/download, so prefer help or tests for routine smoke checks.
 

@@ -5,6 +5,10 @@ import typer
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
+from wv.use_cases.workspace.activate import (
+    WorkspaceActivateInput,
+    run as run_activate_workspace,
+)
 from wv.use_cases.workspace.initialize import (
     WorkspaceInitializeInput,
     run as run_initialize_workspace,
@@ -17,7 +21,7 @@ from wv.use_cases.workspace.validate import (
 )
 from wv.workspace.common import WorkspaceError
 
-app = typer.Typer(help="Initialize, inspect, migrate, and validate the active workspace.")
+app = typer.Typer(help="Initialize, activate, inspect, migrate, and validate workspaces.")
 
 logger = get_logger(__name__)
 
@@ -52,6 +56,43 @@ def init_workspace(
         display_path(result.database_file),
     )
 
+    return None
+
+
+@app.command("activate")
+def activate_workspace(
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help="Existing initialized workspace directory to activate.",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+            writable=True,
+        ),
+    ],
+):
+    """Make an existing initialized workspace active."""
+    logger.info("Activating workspace at %s", display_path(path))
+    try:
+        result = run_activate_workspace(WorkspaceActivateInput(path=path))
+    except WorkspaceError as exc:
+        logger.error("Workspace activation failed: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    if result.changed:
+        logger.done(
+            "Workspace activated at %s (global_config=%s)",
+            display_path(result.workspace_path),
+            display_path(result.global_config_file),
+        )
+    else:
+        logger.done("Workspace is already active at %s", display_path(result.workspace_path))
+    if result.migration_required:
+        logger.warning(
+            "Workspace activated, but migration is required. Run 'wv workspace migrate'."
+        )
     return None
 
 
