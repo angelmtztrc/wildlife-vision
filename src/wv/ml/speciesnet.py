@@ -45,6 +45,7 @@ class SpeciesNetTaxonPrediction:
 @dataclass(frozen=True)
 class SpeciesNetDetectionResult:
     predictions: list[SpeciesNetTaxonPrediction]
+    final_label: str
     final_taxon_id: str | None
     final_taxon_rank: str | None
     final_taxon_confidence: float | None
@@ -92,6 +93,7 @@ def evaluate_animal_detections(
     for item in result["results"]:
         values[(Path(item["path"]), int(item["index"]))] = SpeciesNetDetectionResult(
             predictions=[SpeciesNetTaxonPrediction(**prediction) for prediction in item["predictions"]],
+            final_label=item["final_label"],
             final_taxon_id=item["final_taxon_id"],
             final_taxon_rank=item["final_taxon_rank"],
             final_taxon_confidence=item["final_taxon_confidence"],

@@ -83,6 +83,7 @@ def _evaluate(request: dict) -> dict:
             final = _parse(str(label), float(score), 0)
             values.append({
                 "path": item["path"], "index": item["index"], "predictions": raw,
+                "final_label": _semantic_label(final),
                 "final_taxon_id": final["taxon_id"], "final_taxon_rank": _rank(final),
                 "final_taxon_confidence": final["confidence"],
             })
@@ -101,6 +102,19 @@ def _rank(value: dict) -> str | None:
         if value[key]:
             return rank
     return "kingdom" if value["common_name"] == "animal" else None
+
+
+def _semantic_label(value: dict) -> str:
+    taxon_id = value["taxon_id"]
+    if taxon_id == "f1856211-cfb7-4a5b-9158-c0f72fd09ee6":
+        return "blank"
+    if taxon_id == "990ae9dd-7a59-4344-afcb-1b7b21368000":
+        return "human"
+    if taxon_id == "e2895ed5-780b-48f6-8a11-9e27cb594511":
+        return "vehicle"
+    if taxon_id == "f2efdae9-efb8-48fb-8a91-eccf79ab4ffb":
+        return "other"
+    return "animal"
 
 
 if __name__ == "__main__":

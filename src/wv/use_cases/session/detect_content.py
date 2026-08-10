@@ -9,6 +9,7 @@ from wv.core.detection import (
     validate_detection_settings,
     CLASSIFICATION_GATE,
     MINIMUM_DETECTION_THRESHOLD,
+    SpeciesNetClassification,
 )
 from wv.core.files import get_content_digest, is_allowed_image_file, move_file_with_staged_copy
 from wv.core.session import get_detection_path
@@ -47,7 +48,7 @@ from ._shared import (
 from wv.workspace.workspace_config import load_processing_config
 
 PROCESS_NAME = "detect_content"
-ALGORITHM_VERSION = 2
+ALGORITHM_VERSION = 3
 @dataclass(frozen=True)
 class SessionDetectContentInput:
     session_id: str
@@ -263,13 +264,20 @@ def _build_plan(
     domestic_taxon_ids = set(settings.detection.domestic_taxon_ids)
     for image, source_path in zip(candidates, source_paths, strict=True):
         inference_result = inference_by_path[source_path]
-        domestic_indexes = {
-            index
+        speciesnet_classifications = {
+            index: SpeciesNetClassification(
+                label=(
+                    "domestic"
+                    if species_result.final_taxon_id in domestic_taxon_ids
+                    else species_result.final_label
+                ),
+                confidence=species_result.final_taxon_confidence,
+            )
             for index, _ in enumerate(inference_result.detections)
             if (species_result := species_results.get((source_path, index))) is not None
-            and species_result.final_taxon_id in domestic_taxon_ids
+            and species_result.final_taxon_confidence is not None
         }
-        decision = classify_detections(inference_result.detections, domestic_indexes)
+        decision = classify_detections(inference_result.detections, speciesnet_classifications)
         destination = get_detection_path(managed_session.session_path, decision.label) / source_path.name
         target_digest = image.content_digest
         target_size = image.content_size_bytes
@@ -395,24 +403,13 @@ def _load_existing_plans(
         existing = validate_process_attempt(
             processes, managed_session.session.id, PROCESS_NAME, input_data.recover
         )
-        if existing is not None and _is_legacy_process(existing) and input_data.recover:
-            return existing, SessionProcessImagePlanRepository(sql_session).list_for_process(
-                managed_session.session.id, PROCESS_NAME
-            )
-        validate_process_parameters(existing, parameters_json, PROCESS_NAME)
-        return existing, SessionProcessImagePlanRepository(sql_session).list_for_process(
+        plans = SessionProcessImagePlanRepository(sql_session).list_for_process(
             managed_session.session.id, PROCESS_NAME
         )
-
-
-def _is_legacy_process(process: SessionProcess) -> bool:
-    if process.parameters_json is None:
-        return False
-    try:
-        parameters = json.loads(process.parameters_json)
-    except json.JSONDecodeError:
-        return False
-    return isinstance(parameters, dict) and parameters.get("algorithm_version") == 1
+        if existing is not None and input_data.recover and plans:
+            return existing, plans
+        validate_process_parameters(existing, parameters_json, PROCESS_NAME)
+        return existing, plans
 
 
 def _plan_details(plan: SessionProcessImagePlan) -> dict[str, object]:
@@ -577,9 +574,9 @@ def run(input_data: SessionDetectContentInput) -> SessionDetectContentResult:
     parameters_json = _parameters_json(input_data)
     with _exclusive_session_lock(managed_session.session_path, input_data.dry_run):
         existing, plans = _load_existing_plans(managed_session, input_data, parameters_json)
-        if existing is not None and _is_legacy_process(existing):
+        if existing is not None and plans:
             if existing.parameters_json is None:
-                raise SessionProcessError("Legacy detection process has no recorded parameters.")
+                raise SessionProcessError("Detection process has no recorded parameters.")
             parameters_json = existing.parameters_json
         analysis_results: list[ImageDetectionResult] = []
         if plans:

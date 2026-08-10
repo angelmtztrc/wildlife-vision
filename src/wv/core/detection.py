@@ -22,6 +22,14 @@ class DetectionDecision:
     source: str
 
 
+@dataclass(frozen=True)
+class SpeciesNetClassification:
+    """A semantic SpeciesNet classification for one MegaDetector animal crop."""
+
+    label: str
+    confidence: float
+
+
 def validate_detection_settings(batch_size: int, domestic_taxon_ids: list[str]) -> None:
     """Validate content-detection inference settings.
 
@@ -46,14 +54,15 @@ def validate_detection_settings(batch_size: int, domestic_taxon_ids: list[str]) 
 
 
 def classify_detections(
-    detections: list[MlDetection], domestic_detection_indexes: set[int]
+    detections: list[MlDetection],
+    speciesnet_classifications: dict[int, SpeciesNetClassification],
 ) -> DetectionDecision:
     """Classify MegaDetector detections into a session route.
 
     Args:
         detections: Normalized MegaDetector detections for one image.
-        domestic_detection_indexes: Indexes of animal detections resolved to a
-            configured domestic SpeciesNet taxon.
+        speciesnet_classifications: SpeciesNet results for MegaDetector animal
+            detection indexes that met the crop-classification gate.
 
     Returns:
         An ``animal``, ``human``, ``vehicle``, ``domestic``, ``empty``, or
@@ -63,36 +72,68 @@ def classify_detections(
         ValueError: If detector confidence values are non-finite or outside
             the inclusive ``[0, 1]`` range.
     """
-    trusted: list[tuple[int, MlDetection]] = []
-    meaningful: list[tuple[int, MlDetection]] = []
+    accepted: dict[str, list[DetectionDecision]] = {
+        "human": [],
+        "vehicle": [],
+        "domestic": [],
+        "animal": [],
+        "other": [],
+    }
+    blank_confidences: list[float] = []
+    unresolved = False
+
     for index, detection in enumerate(detections):
         if not isfinite(detection.confidence) or not 0.0 <= detection.confidence <= 1.0:
             raise ValueError("Detector confidence must be between 0.0 and 1.0.")
-        if detection.confidence >= CLASSIFICATION_GATE:
-            meaningful.append((index, detection))
-        if detection.confidence >= TRUSTED_CONTENT_THRESHOLD:
-            trusted.append((index, detection))
 
-    for label in ("human", "vehicle"):
-        matches = [detection for _, detection in trusted if detection.label == label]
-        if matches:
-            return DetectionDecision(label, max(item.confidence for item in matches), "megadetector")
+        if detection.label in {"human", "vehicle"}:
+            if detection.confidence >= TRUSTED_CONTENT_THRESHOLD:
+                accepted[detection.label].append(
+                    DetectionDecision(detection.label, detection.confidence, "megadetector")
+                )
+            elif detection.confidence >= CLASSIFICATION_GATE:
+                unresolved = True
+            continue
 
-    domestic = [
-        detection
-        for index, detection in trusted
-        if detection.label == "animal" and index in domestic_detection_indexes
-    ]
-    if domestic:
-        return DetectionDecision("domestic", max(item.confidence for item in domestic), "speciesnet")
+        if detection.label != "animal":
+            if detection.confidence >= CLASSIFICATION_GATE:
+                accepted["other"].append(
+                    DetectionDecision("other", detection.confidence, "megadetector")
+                )
+            continue
 
-    animals = [detection for _, detection in trusted if detection.label == "animal"]
-    if animals:
-        return DetectionDecision("animal", max(item.confidence for item in animals), "megadetector")
-    if not meaningful:
+        if detection.confidence < CLASSIFICATION_GATE:
+            continue
+
+        speciesnet = speciesnet_classifications.get(index)
+        if speciesnet is None:
+            winner = DetectionDecision("animal", detection.confidence, "megadetector")
+        else:
+            _validate_speciesnet_classification(speciesnet)
+            winner = DetectionDecision("animal", detection.confidence, "ensemble")
+            if speciesnet.confidence > detection.confidence:
+                winner = DetectionDecision(speciesnet.label, speciesnet.confidence, "ensemble")
+
+        if winner.confidence < TRUSTED_CONTENT_THRESHOLD:
+            unresolved = True
+        elif winner.label == "blank":
+            blank_confidences.append(winner.confidence)
+        else:
+            accepted[winner.label].append(winner)
+
+    for label in ("human", "vehicle", "domestic", "animal", "other"):
+        if accepted[label]:
+            winner = max(accepted[label], key=lambda item: item.confidence)
+            return winner
+    if blank_confidences:
+        return DetectionDecision("empty", max(blank_confidences), "ensemble")
+    if not unresolved:
         return DetectionDecision("empty", 0.0, "megadetector")
-    return DetectionDecision(
-        "other",
-        max(item.confidence for _, item in meaningful),
-        "megadetector",
-    )
+    return DetectionDecision("other", 0.0, "ensemble")
+
+
+def _validate_speciesnet_classification(classification: SpeciesNetClassification) -> None:
+    if classification.label not in {"animal", "blank", "domestic", "human", "other", "vehicle"}:
+        raise ValueError("SpeciesNet classification label is unsupported.")
+    if not isfinite(classification.confidence) or not 0.0 <= classification.confidence <= 1.0:
+        raise ValueError("SpeciesNet classification confidence must be between 0.0 and 1.0.")

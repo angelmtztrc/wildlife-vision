@@ -5,7 +5,7 @@ import pytest
 import wv.use_cases.session.detect_content as session_detection
 from wv.core.files import get_content_digest
 from wv.ml.megadetector import MlDetection, MlImageResult, ResolvedModel
-from wv.ml.speciesnet import SpeciesNetModel
+from wv.ml.speciesnet import SpeciesNetDetectionResult, SpeciesNetModel
 from wv.domain.session import IngestSession, SessionImage
 from wv.persistence.repositories import (
     ImageDetectionResultRepository,
@@ -176,6 +176,47 @@ def test_dry_run_does_not_persist_plan_or_move_files(
         ) == []
 
 
+def test_run_uses_speciesnet_blank_to_route_animal_detection_to_empty(
+    configured_workspace: Path, make_image, monkeypatch: pytest.MonkeyPatch
+):
+    init_path = configured_workspace / "sessions" / SESSION_ID / "init"
+    path = make_image(init_path / "blank.jpg")
+    _create_inventory(configured_workspace, [path])
+    _complete_overexposed_ir(configured_workspace)
+    _mock_model(monkeypatch)
+    monkeypatch.setattr(
+        session_detection,
+        "iter_evaluate_images",
+        lambda **kwargs: [MlImageResult(path, [MlDetection("animal", 0.371)])],
+    )
+    monkeypatch.setattr(
+        session_detection,
+        "evaluate_animal_detections",
+        lambda model, requests, batch_size, latitude, longitude: (
+            {
+                (path, 0): SpeciesNetDetectionResult(
+                    predictions=[],
+                    final_label="blank",
+                    final_taxon_id="f1856211-cfb7-4a5b-9158-c0f72fd09ee6",
+                    final_taxon_rank=None,
+                    final_taxon_confidence=0.93645,
+                )
+            },
+            SpeciesNetModel(model, Path("/tmp/speciesnet.pt"), "SPECIES", "4.0.3a", "GPU"),
+        ),
+    )
+
+    result = run(SessionDetectContentInput(session_id=SESSION_ID))
+
+    assert result.files_empty == 1
+    assert result.files_animal == 0
+    with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
+        inference = ImageDetectionResultRepository(sql_session).list_for_images(["image-1"])[0]
+    assert inference.predicted_label == "empty"
+    assert inference.predicted_confidence == 0.93645
+    assert inference.decision_source == "ensemble"
+
+
 def test_recovery_replays_saved_plan_without_model(
     configured_workspace: Path, make_image, monkeypatch: pytest.MonkeyPatch
 ):
@@ -198,7 +239,7 @@ def test_recovery_replays_saved_plan_without_model(
             SESSION_ID,
             "detect_content",
             "2026-08-01T12:03:00+00:00",
-            first.process.parameters_json,
+            first.process.parameters_json.replace('"algorithm_version":3', '"algorithm_version":2'),
         )
 
     monkeypatch.setattr(
