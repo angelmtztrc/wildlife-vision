@@ -14,6 +14,7 @@ class ListSessionsInput:
     monitoring_area_id: str | None = None
     monitoring_site_id: str | None = None
     ingest_status: str | None = None
+    completed_detection_only: bool = False
     limit: int = 20
 
 
@@ -80,6 +81,12 @@ def run(input_data: ListSessionsInput) -> ListSessionsResult:
                 next_process=processing_status.next_process,
             )
         )
+    if input_data.completed_detection_only:
+        items = [
+            item
+            for item in items
+            if item.processing_status in {"completed", "completed_with_failures"}
+        ]
     incomplete = [item for item in items if item.processing_status != "completed"]
     completed = [item for item in items if item.processing_status == "completed"]
     return ListSessionsResult(items=[*incomplete, *completed][: input_data.limit])

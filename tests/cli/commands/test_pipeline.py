@@ -53,12 +53,12 @@ def test_pipeline_session_completion_filters_persisted_ids(monkeypatch):
             self.id = session_id
 
     monkeypatch.setattr(
-        "wv.cli.commands.pipeline.run_list_sessions",
+        "wv.cli.completion.run_list_sessions",
         lambda input_data: ListSessionsResult(
             items=[Session("20260808_120000__SITE001"), Session("20260809_120000__SITE002")]
         ),
     )
 
-    from wv.cli.commands.pipeline import _complete_session
+    from wv.cli.completion import complete_session_id
 
-    assert _complete_session("20260808") == ["20260808_120000__SITE001"]
+    assert complete_session_id("20260808") == ["20260808_120000__SITE001"]

@@ -2,27 +2,14 @@ from typing import Annotated
 
 import typer
 
+from wv.cli.completion import complete_session_id
 from wv.core.logger import get_logger
 from wv.use_cases.pipeline.run import PipelineRunError, PipelineRunInput
 from wv.use_cases.pipeline.run import run as run_pipeline
-from wv.use_cases.session._shared import SessionError
-from wv.use_cases.session.list import ListSessionsInput
-from wv.use_cases.session.list import run as run_list_sessions
 from wv.workspace.common import WorkspaceError
 
 app = typer.Typer(help="Run the ordered managed pipeline for ingested sessions.")
 logger = get_logger(__name__)
-
-
-def _complete_session(incomplete: str) -> list[str]:
-    try:
-        return [
-            session.id
-            for session in run_list_sessions(ListSessionsInput(limit=100)).items
-            if session.id.startswith(incomplete)
-        ]
-    except (SessionError, WorkspaceError):
-        return []
 
 
 @app.command("run")
@@ -31,7 +18,7 @@ def run(
         str,
         typer.Argument(
             help="Completed ingest session ID in the active workspace.",
-            autocompletion=_complete_session,
+            autocompletion=complete_session_id,
         ),
     ],
     recover: Annotated[

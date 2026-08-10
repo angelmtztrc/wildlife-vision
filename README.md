@@ -304,6 +304,10 @@ uv run wv gui review-detection <SESSION_ID> --detection animal --pending-only
 uv run wv gui favorites <SESSION_ID> --pending-only
 ```
 
+Both GUI commands offer shell completion for reviewable session IDs. The
+`--detection` option also completes `animal`, `human`, `vehicle`, `domestic`,
+`empty`, and `other`.
+
 `gui review-detection` records the verified detection in the session database
 and moves a relabeled image into its corresponding detection directory. `gui
 favorites` records a favorite decision for animal images in the session database

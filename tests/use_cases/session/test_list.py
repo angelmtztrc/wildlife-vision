@@ -191,6 +191,39 @@ def test_run_lists_incomplete_sessions_before_newer_completed_sessions(
     ]
 
 
+def test_run_filters_to_reviewable_sessions_before_applying_limit(
+    configured_workspace: Path,
+):
+    _create_session(
+        configured_workspace,
+        session_id="20260801_120000__SITE001",
+        monitoring_site_id="SITE001",
+        started_at="2026-08-01T12:00:00+00:00",
+        ingest_status="completed",
+    )
+    _create_session(
+        configured_workspace,
+        session_id="20260802_120000__SITE001",
+        monitoring_site_id="SITE001",
+        started_at="2026-08-02T12:00:00+00:00",
+        ingest_status="completed",
+    )
+    _create_session(
+        configured_workspace,
+        session_id="20260803_120000__SITE001",
+        monitoring_site_id="SITE001",
+        started_at="2026-08-03T12:00:00+00:00",
+        ingest_status="completed",
+    )
+    _complete_processing(configured_workspace, "20260801_120000__SITE001")
+    _complete_processing(configured_workspace, "20260802_120000__SITE001", with_failures=True)
+
+    result = run(ListSessionsInput(completed_detection_only=True, limit=1))
+
+    assert [item.id for item in result.items] == ["20260802_120000__SITE001"]
+    assert result.items[0].processing_status == "completed_with_failures"
+
+
 @pytest.mark.parametrize(
     ("input_data", "message"),
     [
