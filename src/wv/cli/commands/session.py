@@ -371,17 +371,10 @@ def clean_bursts(
 def detect_content(
     session_id: Annotated[
         str,
-        typer.Argument(help="Completed ingest session ID after all cleanup stages."),
+        typer.Argument(help="Completed ingest session ID after corrupted and overexposed-IR cleanup."),
     ],
     model: Annotated[str | None, typer.Option(help="Override the workspace model for a new stage; retries use the recorded value.")] = None,
-    confidence_threshold: Annotated[
-        float | None,
-        typer.Option("--confidence-threshold", min=0.0, max=1.0, help="Override workspace detection confidence for a new stage; retries use the recorded value."),
-    ] = None,
-    ambiguity_gap: Annotated[
-        float | None,
-        typer.Option("--ambiguity-gap", min=0.0, max=1.0, help="Override workspace detection ambiguity for a new stage; retries use the recorded value."),
-    ] = None,
+    speciesnet_model: Annotated[str | None, typer.Option(help="Override the workspace SpeciesNet model for a new stage; retries use the recorded value.")] = None,
     batch_size: Annotated[
         int | None,
         typer.Option(
@@ -393,14 +386,13 @@ def detect_content(
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview classifications without moving files or updating the database; a new plan still runs inference.")] = False,
     recover: Annotated[bool, typer.Option("--recover", help="Resume an interrupted attempt from its saved inference plan without rerunning inference.")] = False,
 ):
-    """Run the final managed stage and classify images as animal, human, vehicle, empty, or other."""
+    """Classify managed images as animal, human, vehicle, domestic, empty, or other."""
     try:
         result = run_detect_content(
             SessionDetectContentInput(
                 session_id=session_id,
                 model=model,
-                confidence_threshold=confidence_threshold,
-                ambiguity_gap=ambiguity_gap,
+                speciesnet_model=speciesnet_model,
                 batch_size=batch_size,
                 dry_run=dry_run,
                 recover=recover,
@@ -413,12 +405,13 @@ def detect_content(
         raise typer.BadParameter(str(exc), param_hint="session_id") from exc
 
     logger.done(
-        "Finished managed detection for %s: evaluated=%s animal=%s human=%s vehicle=%s empty=%s other=%s moved=%s failed=%s%s",
+        "Finished managed detection for %s: evaluated=%s animal=%s human=%s vehicle=%s domestic=%s empty=%s other=%s moved=%s failed=%s%s",
         result.session_id,
         result.files_evaluated,
         result.files_animal,
         result.files_human,
         result.files_vehicle,
+        result.files_domestic,
         result.files_empty,
         result.files_other,
         result.files_moved,

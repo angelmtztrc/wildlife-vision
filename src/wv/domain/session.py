@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 INGEST_STATUSES = (
     "in_progress",
@@ -48,6 +48,50 @@ class SessionImage:
 class SessionImageStateCount:
     state: str
     count: int
+
+
+@dataclass(frozen=True)
+class ImageTaxonPrediction:
+    rank: int
+    taxon_id: str
+    taxon_class: str | None
+    taxon_order: str | None
+    taxon_family: str | None
+    taxon_genus: str | None
+    taxon_species: str | None
+    common_name: str | None
+    confidence: float
+
+
+@dataclass(frozen=True)
+class ImageObjectDetection:
+    id: str
+    image_id: str
+    category: str
+    confidence: float
+    bbox_x: float
+    bbox_y: float
+    bbox_width: float
+    bbox_height: float
+    final_taxon_id: str | None = None
+    final_taxon_rank: str | None = None
+    final_taxon_confidence: float | None = None
+    predictions: list[ImageTaxonPrediction] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ImageDetectionResult:
+    image_id: str
+    predicted_label: str
+    predicted_confidence: float
+    decision_source: str
+    megadetector_model: str
+    speciesnet_model: str
+    speciesnet_model_version: str | None
+    latitude: float
+    longitude: float
+    failure_message: str | None = None
+    detections: list[ImageObjectDetection] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

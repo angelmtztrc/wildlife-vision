@@ -22,7 +22,7 @@ When you're giving the order to define a plan, always ask for whatever informati
 - The real app entrypoint is the Typer CLI in `src/wv/cli/main.py`.
 - Console scripts are `wv` and `wildlife-vision` (`pyproject.toml`). Use `uv run wv --help` as the basic smoke test.
 - Do not treat the repo-root `main.py` as application code; it is just a placeholder that prints `Hello from wildlife-vision!`.
-- The global `--verbose` flag lives on the root app, so it must come before the subcommand: `uv run wv --verbose setup`.
+- The global `--verbose` flag lives on the root app, so it must come before the subcommand: `uv run wv --verbose models setup`.
 
 ## Repo Shape
 
@@ -101,9 +101,9 @@ src/wv/use_cases/device/
 
 ## Current State
 
-- Implemented command paths worth verifying are `workspace {init,activate,migrate,show,validate}`, `setup`, `ingest {sd,folder}`, `pipeline run`, `detect content`, and `clean {corrupted,overexposed-ir,bursts}`.
+- Implemented command paths worth verifying are `workspace {init,activate,migrate,show,validate}`, `models {list,setup,status}`, `ingest {sd,folder}`, `pipeline run`, `session detect content`, and `clean {corrupted,overexposed-ir,bursts}`.
 - `export favorites` is registered in the root app.
-- `wv setup` calls MegaDetector model preparation (`src/wv/use_cases/setup.py`, `src/wv/ml/megadetector.py`) and can trigger model resolution/download, so prefer help or tests for routine smoke checks.
+- `wv models setup` prepares MegaDetector and the isolated SpeciesNet runtime (`src/wv/use_cases/models/setup.py`), and can trigger model resolution/download, so prefer help or tests for routine smoke checks.
 
 ## Config Gotcha
 

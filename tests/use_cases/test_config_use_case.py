@@ -42,7 +42,7 @@ def test_run_get_returns_known_config_value(tmp_path: Path, monkeypatch):
 
     result = run_get(GetConfigValueInput(key="workspace.version"))
 
-    assert result.value == 2
+    assert result.value == 3
 
 
 def test_run_list_returns_known_config_values_in_schema_order(tmp_path: Path, monkeypatch):
@@ -60,8 +60,8 @@ def test_run_list_returns_known_config_values_in_schema_order(tmp_path: Path, mo
     result = run_list(ListConfigInput())
 
     assert [item.key for item in result.items] == get_known_keys()
-    assert result.items[0].value == 2
-    assert result.items[-1].value == 4
+    assert result.items[0].value == 3
+    assert result.items[-2].value == 4
 
 
 def test_run_list_rejects_version_one_config(tmp_path: Path, monkeypatch):
@@ -72,7 +72,7 @@ def test_run_list_rejects_version_one_config(tmp_path: Path, monkeypatch):
     run_workspace_initialize(WorkspaceInitializeInput(path=workspace_path))
     config_file = workspace_path / ".wv" / "config.yml"
     config_file.write_text(
-        config_file.read_text(encoding="utf-8").replace("version: 2", "version: 1"),
+        config_file.read_text(encoding="utf-8").replace("version: 3", "version: 1"),
         encoding="utf-8",
     )
 

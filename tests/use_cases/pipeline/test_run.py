@@ -41,8 +41,7 @@ def bypass_workflow_lock(monkeypatch):
             bursts=SimpleNamespace(burst_gap_threshold=60, similarity_threshold=5),
             detection=SimpleNamespace(
                 model="MDV5A",
-                confidence_threshold=0.8,
-                ambiguity_gap=0.3,
+                speciesnet_model="speciesnet",
                 batch_size=4,
             ),
         ),
@@ -66,14 +65,13 @@ def test_run_executes_all_stages_in_order(monkeypatch):
         [
             _status("ready", "clean_corrupted", "run"),
             _status("processing", "clean_overexposed_ir", "run"),
-            _status("processing", "clean_bursts", "run"),
             _status("processing", "detect_content", "run"),
             _status("completed", None, None),
         ]
     )
     calls: list[str] = []
     monkeypatch.setattr(pipeline, "run_session_status", lambda input_data: next(statuses))
-    for name in ("run_clean_corrupted", "run_clean_overexposed_ir", "run_clean_bursts", "run_detect_content"):
+    for name in ("run_clean_corrupted", "run_clean_overexposed_ir", "run_detect_content"):
         monkeypatch.setattr(
             pipeline,
             name,
@@ -85,7 +83,6 @@ def test_run_executes_all_stages_in_order(monkeypatch):
     assert calls == [
         "run_clean_corrupted",
         "run_clean_overexposed_ir",
-        "run_clean_bursts",
         "run_detect_content",
     ]
     assert result.final_status == "completed"
@@ -176,7 +173,7 @@ def test_run_requires_explicit_recovery(monkeypatch):
 
 def test_run_rejects_combined_stage_controls():
     with pytest.raises(PipelineRunError, match="cannot be used together"):
-        run(PipelineRunInput(session_id=SESSION.id, next_only=True, until="bursts"))
+        run(PipelineRunInput(session_id=SESSION.id, next_only=True, until="detect-content"))
 
 
 def test_retry_uses_recorded_parameters(monkeypatch):

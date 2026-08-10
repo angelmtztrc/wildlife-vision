@@ -160,7 +160,7 @@ def test_evaluate_images_normalizes_and_preserves_detections_for_routing(
         batch_size=8,
     )
 
-    assert detector.batch_thresholds == [0.01]
+    assert detector.batch_thresholds == [0.005]
     assert results[0].failure is None
     assert results[0].detections == [
         megadetector.MlDetection(label="animal", confidence=0.91),
@@ -234,9 +234,9 @@ def test_evaluate_images_falls_back_to_per_image_inference_when_batch_fails(
     )
 
     assert detector.batch_calls == 1
-    assert detector.batch_thresholds == [0.01]
+    assert detector.batch_thresholds == [0.005]
     assert detector.one_image_calls == [str(image_path)]
-    assert detector.one_image_thresholds == [0.01]
+    assert detector.one_image_thresholds == [0.005]
     assert results == [
         megadetector.MlImageResult(
             file_path=image_path,

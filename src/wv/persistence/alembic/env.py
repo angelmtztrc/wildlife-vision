@@ -6,6 +6,9 @@ from sqlalchemy import engine_from_config, pool
 from wv.persistence.base import Base
 from wv.persistence.models import (
     DeviceModel,
+    ImageDetectionResultModel,
+    ImageObjectDetectionModel,
+    ImageTaxonPredictionModel,
     MonitoringAreaModel,
     MonitoringSiteModel,
     SessionImageModel,

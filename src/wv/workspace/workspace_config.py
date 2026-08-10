@@ -19,6 +19,7 @@ from wv.workspace.schema import (
     ProcessingConfig,
     WORKSPACE_CONFIG_PROPERTIES,
     WORKSPACE_CONFIG_PROPERTIES_V1,
+    WORKSPACE_CONFIG_PROPERTIES_V2,
     WORKSPACE_VERSION,
     build_default_config,
 )
@@ -184,6 +185,9 @@ def validate_workspace_config(value: dict[str, Any], workspace_path: Path) -> No
     if version == 1:
         _validate_base_config(value, workspace_path, WORKSPACE_CONFIG_PROPERTIES_V1)
         return
+    if version == 2:
+        _validate_base_config(value, workspace_path, WORKSPACE_CONFIG_PROPERTIES_V2)
+        return
     if version != WORKSPACE_VERSION:
         raise WorkspaceError(f"Invalid workspace config value for workspace.version: expected {WORKSPACE_VERSION}")
     _validate_base_config(value, workspace_path, WORKSPACE_CONFIG_PROPERTIES)
@@ -191,11 +195,13 @@ def validate_workspace_config(value: dict[str, Any], workspace_path: Path) -> No
         settings = _processing_config(value)
         validate_exposure_thresholds(settings.overexposed_ir.mean_threshold, settings.overexposed_ir.std_threshold, settings.overexposed_ir.high_level, settings.overexposed_ir.pct_high_threshold)
         validate_burst_thresholds(settings.bursts.burst_gap_threshold, settings.bursts.similarity_threshold)
-        validate_detection_settings(settings.detection.confidence_threshold, settings.detection.ambiguity_gap, settings.detection.batch_size)
+        validate_detection_settings(settings.detection.batch_size, settings.detection.domestic_taxon_ids)
     except ValueError as exc:
         raise WorkspaceError(f"Invalid workspace processing config: {exc}") from exc
     if not settings.detection.model.strip():
         raise WorkspaceError("Invalid workspace config value for processing.detection.model: expected non-empty string")
+    if not settings.detection.speciesnet_model.strip():
+        raise WorkspaceError("Invalid workspace config value for processing.detection.speciesnet_model: expected non-empty string")
 
 
 def _processing_config(value: dict[str, Any]) -> ProcessingConfig:
@@ -212,9 +218,9 @@ def _processing_config(value: dict[str, Any]) -> ProcessingConfig:
         ),
         detection=DetectionProcessingConfig(
             model=get_config_property(value, "processing.detection.model"),
-            confidence_threshold=float(get_config_property(value, "processing.detection.confidence_threshold")),
-            ambiguity_gap=float(get_config_property(value, "processing.detection.ambiguity_gap")),
+            speciesnet_model=get_config_property(value, "processing.detection.speciesnet_model"),
             batch_size=get_config_property(value, "processing.detection.batch_size"),
+            domestic_taxon_ids=list(get_config_property(value, "processing.detection.domestic_taxon_ids")),
         ),
     )
 
@@ -224,7 +230,9 @@ def load_processing_config(config_file: Path | None = None, workspace_path: Path
     value = load_workspace_config(config_file)
     validate_workspace_config(value, active_workspace_path)
     if _workspace_version(value) != WORKSPACE_VERSION:
-        raise WorkspaceError("Workspace config is version 1. Run 'wv workspace migrate'.")
+        raise WorkspaceError(
+            f"Workspace config is version {_workspace_version(value)}. Run 'wv workspace migrate'."
+        )
     return _processing_config(value)
 
 
@@ -249,6 +257,29 @@ def migrate_workspace_config_v1_to_v2(value: dict[str, Any], workspace_path: Pat
         else:
             for key, default_value in default_group.items():
                 group_value.setdefault(key, default_value)
+    migrated["workspace"]["version"] = WORKSPACE_VERSION
+    validate_workspace_config(migrated, workspace_path)
+    return migrated
+
+
+def migrate_workspace_config_v2_to_v3(value: dict[str, Any], workspace_path: Path) -> dict[str, Any]:
+    """Upgrade V2 detection settings to database-backed V3 detection settings."""
+    from wv.workspace.schema import DEFAULT_DOMESTIC_TAXON_IDS, DEFAULT_SPECIESNET_MODEL
+
+    if _workspace_version(value) != 2:
+        raise WorkspaceError("Workspace config migration requires version 2.")
+    validate_workspace_config(value, workspace_path)
+    migrated = copy.deepcopy(value)
+    processing = migrated.get("processing")
+    if not isinstance(processing, dict):
+        raise WorkspaceError("Invalid workspace config value for processing: expected mapping")
+    detection = processing.get("detection")
+    if not isinstance(detection, dict):
+        raise WorkspaceError("Invalid workspace config value for processing.detection: expected mapping")
+    detection.pop("confidence_threshold", None)
+    detection.pop("ambiguity_gap", None)
+    detection.setdefault("speciesnet_model", DEFAULT_SPECIESNET_MODEL)
+    detection.setdefault("domestic_taxon_ids", list(DEFAULT_DOMESTIC_TAXON_IDS))
     migrated["workspace"]["version"] = WORKSPACE_VERSION
     validate_workspace_config(migrated, workspace_path)
     return migrated

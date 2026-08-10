@@ -70,8 +70,9 @@ class ReviewApp:
             ("1 Animal", "animal"),
             ("2 Human", "human"),
             ("3 Vehicle", "vehicle"),
-            ("4 Empty", "empty"),
-            ("5 Other", "other"),
+            ("4 Domestic", "domestic"),
+            ("5 Empty", "empty"),
+            ("6 Other", "other"),
         ):
             tk.Button(footer, text=label, command=lambda value=key: self._assign_and_refresh(value)).pack(side="left", padx=(0, 6))
 

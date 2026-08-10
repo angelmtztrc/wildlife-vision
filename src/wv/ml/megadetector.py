@@ -12,7 +12,7 @@ from wv.core.files import get_content_digest
 
 DEFAULT_MODEL = "MDV5A"
 _CATEGORY_LABELS = {1: "animal", 2: "human", 3: "vehicle"}
-_MIN_DETECTION_THRESHOLD = 0.01
+_MIN_DETECTION_THRESHOLD = 0.005
 
 logger = get_logger(__name__)
 
@@ -36,6 +36,10 @@ class ResolvedModel:
 class MlDetection:
     label: str
     confidence: float
+    bbox_x: float = 0.0
+    bbox_y: float = 0.0
+    bbox_width: float = 0.0
+    bbox_height: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -188,6 +192,20 @@ def _normalize_detection(raw_detection: dict[str, object]) -> MlDetection:
     if not isfinite(confidence) or not 0.0 <= confidence <= 1.0:
         raise ValueError("Invalid detection confidence.")
 
+    bbox = raw_detection.get("bbox")
+    if bbox is None:
+        bbox = [0.0, 0.0, 0.0, 0.0]
+    if not isinstance(bbox, list) or len(bbox) != 4:
+        raise ValueError("Invalid detection bounding box.")
+    try:
+        bbox_x, bbox_y, bbox_width, bbox_height = (float(value) for value in bbox)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Invalid detection bounding box.") from exc
+    if not all(isfinite(value) and 0.0 <= value <= 1.0 for value in (bbox_x, bbox_y, bbox_width, bbox_height)):
+        raise ValueError("Invalid detection bounding box.")
+    if bbox_x + bbox_width > 1.0 or bbox_y + bbox_height > 1.0:
+        raise ValueError("Invalid detection bounding box.")
+
     try:
         category_id = int(str(raw_detection.get("category")))
     except (TypeError, ValueError):
@@ -196,6 +214,10 @@ def _normalize_detection(raw_detection: dict[str, object]) -> MlDetection:
     return MlDetection(
         label=_CATEGORY_LABELS.get(category_id, "other"),
         confidence=confidence,
+        bbox_x=bbox_x,
+        bbox_y=bbox_y,
+        bbox_width=bbox_width,
+        bbox_height=bbox_height,
     )
 
 

@@ -45,7 +45,7 @@ def test_config_get_prints_known_value(cli_runner, tmp_path: Path, monkeypatch):
     result = cli_runner.invoke(config.app, ["get", "workspace.version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == "2"
+    assert result.output.strip() == "3"
 
 
 def test_config_list_prints_known_values_in_schema_order(cli_runner, tmp_path: Path, monkeypatch):

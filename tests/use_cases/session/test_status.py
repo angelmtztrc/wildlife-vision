@@ -104,7 +104,7 @@ def test_run_reports_ready_session_inventory_and_filesystem(configured_workspace
     assert result.overall_status == "ready"
     assert result.next_process == "clean_corrupted"
     assert result.next_action == "run"
-    assert [stage.status for stage in result.stages] == ["not_started"] * 4
+    assert [stage.status for stage in result.stages] == ["not_started"] * 3
     assert [(item.state, item.count) for item in result.inventory] == [
         ("detection/animal", 1),
         ("init", 1),

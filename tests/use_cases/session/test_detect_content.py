@@ -5,8 +5,10 @@ import pytest
 import wv.use_cases.session.detect_content as session_detection
 from wv.core.files import get_content_digest
 from wv.ml.megadetector import MlDetection, MlImageResult, ResolvedModel
+from wv.ml.speciesnet import SpeciesNetModel
 from wv.domain.session import IngestSession, SessionImage
 from wv.persistence.repositories import (
+    ImageDetectionResultRepository,
     SessionImageRepository,
     SessionProcessImagePlanRepository,
     SessionProcessRepository,
@@ -53,13 +55,13 @@ def _create_inventory(workspace_path: Path, paths: list[Path]) -> None:
             )
 
 
-def _complete_bursts(workspace_path: Path) -> None:
+def _complete_overexposed_ir(workspace_path: Path) -> None:
     with sql_session_scope(require_workspace_database_path(workspace_path)) as sql_session:
         repository = SessionProcessRepository(sql_session)
-        repository.start(SESSION_ID, "clean_bursts", "2026-08-01T12:01:00+00:00", "{}")
+        repository.start(SESSION_ID, "clean_overexposed_ir", "2026-08-01T12:01:00+00:00", "{}")
         repository.complete(
             SESSION_ID,
-            "clean_bursts",
+            "clean_overexposed_ir",
             status="completed",
             completed_at="2026-08-01T12:02:00+00:00",
             files_discovered=0,
@@ -74,12 +76,24 @@ def _complete_bursts(workspace_path: Path) -> None:
 def _mock_model(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         session_detection,
+        "verify_manifest",
+        lambda megadetector_model, speciesnet_model: object(),
+    )
+    monkeypatch.setattr(
+        session_detection,
         "resolve_model",
         lambda model: ResolvedModel(
             requested_model=model,
             resolved_path=Path("/tmp/model.pt"),
             content_digest="MODEL",
             content_size_bytes=1,
+        ),
+    )
+    monkeypatch.setattr(
+        session_detection,
+        "evaluate_animal_detections",
+        lambda model, requests, batch_size, latitude, longitude: (
+            {}, SpeciesNetModel(model, Path("/tmp/speciesnet.pt"), "SPECIES", "4.0.3a", "GPU")
         ),
     )
 
@@ -90,8 +104,9 @@ def test_run_persists_detection_plan_and_updates_inventory(
     init_path = configured_workspace / "sessions" / SESSION_ID / "init"
     animal = make_image(init_path / "animal.jpg")
     empty = make_image(init_path / "empty.jpg")
+    original_digest = get_content_digest(animal)
     _create_inventory(configured_workspace, [animal, empty])
-    _complete_bursts(configured_workspace)
+    _complete_overexposed_ir(configured_workspace)
     _mock_model(monkeypatch)
     monkeypatch.setattr(
         session_detection,
@@ -117,20 +132,23 @@ def test_run_persists_detection_plan_and_updates_inventory(
             SESSION_ID, "detect_content"
         )
         image = SessionImageRepository(sql_session).get("image-1")
+        inference = ImageDetectionResultRepository(sql_session).list_for_images(["image-1"])[0]
 
     assert len(plans) == 2
     assert plans[0].decision_details_json is not None
     assert image.state == "detection/animal"
-    assert image.content_digest != get_content_digest(animal) if animal.exists() else True
+    assert image.content_digest == original_digest
     assert (configured_workspace / "sessions" / SESSION_ID / image.current_relative_path).is_file()
+    assert inference.predicted_label == "animal"
+    assert inference.detections[0].category == "animal"
 
 
-def test_run_requires_burst_predecessor(configured_workspace: Path, make_image):
+def test_run_requires_overexposure_predecessor(configured_workspace: Path, make_image):
     init_path = configured_workspace / "sessions" / SESSION_ID / "init"
     path = make_image(init_path / "animal.jpg")
     _create_inventory(configured_workspace, [path])
 
-    with pytest.raises(SessionProcessError, match="requires clean_bursts"):
+    with pytest.raises(SessionProcessError, match="requires clean_overexposed_ir"):
         run(SessionDetectContentInput(session_id=SESSION_ID))
 
 
@@ -140,7 +158,7 @@ def test_dry_run_does_not_persist_plan_or_move_files(
     init_path = configured_workspace / "sessions" / SESSION_ID / "init"
     path = make_image(init_path / "animal.jpg")
     _create_inventory(configured_workspace, [path])
-    _complete_bursts(configured_workspace)
+    _complete_overexposed_ir(configured_workspace)
     _mock_model(monkeypatch)
     monkeypatch.setattr(
         session_detection,
@@ -165,7 +183,7 @@ def test_recovery_replays_saved_plan_without_model(
     path = make_image(init_path / "animal.jpg")
     (init_path / "notes.txt").write_text("ignore")
     _create_inventory(configured_workspace, [path])
-    _complete_bursts(configured_workspace)
+    _complete_overexposed_ir(configured_workspace)
     _mock_model(monkeypatch)
     monkeypatch.setattr(
         session_detection,

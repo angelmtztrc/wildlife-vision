@@ -16,7 +16,7 @@ def review_detection(
         str,
         typer.Option(
             "--detection",
-            help="Bucket to review: animal, human, vehicle, empty, or other.",
+            help="Bucket to review: animal, human, vehicle, domestic, empty, or other.",
             case_sensitive=False,
         ),
     ],

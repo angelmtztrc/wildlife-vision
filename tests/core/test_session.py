@@ -20,7 +20,7 @@ def test_session_routes_are_canonical(tmp_path: Path):
     assert get_ignored_corrupted_path(session_path) == session_path / "ignored" / "corrupted"
     assert get_ignored_overexposed_path(session_path) == session_path / "ignored" / "overexposed"
     assert get_ignored_bursts_path(session_path) == session_path / "ignored" / "bursts"
-    assert DETECTION_LABELS == ("animal", "vehicle", "human", "other", "empty")
+    assert DETECTION_LABELS == ("animal", "vehicle", "human", "domestic", "other", "empty")
     assert get_detection_path(session_path) == session_path / "detection"
     assert get_detection_path(session_path, "animal") == session_path / "detection" / "animal"
 

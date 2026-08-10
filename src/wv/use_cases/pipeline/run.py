@@ -2,8 +2,6 @@ import json
 from dataclasses import dataclass, field
 
 from wv.core.logger import get_logger
-from wv.use_cases.session.clean_bursts import SessionCleanBurstsInput
-from wv.use_cases.session.clean_bursts import run as run_clean_bursts
 from wv.use_cases.session.clean_corrupted import SessionCleanCorruptedInput
 from wv.use_cases.session.clean_corrupted import run as run_clean_corrupted
 from wv.use_cases.session.clean_overexposed_ir import SessionCleanOverexposedIrInput
@@ -17,7 +15,7 @@ from wv.workspace.workspace_config import load_processing_config
 
 PROCESS_ALIASES = dict(
     zip(
-        ("corrupted", "overexposed-ir", "bursts", "detect-content"),
+        ("corrupted", "overexposed-ir", "detect-content"),
         PROCESS_NAMES,
         strict=True,
     )
@@ -40,11 +38,8 @@ class PipelineRunInput:
     std_threshold: float | None = None
     high_level: int | None = None
     pct_high_threshold: float | None = None
-    burst_gap_threshold: int | None = None
-    similarity_threshold: int | None = None
     model: str | None = None
-    confidence_threshold: float | None = None
-    ambiguity_gap: float | None = None
+    speciesnet_model: str | None = None
     batch_size: int | None = None
 
 
@@ -121,22 +116,12 @@ def _run_stage(input_data: PipelineRunInput, process_name: str, stage: SessionSt
                 recover=recover,
             )
         )
-    if process_name == "clean_bursts":
-        return run_clean_bursts(
-            SessionCleanBurstsInput(
-                session_id=input_data.session_id,
-                burst_gap_threshold=int(_value(provided=input_data.burst_gap_threshold, stored=stored, key="burst_gap_threshold", default=settings.bursts.burst_gap_threshold)),
-                similarity_threshold=int(_value(provided=input_data.similarity_threshold, stored=stored, key="similarity_threshold", default=settings.bursts.similarity_threshold)),
-                recover=recover,
-            )
-        )
     if process_name == "detect_content":
         return run_detect_content(
             SessionDetectContentInput(
                 session_id=input_data.session_id,
                 model=str(_value(provided=input_data.model, stored=stored, key="model", default=settings.detection.model)),
-                confidence_threshold=float(_value(provided=input_data.confidence_threshold, stored=stored, key="confidence_threshold", default=settings.detection.confidence_threshold)),
-                ambiguity_gap=float(_value(provided=input_data.ambiguity_gap, stored=stored, key="ambiguity_gap", default=settings.detection.ambiguity_gap)),
+                speciesnet_model=str(_value(provided=input_data.speciesnet_model, stored=stored, key="speciesnet_model", default=settings.detection.speciesnet_model)),
                 batch_size=(
                     int(
                         _value(

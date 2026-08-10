@@ -313,10 +313,8 @@ def test_session_detect_content_forwards_options(cli_runner, monkeypatch):
             "session-1",
             "--model",
             "custom.pt",
-            "--confidence-threshold",
-            "0.7",
-            "--ambiguity-gap",
-            "0.2",
+            "--speciesnet-model",
+            "custom-speciesnet",
             "--batch-size",
             "4",
             "--dry-run",
@@ -326,8 +324,7 @@ def test_session_detect_content_forwards_options(cli_runner, monkeypatch):
 
     assert result.exit_code == 0
     assert received_input.model == "custom.pt"
-    assert received_input.confidence_threshold == 0.7
-    assert received_input.ambiguity_gap == 0.2
+    assert received_input.speciesnet_model == "custom-speciesnet"
     assert received_input.batch_size == 4
     assert received_input.dry_run is True
     assert received_input.recover is True

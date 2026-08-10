@@ -15,6 +15,7 @@ from wv.workspace.workspace_config import (
     get_workspace_config_path,
     load_workspace_config,
     migrate_workspace_config_v1_to_v2,
+    migrate_workspace_config_v2_to_v3,
     require_workspace_database_path,
     require_workspace_path,
     validate_workspace_config,
@@ -68,10 +69,12 @@ def run(input_data: WorkspaceMigrateInput) -> WorkspaceMigrateResult:
         raise WorkspaceError("Workspace config has an invalid version.")
     if previous_config_version == 1:
         migrated_config = migrate_workspace_config_v1_to_v2(config, workspace_path)
+    elif previous_config_version == 2:
+        migrated_config = migrate_workspace_config_v2_to_v3(config, workspace_path)
     else:
         validate_workspace_config(config, workspace_path)
         migrated_config = config
-    if previous_config_version not in {1, 2}:
+    if previous_config_version not in {1, 2, 3}:
         raise WorkspaceError(f"Unsupported workspace config version: {previous_config_version}")
     previous_revision = _get_database_revision(database_path)
 
@@ -91,7 +94,7 @@ def run(input_data: WorkspaceMigrateInput) -> WorkspaceMigrateResult:
             raise WorkspaceError("Workspace database migration did not reach the packaged migration head.")
     else:
         current_revision = previous_revision
-    config_migrated = previous_config_version == 1
+    config_migrated = previous_config_version in {1, 2}
     if config_migrated:
         write_workspace_config(migrated_config, config_path)
         validate_workspace_config(load_workspace_config(config_path), workspace_path)
@@ -101,7 +104,7 @@ def run(input_data: WorkspaceMigrateInput) -> WorkspaceMigrateResult:
         config_path=config_path,
         database_path=database_path,
         previous_config_version=previous_config_version,
-        current_config_version=2,
+        current_config_version=3,
         config_migrated=config_migrated,
         previous_database_revision=previous_revision,
         current_database_revision=current_revision,

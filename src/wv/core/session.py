@@ -6,7 +6,7 @@ from pathlib import Path
 INIT_DIRECTORY = "init"
 IGNORED_DIRECTORY = "ignored"
 DETECTION_DIRECTORY = "detection"
-DETECTION_LABELS = ("animal", "vehicle", "human", "other", "empty")
+DETECTION_LABELS = ("animal", "vehicle", "human", "domestic", "other", "empty")
 _SESSION_COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 
 

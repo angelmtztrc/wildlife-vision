@@ -369,20 +369,23 @@ processing:
     similarity_threshold: 5
   detection:
     model: MDV5A
-    confidence_threshold: 0.8
-    ambiguity_gap: 0.3
+    speciesnet_model: kaggle:google/speciesnet/pyTorch/v4.0.3a/1
     batch_size: 4
+    domestic_taxon_ids: []
 ```
 
 Existing version 1 workspaces must be upgraded with `uv run wv workspace migrate`.
 The standalone filesystem commands do not read workspace processing settings.
 
-Prepare the local MegaDetector model when required. This command can resolve or
-download a model:
+Prepare models selected by the active workspace. This creates the isolated
+SpeciesNet runtime and can download model artifacts:
 
 ```bash
-uv run wv setup
+uv run wv models setup --megadetector v5a --speciesnet v4.0.3a
 ```
+
+Use `uv run wv models list` to see supported aliases and `uv run wv models status`
+to verify the selected models before processing sessions.
 
 ## Command Reference
 
@@ -394,11 +397,10 @@ wv monitoring-site {create,list,show,update}
 wv device {create,list,show,update}
 wv sd {init,show,update,clear}
 wv ingest {sd,folder}
+wv models {list,setup,status}
 wv session {list,status,clean,detect}
 wv pipeline run
 wv gui {review-detection,favorites}
 wv export favorites
 wv clean {corrupted,overexposed-ir,bursts}
-wv detect content
-wv setup
 ```

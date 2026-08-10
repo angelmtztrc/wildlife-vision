@@ -44,20 +44,17 @@ def run(
     ] = False,
     until: Annotated[
         str | None,
-        typer.Option("--until", help="Stop inclusively after: corrupted, overexposed-ir, bursts, or detect-content."),
+        typer.Option("--until", help="Stop inclusively after: corrupted, overexposed-ir, or detect-content."),
     ] = None,
     mean_threshold: Annotated[float | None, typer.Option("--mean-threshold", min=0.0, max=255.0, help="Override the grayscale mean for a new overexposed-IR stage; retries use the recorded value.")] = None,
     std_threshold: Annotated[float | None, typer.Option("--std-threshold", min=0.0, help="Override grayscale deviation for a new overexposed-IR stage; retries use the recorded value.")] = None,
     high_level: Annotated[int | None, typer.Option("--high-level", min=0, max=255, help="Override the near-white cutoff for a new overexposed-IR stage; retries use the recorded value.")] = None,
     pct_high_threshold: Annotated[float | None, typer.Option("--pct-high-threshold", min=0.0, max=1.0, help="Override the near-white fraction for a new overexposed-IR stage; retries use the recorded value.")] = None,
-    burst_gap_threshold: Annotated[int | None, typer.Option("--burst-gap-threshold", min=0, help="Override the burst gap for a new burst stage; retries use the recorded value.")] = None,
-    similarity_threshold: Annotated[int | None, typer.Option("--similarity-threshold", min=0, max=64, help="Override hash similarity for a new burst stage; retries use the recorded value.")] = None,
     model: Annotated[str | None, typer.Option("--model", help="Override the workspace model for a new detection stage; retries use the recorded value.")] = None,
-    confidence_threshold: Annotated[float | None, typer.Option("--confidence-threshold", min=0.0, max=1.0, help="Override detection confidence for a new stage; retries use the recorded value.")] = None,
-    ambiguity_gap: Annotated[float | None, typer.Option("--ambiguity-gap", min=0.0, max=1.0, help="Override detection ambiguity for a new stage; retries use the recorded value.")] = None,
+    speciesnet_model: Annotated[str | None, typer.Option("--speciesnet-model", help="Override the SpeciesNet model for a new detection stage; retries use the recorded value.")] = None,
     batch_size: Annotated[int | None, typer.Option("--batch-size", min=1, help="Override inference batch size for a new detection stage; retries use the recorded value.")] = None,
 ):
-    """Run eligible stages in order: corrupted, overexposed IR, bursts, then content detection."""
+    """Run eligible stages in order: corrupted, overexposed IR, then content detection."""
     try:
         result = run_pipeline(
             PipelineRunInput(
@@ -69,11 +66,8 @@ def run(
                 std_threshold=std_threshold,
                 high_level=high_level,
                 pct_high_threshold=pct_high_threshold,
-                burst_gap_threshold=burst_gap_threshold,
-                similarity_threshold=similarity_threshold,
                 model=model,
-                confidence_threshold=confidence_threshold,
-                ambiguity_gap=ambiguity_gap,
+                speciesnet_model=speciesnet_model,
                 batch_size=batch_size,
             )
         )

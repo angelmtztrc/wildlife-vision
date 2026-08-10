@@ -1,26 +1,31 @@
 import json
-import shutil
-import tempfile
 from dataclasses import dataclass, replace
 from importlib.metadata import version
 from pathlib import Path
+from uuid import uuid4
 
 from wv.core.detection import (
-    build_detection_description,
     classify_detections,
-    format_detection_confidence,
     validate_detection_settings,
+    CLASSIFICATION_GATE,
+    MINIMUM_DETECTION_THRESHOLD,
 )
-from wv.core.exif import read_exif, write_exif_image_description
 from wv.core.files import get_content_digest, is_allowed_image_file, move_file_with_staged_copy
 from wv.core.session import get_detection_path
-from wv.ml.megadetector import (
-    MlImageResult,
-    iter_evaluate_images,
-    resolve_model,
+from wv.ml.megadetector import MlImageResult, iter_evaluate_images, resolve_model
+from wv.ml.model_manifest import verify_manifest
+from wv.ml.speciesnet import evaluate_animal_detections
+from wv.domain.session import (
+    ImageDetectionResult,
+    ImageObjectDetection,
+    ImageTaxonPrediction,
+    SessionImage,
+    SessionProcess,
+    SessionProcessImagePlan,
 )
-from wv.domain.session import SessionImage, SessionProcess, SessionProcessImagePlan
 from wv.persistence.repositories import (
+    ImageDetectionResultRepository,
+    MonitoringSiteRepository,
     SessionImageRepository,
     SessionProcessImagePlanRepository,
     SessionProcessRepository,
@@ -42,13 +47,12 @@ from ._shared import (
 from wv.workspace.workspace_config import load_processing_config
 
 PROCESS_NAME = "detect_content"
-ALGORITHM_VERSION = 1
+ALGORITHM_VERSION = 2
 @dataclass(frozen=True)
 class SessionDetectContentInput:
     session_id: str
     model: str | None = None
-    confidence_threshold: float | None = None
-    ambiguity_gap: float | None = None
+    speciesnet_model: str | None = None
     batch_size: int | None = None
     dry_run: bool = False
     recover: bool = False
@@ -67,6 +71,7 @@ class SessionDetectContentResult:
     files_animal: int = 0
     files_human: int = 0
     files_vehicle: int = 0
+    files_domestic: int = 0
     files_empty: int = 0
     files_other: int = 0
     destination: Path = Path()
@@ -84,6 +89,7 @@ class _DetectContentSummary:
     files_animal: int = 0
     files_human: int = 0
     files_vehicle: int = 0
+    files_domestic: int = 0
     files_empty: int = 0
     files_other: int = 0
     destination: Path = Path()
@@ -94,11 +100,11 @@ def _parameters_json(input_data: SessionDetectContentInput) -> str:
     return canonical_process_parameters(
         {
             "algorithm_version": ALGORITHM_VERSION,
-            "ambiguity_gap": input_data.ambiguity_gap,
             "batch_size": input_data.batch_size,
-            "confidence_threshold": input_data.confidence_threshold,
             "model": input_data.model,
-            "minimum_detection_threshold": 0.01,
+            "speciesnet_model": input_data.speciesnet_model,
+            "minimum_detection_threshold": MINIMUM_DETECTION_THRESHOLD,
+            "classification_gate": CLASSIFICATION_GATE,
         }
     )
 
@@ -116,31 +122,21 @@ def _resolve_input(
         PROCESS_NAME,
         {
             "model": input_data.model,
-            "confidence_threshold": input_data.confidence_threshold,
-            "ambiguity_gap": input_data.ambiguity_gap,
+            "speciesnet_model": input_data.speciesnet_model,
             "batch_size": input_data.batch_size,
         },
         {
             "model": settings.detection.model,
-            "confidence_threshold": settings.detection.confidence_threshold,
-            "ambiguity_gap": settings.detection.ambiguity_gap,
+            "speciesnet_model": settings.detection.speciesnet_model,
             "batch_size": settings.detection.batch_size,
         },
     )
     return replace(
         input_data,
         model=str(values["model"]),
-        confidence_threshold=float(values["confidence_threshold"]),
-        ambiguity_gap=float(values["ambiguity_gap"]),
+        speciesnet_model=str(values["speciesnet_model"]),
         batch_size=int(values["batch_size"]),
     )
-
-
-def _read_description(path: Path) -> str | None:
-    value = read_exif(path, "ImageDescription")
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="ignore")
-    return str(value) if value is not None else None
 
 
 def _load_candidates(managed_session: ManagedSession) -> tuple[list[SessionImage], int, int]:
@@ -181,14 +177,17 @@ def _build_plan(
     managed_session: ManagedSession,
     input_data: SessionDetectContentInput,
     candidates: list[SessionImage],
-) -> tuple[list[SessionProcessImagePlan], _DetectContentSummary, str]:
+) -> tuple[list[SessionProcessImagePlan], list[ImageDetectionResult], _DetectContentSummary, str]:
     if not candidates:
-        return [], _DetectContentSummary(), canonical_process_parameters({"schema_version": 1})
+        return [], [], _DetectContentSummary(), canonical_process_parameters({"schema_version": 2})
 
+    settings = load_processing_config()
+    if verify_manifest(str(input_data.model), str(input_data.speciesnet_model)) is None:
+        raise SessionProcessError("Selected models are not ready. Run 'wv models setup'.")
     resolved_model = resolve_model(input_data.model)
     execution_details = canonical_process_parameters(
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "megadetector_version": version("megadetector"),
             "model": {
                 "requested": resolved_model.requested_model,
@@ -205,7 +204,7 @@ def _build_plan(
     inference_results = iter_evaluate_images(
         model=str(resolved_model.resolved_path),
         image_paths=source_paths,
-        confidence_threshold=input_data.confidence_threshold,
+        confidence_threshold=MINIMUM_DETECTION_THRESHOLD,
         batch_size=input_data.batch_size,
     )
 
@@ -216,62 +215,145 @@ def _build_plan(
         dry_run=input_data.dry_run,
     )
     plans: list[SessionProcessImagePlan] = []
+    analysis_results: list[ImageDetectionResult] = []
     planned_at = utc_now()
-    with tempfile.TemporaryDirectory(prefix="wv-detection-plan-") as temporary_directory:
-        temporary_root = Path(temporary_directory)
-        for image, source_path, inference_result in zip(
-            candidates, source_paths, inference_results, strict=True
-        ):
-            _validate_inference_result(inference_result, source_path)
-            if inference_result.failure:
-                raise SessionProcessError(
-                    f"Detection failed for {source_path}: {inference_result.failure}"
-                )
-            decision = classify_detections(
-                inference_result.detections,
-                input_data.confidence_threshold,
-                input_data.ambiguity_gap,
+    inference_by_path: dict[Path, MlImageResult] = {}
+    for source_path, inference_result in zip(source_paths, inference_results, strict=True):
+        _validate_inference_result(inference_result, source_path)
+        if inference_result.failure:
+            raise SessionProcessError(f"Detection failed for {source_path}: {inference_result.failure}")
+        inference_by_path[source_path] = inference_result
+
+    with sql_session_scope(managed_session.database_path) as sql_session:
+        monitoring_site = MonitoringSiteRepository(sql_session).get(
+            managed_session.session.monitoring_site_id
+        )
+    species_requests = [
+        (source_path, index, detection)
+        for source_path, inference_result in inference_by_path.items()
+        for index, detection in enumerate(inference_result.detections)
+        if detection.label == "animal" and detection.confidence >= CLASSIFICATION_GATE
+    ]
+    species_results = {}
+    species_model = None
+    if species_requests:
+        try:
+            species_results, species_model = evaluate_animal_detections(
+                str(input_data.speciesnet_model),
+                species_requests,
+                int(input_data.batch_size),
+                monitoring_site.latitude,
+                monitoring_site.longitude,
             )
-            description = build_detection_description(_read_description(source_path), decision)
-            destination = get_detection_path(managed_session.session_path, decision.label) / source_path.name
-            temporary_path = temporary_root / source_path.name
-            try:
-                shutil.copy2(source_path, temporary_path)
-                write_exif_image_description(temporary_path, description)
-                target_digest = get_content_digest(temporary_path)
-                target_size = temporary_path.stat().st_size
-            finally:
-                temporary_path.unlink(missing_ok=True)
-            details = canonical_process_parameters(
-                {
-                    "schema_version": 1,
-                    "label": decision.label,
-                    "confidence": format_detection_confidence(decision.confidence),
-                    "image_description": description,
-                    "source": {
-                        "content_digest": image.content_digest,
-                        "size_bytes": image.content_size_bytes,
-                    },
-                    "target": {
-                        "content_digest": target_digest,
-                        "size_bytes": target_size,
-                    },
-                }
+        except Exception as exc:
+            raise SessionProcessError(f"SpeciesNet classification failed: {exc}") from exc
+        execution_details = canonical_process_parameters(
+            {
+                **json.loads(execution_details),
+                "speciesnet": {
+                    "requested": species_model.requested_model,
+                    "resolved_path": str(species_model.classifier_path),
+                    "content_digest": species_model.classifier_digest,
+                    "model_version": species_model.model_version,
+                    "inference_device": species_model.inference_device,
+                },
+            }
+        )
+
+    domestic_taxon_ids = set(settings.detection.domestic_taxon_ids)
+    for image, source_path in zip(candidates, source_paths, strict=True):
+        inference_result = inference_by_path[source_path]
+        domestic_indexes = {
+            index
+            for index, _ in enumerate(inference_result.detections)
+            if (species_result := species_results.get((source_path, index))) is not None
+            and species_result.final_taxon_id in domestic_taxon_ids
+        }
+        decision = classify_detections(inference_result.detections, domestic_indexes)
+        destination = get_detection_path(managed_session.session_path, decision.label) / source_path.name
+        target_digest = image.content_digest
+        target_size = image.content_size_bytes
+        object_detections = [
+            _to_object_detection(image.id, index, detection, species_results.get((source_path, index)))
+            for index, detection in enumerate(inference_result.detections)
+        ]
+        analysis_results.append(
+            ImageDetectionResult(
+                image_id=image.id,
+                predicted_label=decision.label,
+                predicted_confidence=decision.confidence,
+                decision_source=decision.source,
+                megadetector_model=str(resolved_model.resolved_path),
+                speciesnet_model=str(input_data.speciesnet_model),
+                speciesnet_model_version=species_model.model_version if species_model else None,
+                latitude=monitoring_site.latitude,
+                longitude=monitoring_site.longitude,
+                detections=object_detections,
             )
-            plans.append(
-                SessionProcessImagePlan(
-                    session_id=managed_session.session.id,
-                    process_name=PROCESS_NAME,
-                    image_id=image.id,
-                    decision="move",
-                    target_relative_path=_relative_path(managed_session.session_path, destination),
-                    planned_at=planned_at,
-                    decision_details_json=details,
-                )
+        )
+        details = canonical_process_parameters(
+            {
+                "schema_version": 2,
+                "label": decision.label,
+                "confidence": decision.confidence,
+                "decision_source": decision.source,
+                "source": {
+                    "content_digest": image.content_digest,
+                    "size_bytes": image.content_size_bytes,
+                },
+                "target": {
+                    "content_digest": target_digest,
+                    "size_bytes": target_size,
+                },
+            }
+        )
+        plans.append(
+            SessionProcessImagePlan(
+                session_id=managed_session.session.id,
+                process_name=PROCESS_NAME,
+                image_id=image.id,
+                decision="move",
+                target_relative_path=_relative_path(managed_session.session_path, destination),
+                planned_at=planned_at,
+                decision_details_json=details,
             )
-            result.files_evaluated += 1
-            _increment_label(result, decision.label)
-    return plans, result, execution_details
+        )
+        result.files_evaluated += 1
+        _increment_label(result, decision.label)
+    return plans, analysis_results, result, execution_details
+
+
+def _to_object_detection(image_id: str, index: int, detection, species_result) -> ImageObjectDetection:
+    predictions = []
+    if species_result is not None:
+        predictions = [
+            ImageTaxonPrediction(
+                rank=prediction.rank,
+                taxon_id=prediction.taxon_id,
+                taxon_class=prediction.taxon_class,
+                taxon_order=prediction.taxon_order,
+                taxon_family=prediction.taxon_family,
+                taxon_genus=prediction.taxon_genus,
+                taxon_species=prediction.taxon_species,
+                common_name=prediction.common_name,
+                confidence=prediction.confidence,
+            )
+            for prediction in species_result.predictions
+        ]
+    return ImageObjectDetection(
+        id=f"{image_id}:{index}",
+        image_id=image_id,
+        category=detection.label,
+        confidence=detection.confidence,
+        bbox_x=detection.bbox_x,
+        bbox_y=detection.bbox_y,
+        bbox_width=detection.bbox_width,
+        bbox_height=detection.bbox_height,
+        final_taxon_id=species_result.final_taxon_id if species_result else None,
+        final_taxon_rank=species_result.final_taxon_rank if species_result else None,
+        final_taxon_confidence=species_result.final_taxon_confidence if species_result else None,
+        predictions=predictions,
+    )
 
 
 def _validate_inference_result(result: MlImageResult, source_path: Path) -> None:
@@ -287,6 +369,7 @@ def _start_and_persist_plan(
     parameters_json: str,
     execution_details: str,
     plans: list[SessionProcessImagePlan],
+    analysis_results: list[ImageDetectionResult],
 ) -> None:
     with sql_session_scope(managed_session.database_path) as sql_session:
         processes = SessionProcessRepository(sql_session)
@@ -299,6 +382,7 @@ def _start_and_persist_plan(
             managed_session.session.id, PROCESS_NAME, execution_details
         )
         SessionProcessImagePlanRepository(sql_session).create_many(plans)
+        ImageDetectionResultRepository(sql_session).replace_many(analysis_results)
 
 
 def _load_existing_plans(
@@ -311,10 +395,24 @@ def _load_existing_plans(
         existing = validate_process_attempt(
             processes, managed_session.session.id, PROCESS_NAME, input_data.recover
         )
+        if existing is not None and _is_legacy_process(existing) and input_data.recover:
+            return existing, SessionProcessImagePlanRepository(sql_session).list_for_process(
+                managed_session.session.id, PROCESS_NAME
+            )
         validate_process_parameters(existing, parameters_json, PROCESS_NAME)
         return existing, SessionProcessImagePlanRepository(sql_session).list_for_process(
             managed_session.session.id, PROCESS_NAME
         )
+
+
+def _is_legacy_process(process: SessionProcess) -> bool:
+    if process.parameters_json is None:
+        return False
+    try:
+        parameters = json.loads(process.parameters_json)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(parameters, dict) and parameters.get("algorithm_version") == 1
 
 
 def _plan_details(plan: SessionProcessImagePlan) -> dict[str, object]:
@@ -347,7 +445,7 @@ def _apply_plans(
             raise SessionProcessError(f"Detection plan is invalid for {plan.image_id}")
         details = _plan_details(plan)
         label = str(details["label"])
-        description = str(details["image_description"])
+        description = details.get("image_description")
         target = details["target"]
         source = details["source"]
         if not isinstance(target, dict) or not isinstance(source, dict):
@@ -373,8 +471,10 @@ def _apply_plans(
                 move_file_with_staged_copy(
                     source_path,
                     destination,
-                    transform=lambda staged_path: write_exif_image_description(
-                        staged_path, description
+                    transform=(
+                        lambda staged_path: _write_legacy_description(staged_path, str(description))
+                        if description is not None
+                        else None
                     ),
                     verify=lambda staged_path: _content_matches(
                         staged_path, target_digest, target_size
@@ -399,6 +499,13 @@ def _apply_plans(
 
 def _content_matches(path: Path, digest: str, size: int) -> bool:
     return path.is_file() and path.stat().st_size == size and get_content_digest(path) == digest
+
+
+def _write_legacy_description(path: Path, description: str) -> None:
+    """Apply EXIF only while replaying a persisted V1 detection plan."""
+    from wv.core.exif import write_exif_image_description
+
+    write_exif_image_description(path, description)
 
 
 def _complete(
@@ -452,6 +559,7 @@ def _result(
         files_animal=summary.files_animal,
         files_human=summary.files_human,
         files_vehicle=summary.files_vehicle,
+        files_domestic=summary.files_domestic,
         files_empty=summary.files_empty,
         files_other=summary.files_other,
         destination=summary.destination,
@@ -464,11 +572,16 @@ def run(input_data: SessionDetectContentInput) -> SessionDetectContentResult:
     managed_session = resolve_managed_session(input_data.session_id)
     input_data = _resolve_input(managed_session, input_data)
     validate_detection_settings(
-        input_data.confidence_threshold, input_data.ambiguity_gap, input_data.batch_size
+        int(input_data.batch_size), load_processing_config().detection.domestic_taxon_ids
     )
     parameters_json = _parameters_json(input_data)
     with _exclusive_session_lock(managed_session.session_path, input_data.dry_run):
         existing, plans = _load_existing_plans(managed_session, input_data, parameters_json)
+        if existing is not None and _is_legacy_process(existing):
+            if existing.parameters_json is None:
+                raise SessionProcessError("Legacy detection process has no recorded parameters.")
+            parameters_json = existing.parameters_json
+        analysis_results: list[ImageDetectionResult] = []
         if plans:
             ignored = sum(
                 1
@@ -493,7 +606,7 @@ def run(input_data: SessionDetectContentInput) -> SessionDetectContentResult:
                 dry_run=input_data.dry_run,
             )
             try:
-                plans, planned_result, execution_details = _build_plan(
+                plans, analysis_results, planned_result, execution_details = _build_plan(
                     managed_session, input_data, candidates
                 )
                 planned_result.files_discovered = discovered
@@ -513,7 +626,7 @@ def run(input_data: SessionDetectContentInput) -> SessionDetectContentResult:
             return _result(managed_session, None, result)
         if not existing or not plans:
             _start_and_persist_plan(
-                managed_session, input_data, parameters_json, execution_details, plans
+                managed_session, input_data, parameters_json, execution_details, plans, analysis_results
             )
         else:
             with sql_session_scope(managed_session.database_path) as sql_session:

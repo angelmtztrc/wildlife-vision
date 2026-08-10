@@ -8,11 +8,16 @@ from wv.core.detection import (
 from wv.ml.megadetector import MlDetection
 
 
-def test_classify_detections_uses_configured_ambiguity_gap():
-    detections = [MlDetection("animal", 0.8), MlDetection("human", 0.6)]
+def test_classify_detections_uses_human_first_precedence():
+    detections = [MlDetection("animal", 0.9), MlDetection("human", 0.2)]
 
-    assert classify_detections(detections, 0.7, 0.3).label == "other"
-    assert classify_detections(detections, 0.7, 0.2).label == "animal"
+    assert classify_detections(detections, set()).label == "human"
+
+
+def test_classify_detections_uses_speciesnet_domestic_result():
+    detections = [MlDetection("animal", 0.9)]
+
+    assert classify_detections(detections, {0}).label == "domestic"
 
 
 def test_default_batch_size_is_conservative():
@@ -20,11 +25,11 @@ def test_default_batch_size_is_conservative():
 
 
 @pytest.mark.parametrize(
-    ("confidence_threshold", "ambiguity_gap", "batch_size"),
-    [(float("nan"), 0.3, 1), (0.8, float("inf"), 1), (0.8, 0.3, 0)],
+    ("batch_size", "domestic_taxon_ids"),
+    [(0, []), (1, ["00000000-0000-0000-0000-000000000000"] * 2), (1, [""])],
 )
 def test_validate_detection_settings_rejects_invalid_values(
-    confidence_threshold: float, ambiguity_gap: float, batch_size: int
+    batch_size: int, domestic_taxon_ids: list[str]
 ):
     with pytest.raises(ValueError):
-        validate_detection_settings(confidence_threshold, ambiguity_gap, batch_size)
+        validate_detection_settings(batch_size, domestic_taxon_ids)

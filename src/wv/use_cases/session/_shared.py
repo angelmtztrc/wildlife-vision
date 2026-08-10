@@ -29,9 +29,9 @@ from wv.workspace.workspace_config import (
 PROCESS_NAMES = (
     "clean_corrupted",
     "clean_overexposed_ir",
-    "clean_bursts",
     "detect_content",
 )
+OPTIONAL_PROCESS_NAMES = ("clean_corrupted", "clean_overexposed_ir", "clean_bursts")
 SUCCESSFUL_PROCESS_STATUSES = {"completed", "completed_with_failures"}
 _workflow_lock_path: ContextVar[Path | None] = ContextVar("workflow_lock_path", default=None)
 
@@ -217,12 +217,13 @@ def validate_process_attempt(
             do not permit another attempt.
     """
     try:
-        process_index = PROCESS_NAMES.index(process_name)
+        process_names = PROCESS_NAMES if process_name in PROCESS_NAMES else OPTIONAL_PROCESS_NAMES
+        process_index = process_names.index(process_name)
     except ValueError as exc:
         raise SessionProcessError(f"Unknown session process: {process_name}") from exc
 
     if process_index > 0:
-        predecessor_name = PROCESS_NAMES[process_index - 1]
+        predecessor_name = process_names[process_index - 1]
         predecessor = repository.get_optional(session_id, predecessor_name)
         if predecessor is None or predecessor.status not in SUCCESSFUL_PROCESS_STATUSES:
             raise SessionProcessError(
@@ -245,7 +246,7 @@ def validate_process_attempt(
         return existing
 
     if existing.status in {"completed_with_failures", "failed"}:
-        for successor_name in PROCESS_NAMES[process_index + 1 :]:
+        for successor_name in process_names[process_index + 1 :]:
             if repository.get_optional(session_id, successor_name) is not None:
                 raise SessionProcessError(
                     f"Session process cannot be retried after {successor_name} has started."
