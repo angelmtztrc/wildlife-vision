@@ -10,7 +10,6 @@ from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
     Progress,
-    SpinnerColumn,
     Task,
     TextColumn,
     TimeElapsedColumn,
@@ -284,8 +283,10 @@ def get_progress() -> Progress:
 
     Returns:
         A Rich ``Progress`` instance configured for this application's console.
-        Use it as a context manager so terminal rendering is started and stopped
-        correctly.
+        Each row starts with the local time when this display was created and an
+        ``INFO`` level label, followed by the bar, percentage, completed count,
+        and elapsed time. Use it as a context manager so terminal rendering is
+        started and stopped correctly.
 
     Examples:
         with get_progress() as progress:
@@ -294,8 +295,11 @@ def get_progress() -> Progress:
                 # do work
                 progress.update(task, advance=1)
     """
+    started_at = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    info_color = LEVEL_COLORS["INFO"]
+
     return Progress(
-        SpinnerColumn(),
+        TextColumn(f"[dim]{started_at}[/dim] [[{info_color}]INFO[/{info_color}]]"),
         FullBlockBarColumn(bar_width=None),
         TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         MofNCompleteColumn(),
