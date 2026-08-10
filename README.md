@@ -220,7 +220,9 @@ uv run wv session list --ingest-status completed --limit 20
 SESSION ID  STARTED AT  SITE ID  PROCESSING STATUS
 ```
 
-`PROCESSING STATUS` is derived from persisted managed-stage records. Use
+`PROCESSING STATUS` is derived from persisted managed-stage records. Incomplete
+sessions, including recoverable and failed work, are listed before cleanly
+completed sessions; each group remains newest-first. Use
 `session status` for ingest status, filesystem health, detailed stage counters,
 and the next permitted action.
 

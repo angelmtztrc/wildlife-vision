@@ -51,7 +51,7 @@ def run(input_data: ListSessionsInput) -> ListSessionsResult:
                 monitoring_area_id=input_data.monitoring_area_id,
                 monitoring_site_id=input_data.monitoring_site_id,
                 ingest_status=input_data.ingest_status,
-                limit=input_data.limit,
+                limit=None,
                 newest_first=True,
             )
             processes = SessionProcessRepository(sql_session).list_for_sessions(
@@ -80,4 +80,6 @@ def run(input_data: ListSessionsInput) -> ListSessionsResult:
                 next_process=processing_status.next_process,
             )
         )
-    return ListSessionsResult(items=items)
+    incomplete = [item for item in items if item.processing_status != "completed"]
+    completed = [item for item in items if item.processing_status == "completed"]
+    return ListSessionsResult(items=[*incomplete, *completed][: input_data.limit])

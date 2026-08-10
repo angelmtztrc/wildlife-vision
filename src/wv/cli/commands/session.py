@@ -58,7 +58,7 @@ def list_sessions(
         typer.Option("--limit", min=1, help="Maximum number of sessions to show."),
     ] = 20,
 ):
-    """List recent sessions and their database-derived processing status."""
+    """List incomplete sessions first, then completed sessions by recency."""
     try:
         result = run_list_sessions(
             ListSessionsInput(

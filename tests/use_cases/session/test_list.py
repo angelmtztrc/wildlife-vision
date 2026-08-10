@@ -32,6 +32,38 @@ def _create_session(
         )
 
 
+def _complete_processing(
+    workspace_path: Path, session_id: str, *, with_failures: bool = False
+) -> None:
+    with sql_session_scope(require_workspace_database_path(workspace_path)) as sql_session:
+        repository = SessionProcessRepository(sql_session)
+        for index, process_name in enumerate(
+            ("clean_corrupted", "clean_overexposed_ir", "detect_content"), start=1
+        ):
+            repository.start(
+                session_id,
+                process_name,
+                f"2026-08-01T12:0{index}:00+00:00",
+                parameters_json="{}",
+            )
+            repository.complete(
+                session_id,
+                process_name,
+                status=(
+                    "completed_with_failures"
+                    if with_failures and process_name == "detect_content"
+                    else "completed"
+                ),
+                completed_at=f"2026-08-01T12:0{index}:30+00:00",
+                files_discovered=0,
+                files_processed=0,
+                files_selected=0,
+                files_moved=0,
+                files_ignored=0,
+                files_failed=1 if with_failures and process_name == "detect_content" else 0,
+            )
+
+
 def test_run_lists_newest_sessions_with_combined_filters(configured_workspace: Path):
     _create_session(
         configured_workspace,
@@ -108,6 +140,55 @@ def test_run_derives_processing_status_from_bulk_process_records(
     assert result.items[0].processing_status == "processing"
     assert result.items[0].next_action == "run"
     assert result.items[0].next_process == "clean_overexposed_ir"
+
+
+def test_run_lists_incomplete_sessions_before_newer_completed_sessions(
+    configured_workspace: Path,
+):
+    _create_session(
+        configured_workspace,
+        session_id="20260801_120000__SITE001",
+        monitoring_site_id="SITE001",
+        started_at="2026-08-01T12:00:00+00:00",
+        ingest_status="completed",
+    )
+    _create_session(
+        configured_workspace,
+        session_id="20260802_120000__SITE001",
+        monitoring_site_id="SITE001",
+        started_at="2026-08-02T12:00:00+00:00",
+        ingest_status="completed",
+    )
+    _create_session(
+        configured_workspace,
+        session_id="20260803_120000__SITE001",
+        monitoring_site_id="SITE001",
+        started_at="2026-08-03T12:00:00+00:00",
+        ingest_status="completed",
+    )
+    _create_session(
+        configured_workspace,
+        session_id="20260804_120000__SITE001",
+        monitoring_site_id="SITE001",
+        started_at="2026-08-04T12:00:00+00:00",
+        ingest_status="completed",
+    )
+    _complete_processing(configured_workspace, "20260802_120000__SITE001")
+    _complete_processing(configured_workspace, "20260803_120000__SITE001", with_failures=True)
+    _complete_processing(configured_workspace, "20260804_120000__SITE001")
+
+    result = run(ListSessionsInput(limit=3))
+
+    assert [item.id for item in result.items] == [
+        "20260803_120000__SITE001",
+        "20260801_120000__SITE001",
+        "20260804_120000__SITE001",
+    ]
+    assert [item.processing_status for item in result.items] == [
+        "completed_with_failures",
+        "ready",
+        "completed",
+    ]
 
 
 @pytest.mark.parametrize(
