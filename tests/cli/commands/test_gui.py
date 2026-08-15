@@ -99,6 +99,30 @@ def test_gui_review_detection_rejects_unknown_detection_label(cli_runner):
     assert "Unknown detection label 'bird'" in result.output
 
 
+def test_gui_review_detection_preview_help_lists_include_reviewed(cli_runner):
+    result = cli_runner.invoke(app, ["gui", "review-detection-preview", "--help"])
+
+    assert result.exit_code == 0
+    assert "--include-reviewed" in result.output
+
+
+def test_gui_review_detection_preview_launches_application(cli_runner, monkeypatch: pytest.MonkeyPatch):
+    calls: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        gui_command,
+        "launch_review_detection_preview_app",
+        lambda session_id, include_reviewed: calls.append((session_id, include_reviewed)),
+    )
+
+    result = cli_runner.invoke(
+        app,
+        ["gui", "review-detection-preview", "SESSION001", "--include-reviewed"],
+    )
+
+    assert result.exit_code == 0
+    assert calls == [("SESSION001", True)]
+
+
 def test_gui_favorites_help_lists_pending_only(cli_runner):
     result = cli_runner.invoke(app, ["gui", "favorites", "--help"])
 

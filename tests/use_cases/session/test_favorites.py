@@ -27,6 +27,10 @@ from wv.use_cases.session.review_detection_load import (
     LoadReviewDetectionInput,
     run as load_review_detection,
 )
+from wv.use_cases.session.review_detection_preview_load import (
+    LoadReviewDetectionPreviewInput,
+    run as load_review_detection_preview,
+)
 
 SESSION_ID = "20240628_120000__HNT001"
 
@@ -155,6 +159,46 @@ def test_completed_detection_with_failures_allows_review(
     )
 
     assert [item.image_id for item in result.items] == ["image-1"]
+
+
+def test_detection_preview_loads_all_labels_and_excludes_reviewed_by_default(
+    configured_workspace: Path, make_image
+):
+    session_path, animal_path = _create_detected_session(configured_workspace, make_image)
+    human_path = make_image(session_path / "detection" / "human" / "human.jpg")
+    with sql_session_scope(configured_workspace / ".wv" / "database.sqlite") as sql_session:
+        repository = SessionImageRepository(sql_session)
+        repository.mark_detection_reviewed("image-1")
+        repository.create_or_replace_by_initial_path(
+            SessionImage(
+                id="image-2",
+                session_id=SESSION_ID,
+                source_relative_path="DCIM/human.jpg",
+                initial_relative_path="init/human.jpg",
+                current_relative_path="detection/human/human.jpg",
+                state="detection/human",
+                content_digest=get_content_digest(human_path),
+                content_size_bytes=human_path.stat().st_size,
+                captured_at="2024-06-28T12:01:00+00:00",
+                ingested_at="2026-08-08T00:00:00+00:00",
+            )
+        )
+
+    pending = load_review_detection_preview(
+        LoadReviewDetectionPreviewInput(session_id=SESSION_ID, detection_label="human")
+    )
+    all_items = load_review_detection_preview(
+        LoadReviewDetectionPreviewInput(
+            session_id=SESSION_ID,
+            include_reviewed=True,
+            detection_label="animal",
+        )
+    )
+
+    assert [(item.image_id, item.current_label) for item in pending.items] == [("image-2", "human")]
+    assert [(item.image_id, item.file_path) for item in all_items.items] == [("image-1", animal_path)]
+    assert pending.label_counts["human"] == 1
+    assert all_items.label_counts["animal"] == 1
 
 
 def test_review_and_favorites_require_completed_detection(

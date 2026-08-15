@@ -48,6 +48,7 @@ def test_all_commands_and_parameters_have_help():
         (["device", "update"], "Update one or more fields on a device record."),
         (["export", "favorites"], "Copy favorited animal detections from a completed managed session."),
         (["gui", "review-detection"], "Review and relabel images in one completed detection bucket."),
+        (["gui", "review-detection-preview"], "Preview session-wide keyboard detection review."),
         (["gui", "favorites"], "Review favorite status for animal detections."),
         (["ingest", "sd"], "Ingest JPEGs from an initialized SD card into the active workspace."),
         (["ingest", "folder"], "Ingest JPEGs from a folder into a managed session in the active workspace."),

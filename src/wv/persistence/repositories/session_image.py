@@ -71,14 +71,69 @@ class SessionImageRepository:
         ).all()
         return [_model_to_session_image(model) for model in models]
 
+    def list_for_session_states(
+        self,
+        session_id: str,
+        states: tuple[str, ...],
+        *,
+        detection_reviewed: bool | None = None,
+    ) -> list[SessionImage]:
+        """Return session images in any of the supplied inventory states.
+
+        Args:
+            session_id: Managed session identifier.
+            states: Inventory states to include.
+            detection_reviewed: When set, include only images with the matching
+                detection-review status.
+
+        Returns:
+            Matching images ordered by current relative path and image ID.
+        """
+        if not states:
+            return []
+
+        statement = select(SessionImageModel).where(
+            SessionImageModel.session_id == session_id,
+            SessionImageModel.state.in_(states),
+        )
+        if detection_reviewed is not None:
+            statement = statement.where(
+                SessionImageModel.detection_reviewed == detection_reviewed
+            )
+
+        models = self.sql_session.scalars(
+            statement.order_by(SessionImageModel.current_relative_path, SessionImageModel.id)
+        ).all()
+        return [_model_to_session_image(model) for model in models]
+
     def count_by_state_for_session(
-        self, session_id: str
+        self,
+        session_id: str,
+        *,
+        states: tuple[str, ...] | None = None,
+        detection_reviewed: bool | None = None,
     ) -> list[SessionImageStateCount]:
+        """Count session images by inventory state.
+
+        Args:
+            session_id: Managed session identifier.
+            states: Optional inventory states to include.
+            detection_reviewed: Optional detection-review status filter.
+
+        Returns:
+            Counts ordered by inventory state.
+        """
+        statement = select(SessionImageModel.state, func.count(SessionImageModel.id)).where(
+            SessionImageModel.session_id == session_id
+        )
+        if states is not None:
+            statement = statement.where(SessionImageModel.state.in_(states))
+        if detection_reviewed is not None:
+            statement = statement.where(
+                SessionImageModel.detection_reviewed == detection_reviewed
+            )
         rows = self.sql_session.execute(
-            select(SessionImageModel.state, func.count(SessionImageModel.id))
-            .where(SessionImageModel.session_id == session_id)
-            .group_by(SessionImageModel.state)
-            .order_by(SessionImageModel.state)
+            statement.group_by(SessionImageModel.state).order_by(SessionImageModel.state)
         ).all()
         return [
             SessionImageStateCount(state=state, count=count) for state, count in rows

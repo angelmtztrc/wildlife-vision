@@ -5,6 +5,7 @@ import typer
 from wv.cli.completion import complete_detection_label, complete_reviewable_session_id
 from wv.gui.favorites.app import launch_favorites_app
 from wv.gui.review_detection.app import launch_review_detection_app
+from wv.gui.review_detection_preview.app import launch_review_detection_preview_app
 from wv.core.session import DETECTION_LABELS, normalize_detection_label
 
 app = typer.Typer(help="Launch interactive review tools for managed sessions.")
@@ -50,6 +51,31 @@ def review_detection(
         pending_only=pending_only,
     )
 
+    return None
+
+
+@app.command("review-detection-preview")
+def review_detection_preview(
+    session_id: Annotated[
+        str,
+        typer.Argument(
+            help="Managed session ID with completed content detection.",
+            autocompletion=complete_reviewable_session_id,
+        ),
+    ],
+    include_reviewed: Annotated[
+        bool,
+        typer.Option(
+            "--include-reviewed",
+            help="Include already verified images, which remain editable.",
+        ),
+    ] = False,
+):
+    """Preview session-wide keyboard detection review."""
+    launch_review_detection_preview_app(
+        session_id=session_id,
+        include_reviewed=include_reviewed,
+    )
     return None
 
 

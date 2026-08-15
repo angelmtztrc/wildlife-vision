@@ -301,6 +301,8 @@ The review GUIs operate on a managed session after content detection completes:
 
 ```bash
 uv run wv gui review-detection <SESSION_ID> --detection animal --pending-only
+uv run wv gui review-detection-preview <SESSION_ID>
+uv run wv gui review-detection-preview <SESSION_ID> --include-reviewed
 uv run wv gui favorites <SESSION_ID> --pending-only
 ```
 
@@ -312,6 +314,14 @@ Both GUI commands offer shell completion for reviewable session IDs. The
 and moves a relabeled image into its corresponding detection directory. `gui
 favorites` records a favorite decision for animal images in the session database
 without modifying or moving the image files.
+
+`gui review-detection-preview` is an experimental session-wide reviewer. It
+starts with unverified images across all labels, uses a three-column keyboard
+grid, and stages changes until `Ctrl+S`. Press `Enter` to verify a focused
+image, `1` through `6` to relabel and verify it, `[` or `]` to change labels,
+and `Space` to open the focused image. `--include-reviewed` makes prior reviews
+visible and editable. The existing `gui review-detection` command remains the
+stable reviewer while the preview is validated.
 
 ## 9. Export Curated Images
 
@@ -406,7 +416,7 @@ wv ingest {sd,folder}
 wv models {list,setup,status}
 wv session {list,status,clean,detect}
 wv pipeline run
-wv gui {review-detection,favorites}
+wv gui {review-detection,review-detection-preview,favorites}
 wv export favorites
 wv clean {corrupted,overexposed-ir,bursts}
 ```
