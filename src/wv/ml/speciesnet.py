@@ -9,14 +9,18 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import platformdirs
 
+from wv.core.logger import get_logger, get_progress
 from wv.ml.megadetector import MlDetection
 
 _SPECIESNET_VERSION = "5.0.5"
+_PROGRESS_POLL_INTERVAL_SECONDS = 0.1
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -87,7 +91,8 @@ def evaluate_animal_detections(
                 }
                 for path, index, detection in requests
             ],
-        }
+        },
+        show_progress=True,
     )
     values: dict[tuple[Path, int], SpeciesNetDetectionResult] = {}
     for item in result["results"]:
@@ -129,24 +134,99 @@ def _runtime_ready_marker() -> Path:
     return Path(platformdirs.user_cache_path("wildlife-vision")) / f"speciesnet-{_SPECIESNET_VERSION}" / ".wv-ready"
 
 
-def _run_worker(payload: dict) -> dict:
+def _run_worker(payload: dict, *, show_progress: bool = False) -> dict:
     with tempfile.TemporaryDirectory(prefix="wv-speciesnet-") as directory:
         root = Path(directory)
         request_path = root / "request.json"
         result_path = root / "result.json"
+        progress_path = root / "progress.json"
+        if show_progress:
+            payload = {**payload, "progress_path": str(progress_path)}
         request_path.write_text(json.dumps(payload), encoding="utf-8")
         environment = os.environ | {"PYTHONPATH": str(Path(__file__).parents[2])}
-        _run(
-            [
-                str(_runtime_python()),
-                "-m",
-                "wv.ml.speciesnet_worker",
-                str(request_path),
-                str(result_path),
-            ],
-            environment,
-        )
+        command = [
+            str(_runtime_python()),
+            "-m",
+            "wv.ml.speciesnet_worker",
+            str(request_path),
+            str(result_path),
+        ]
+        if show_progress:
+            _run_worker_with_progress(command, environment, progress_path)
+        else:
+            _run(command, environment)
         return json.loads(result_path.read_text(encoding="utf-8"))
+
+
+def _run_worker_with_progress(
+    command: list[str], environment: dict[str, str], progress_path: Path
+) -> None:
+    """Run an evaluation worker while rendering its atomically published progress."""
+    with tempfile.TemporaryDirectory(prefix="wv-speciesnet-output-") as output_directory:
+        output_root = Path(output_directory)
+        stdout_path = output_root / "stdout.log"
+        stderr_path = output_root / "stderr.log"
+        with stdout_path.open("w", encoding="utf-8") as stdout, stderr_path.open(
+            "w", encoding="utf-8"
+        ) as stderr:
+            process = subprocess.Popen(command, stdout=stdout, stderr=stderr, env=environment)
+            with get_progress() as progress:
+                task = progress.add_task("Loading SpeciesNet model", total=None)
+                while process.poll() is None:
+                    _update_progress(progress, task, progress_path)
+                    time.sleep(_PROGRESS_POLL_INTERVAL_SECONDS)
+                _update_progress(progress, task, progress_path)
+
+        stdout = stdout_path.read_text(encoding="utf-8").strip()
+        stderr = stderr_path.read_text(encoding="utf-8").strip()
+        if process.returncode != 0:
+            detail = stderr or stdout or "unknown error"
+            raise RuntimeError(f"SpeciesNet evaluation failed: {detail}")
+        if stdout:
+            logger.debug("Captured stdout from SpeciesNet worker:\n%s", stdout)
+        if stderr:
+            logger.debug("Captured stderr from SpeciesNet worker:\n%s", stderr)
+
+
+def _update_progress(progress, task: int, progress_path: Path) -> None:
+    status = _read_progress(progress_path)
+    if status is None:
+        return
+    phase = status["phase"]
+    if phase == "loading_model":
+        progress.update(task, description="Loading SpeciesNet model", total=None)
+        return
+    if phase == "classifying":
+        progress.update(
+            task,
+            description="Classifying animal detections with SpeciesNet",
+            total=status["total"],
+            completed=status["completed"],
+        )
+        return
+    progress.update(
+        task,
+        description="SpeciesNet classification complete",
+        total=status["total"],
+        completed=status["total"],
+    )
+
+
+def _read_progress(progress_path: Path) -> dict[str, int | str] | None:
+    try:
+        value = json.loads(progress_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(value, dict):
+        return None
+    phase = value.get("phase")
+    completed = value.get("completed")
+    total = value.get("total")
+    if phase not in {"loading_model", "classifying", "complete"}:
+        return None
+    if not isinstance(completed, int) or not isinstance(total, int) or completed < 0 or total < 0:
+        return None
+    return {"phase": phase, "completed": min(completed, total), "total": total}
 
 
 def _run(command: list[str], environment: dict[str, str] | None = None) -> None:

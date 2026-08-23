@@ -12,6 +12,7 @@ from wv.core.detection import (
     SpeciesNetClassification,
 )
 from wv.core.files import get_content_digest, is_allowed_image_file, move_file_with_staged_copy
+from wv.core.logger import get_logger
 from wv.core.session import get_detection_path
 from wv.ml.megadetector import MlImageResult, iter_evaluate_images, resolve_model
 from wv.ml.model_manifest import verify_manifest
@@ -49,6 +50,7 @@ from wv.workspace.workspace_config import load_processing_config
 
 PROCESS_NAME = "detect_content"
 ALGORITHM_VERSION = 3
+logger = get_logger(__name__)
 @dataclass(frozen=True)
 class SessionDetectContentInput:
     session_id: str
@@ -235,9 +237,27 @@ def _build_plan(
         for index, detection in enumerate(inference_result.detections)
         if detection.label == "animal" and detection.confidence >= CLASSIFICATION_GATE
     ]
+    total_detections = sum(
+        len(inference_result.detections) for inference_result in inference_by_path.values()
+    )
+    speciesnet_image_count = len({source_path for source_path, _, _ in species_requests})
+    logger.info(
+        "MegaDetector complete: images=%s detections=%s speciesnet_candidates=%s "
+        "images_with_candidates=%s",
+        len(candidates),
+        total_detections,
+        len(species_requests),
+        speciesnet_image_count,
+    )
     species_results = {}
     species_model = None
     if species_requests:
+        logger.info(
+            "Starting SpeciesNet classification: crops=%s images=%s batch_size=%s",
+            len(species_requests),
+            speciesnet_image_count,
+            input_data.batch_size,
+        )
         try:
             species_results, species_model = evaluate_animal_detections(
                 str(input_data.speciesnet_model),
@@ -248,6 +268,7 @@ def _build_plan(
             )
         except Exception as exc:
             raise SessionProcessError(f"SpeciesNet classification failed: {exc}") from exc
+        logger.info("SpeciesNet complete: %s animal crops classified", len(species_requests))
         execution_details = canonical_process_parameters(
             {
                 **json.loads(execution_details),
@@ -260,6 +281,8 @@ def _build_plan(
                 },
             }
         )
+    else:
+        logger.info("Skipping SpeciesNet classification: no qualifying animal detections")
 
     domestic_taxon_ids = set(settings.detection.domestic_taxon_ids)
     for image, source_path in zip(candidates, source_paths, strict=True):

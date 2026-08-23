@@ -1,6 +1,7 @@
 """Executable side of the isolated SpeciesNet adapter."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -42,6 +43,9 @@ def _evaluate(request: dict) -> dict:
     from speciesnet.geolocation import find_admin1_region
     from speciesnet.utils import BBox
 
+    progress_path = Path(request["progress_path"])
+    requests = request["requests"]
+    _write_progress(progress_path, "loading_model", 0, len(requests))
     classifier = SpeciesNetClassifier(request["model"])
     ensemble = SpeciesNetEnsemble(request["model"], geofence=True)
     latitude = float(request["latitude"])
@@ -51,7 +55,7 @@ def _evaluate(request: dict) -> dict:
     country = country_record.alpha_3 if country_record else None
     admin1 = find_admin1_region(country=country, latitude=latitude, longitude=longitude)
     values = []
-    requests = request["requests"]
+    _write_progress(progress_path, "classifying", 0, len(requests))
     for start in range(0, len(requests), int(request["batch_size"])):
         batch = requests[start : start + int(request["batch_size"])]
         paths, images = [], []
@@ -87,7 +91,20 @@ def _evaluate(request: dict) -> dict:
                 "final_taxon_id": final["taxon_id"], "final_taxon_rank": _rank(final),
                 "final_taxon_confidence": final["confidence"],
             })
-    return {"model": _prepare(request["model"]), "results": values}
+        _write_progress(progress_path, "classifying", start + len(batch), len(requests))
+    result = {"model": _prepare(request["model"]), "results": values}
+    _write_progress(progress_path, "complete", len(requests), len(requests))
+    return result
+
+
+def _write_progress(progress_path: Path, phase: str, completed: int, total: int) -> None:
+    """Atomically publish one worker progress snapshot for the parent process."""
+    temporary_path = progress_path.with_suffix(".tmp")
+    temporary_path.write_text(
+        json.dumps({"phase": phase, "completed": completed, "total": total}),
+        encoding="utf-8",
+    )
+    os.replace(temporary_path, progress_path)
 
 
 def _parse(label: str, confidence: float, rank: int) -> dict:

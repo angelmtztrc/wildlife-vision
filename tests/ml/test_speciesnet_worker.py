@@ -1,4 +1,6 @@
-from wv.ml.speciesnet_worker import _semantic_label
+import json
+
+from wv.ml.speciesnet_worker import _semantic_label, _write_progress
 
 
 def test_semantic_label_maps_speciesnet_special_taxa():
@@ -10,3 +12,16 @@ def test_semantic_label_maps_speciesnet_special_taxa():
 
 def test_semantic_label_maps_taxonomic_result_to_animal():
     assert _semantic_label({"taxon_id": "taxon-id"}) == "animal"
+
+
+def test_write_progress_replaces_complete_snapshot(tmp_path):
+    progress_path = tmp_path / "progress.json"
+
+    _write_progress(progress_path, "classifying", 16, 31)
+
+    assert json.loads(progress_path.read_text(encoding="utf-8")) == {
+        "phase": "classifying",
+        "completed": 16,
+        "total": 31,
+    }
+    assert not progress_path.with_suffix(".tmp").exists()
