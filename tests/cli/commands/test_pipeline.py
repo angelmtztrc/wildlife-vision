@@ -1,106 +1,64 @@
-from pathlib import Path
-
-import pytest
-
-from wv.cli.commands import pipeline
-from wv.use_cases.clean.bursts import CleanBurstsResult
-from wv.use_cases.clean.corrupted import CleanCorruptedResult
-from wv.use_cases.clean.overexposed_ir import CleanOverexposedIrResult
-from wv.use_cases.detect.content import DetectContentResult
-from wv.use_cases.pipeline.preprocess import PipelinePreprocessResult
+from wv.cli.main import app
+from wv.use_cases.session.list import ListSessionsResult
+from wv.use_cases.pipeline.run import PipelineRunResult, PipelineStageResult
 
 
-def test_pipeline_preprocess_prints_summary_for_success(
-    cli_runner,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    session_path = tmp_path / "20260707_101530__Camera_01"
-    initial_path = session_path / "initial"
-    initial_path.mkdir(parents=True)
+def test_pipeline_run_forwards_options_and_prints_summary(cli_runner, monkeypatch):
+    received = None
 
-    monkeypatch.setattr(
-        pipeline,
-        "run_pipeline_preprocess",
-        lambda input_data: PipelinePreprocessResult(
-            session_path=session_path,
-            initial_path=initial_path,
-            corrupted_result=CleanCorruptedResult(files_corrupted=1, destination=session_path / "ignored" / "corrupted"),
-            overexposed_result=CleanOverexposedIrResult(files_overexposed=2, destination=session_path / "ignored" / "overexposed"),
-            bursts_result=CleanBurstsResult(files_reduced=3, destination=session_path / "ignored" / "bursts"),
-            detect_result=DetectContentResult(files_evaluated=4, files_moved=4, destination=session_path / "detection"),
-            files_failed=0,
-            files_remaining_in_initial=1,
-            dry_run=True,
-        ),
-    )
+    def fake_run(input_data):
+        nonlocal received
+        received = input_data
+        return PipelineRunResult(
+            session_id=input_data.session_id,
+            stages=[PipelineStageResult("clean_corrupted", "completed", 0)],
+            final_status="stopped",
+            stopped_at="clean_corrupted",
+        )
+
+    monkeypatch.setattr("wv.cli.commands.pipeline.run_pipeline", fake_run)
 
     result = cli_runner.invoke(
-        pipeline.app,
-        [str(session_path), "--dry-run"],
+        app,
+        ["pipeline", "run", "20260808_120000__SITE001", "--next", "--mean-threshold", "210"],
     )
 
     assert result.exit_code == 0
-    assert "[INFO]" in result.output
-    assert "Starting preprocess pipeline" in result.output
-    assert "[DONE]" in result.output
-    assert "Finished preprocess pipeline" in result.output
-    assert "corrupted=1" in result.output
-    assert "overexposed=2" in result.output
-    assert "reduced=3" in result.output
-    assert "evaluated=4" in result.output
-    assert "moved=4" in result.output
-    assert "failed=0" in result.output
-    assert "remaining_in_initial=1" in result.output
-    assert "(dry run)" in result.output
+    assert received.next_only is True
+    assert received.mean_threshold == 210.0
+    assert "status=stopped" in result.output
+    assert "stages=clean_corrupted" in result.output
 
 
-def test_pipeline_preprocess_exits_with_code_one_when_use_case_reports_failures(
-    cli_runner,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    session_path = tmp_path / "20260707_101530__Camera_01"
-    initial_path = session_path / "initial"
-    initial_path.mkdir(parents=True)
-
+def test_pipeline_run_returns_failure_for_stage_file_failures(cli_runner, monkeypatch):
     monkeypatch.setattr(
-        pipeline,
-        "run_pipeline_preprocess",
-        lambda input_data: PipelinePreprocessResult(
-            session_path=session_path,
-            initial_path=initial_path,
-            corrupted_result=CleanCorruptedResult(destination=session_path / "ignored" / "corrupted"),
-            overexposed_result=CleanOverexposedIrResult(destination=session_path / "ignored" / "overexposed"),
-            bursts_result=CleanBurstsResult(destination=session_path / "ignored" / "bursts"),
-            detect_result=DetectContentResult(destination=session_path / "detection"),
-            files_failed=1,
-            files_remaining_in_initial=2,
-            dry_run=False,
+        "wv.cli.commands.pipeline.run_pipeline",
+        lambda input_data: PipelineRunResult(
+            session_id=input_data.session_id,
+            stages=[PipelineStageResult("clean_corrupted", "completed_with_failures", 1)],
+            final_status="completed_with_failures",
+            stopped_at="clean_corrupted",
         ),
     )
 
-    result = cli_runner.invoke(
-        pipeline.app,
-        [str(session_path)],
-    )
+    result = cli_runner.invoke(app, ["pipeline", "run", "20260808_120000__SITE001"])
 
     assert result.exit_code == 1
-    assert "[DONE]" in result.output
-    assert "failed=1" in result.output
+    assert "completed_with_failures" in result.output
 
 
-def test_pipeline_preprocess_rejects_invalid_session_path(
-    cli_runner,
-    tmp_path: Path,
-):
-    session_path = tmp_path / "invalid-session"
-    session_path.mkdir()
+def test_pipeline_session_completion_filters_persisted_ids(monkeypatch):
+    class Session:
+        def __init__(self, session_id: str):
+            self.id = session_id
 
-    result = cli_runner.invoke(
-        pipeline.app,
-        [str(session_path)],
+    monkeypatch.setattr(
+        "wv.cli.completion.run_list_sessions",
+        lambda input_data: ListSessionsResult(
+            items=[Session("20260808_120000__SITE001"), Session("20260809_120000__SITE002")]
+        ),
     )
 
-    assert result.exit_code != 0
-    assert "YYYYMMDD_HHMMSS__CAMERA" in result.output
+    from wv.cli.completion import complete_session_id
+
+    assert complete_session_id("20260808") == ["20260808_120000__SITE001"]

@@ -13,7 +13,7 @@ def test_config_key_completion_returns_known_keys():
     assert completions == [key for key in get_known_keys() if key.startswith("workspace.")]
 
 
-def test_config_init_overwrites_workspace_config(cli_runner, tmp_path: Path, monkeypatch):
+def test_config_init_rejects_existing_workspace_config(cli_runner, tmp_path: Path, monkeypatch):
     config_dir = tmp_path / "user-config"
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
@@ -27,9 +27,10 @@ def test_config_init_overwrites_workspace_config(cli_runner, tmp_path: Path, mon
 
     result = cli_runner.invoke(config.app, ["init"])
 
-    assert result.exit_code == 0
-    assert "Workspace config initialized" in result.output
-    assert "version: 1" in config_file.read_text(encoding="utf-8")
+    assert result.exit_code == 1
+    assert "Workspace config already" in result.output
+    assert "exists" in result.output
+    assert "version: 999" in config_file.read_text(encoding="utf-8")
 
 
 def test_config_get_prints_known_value(cli_runner, tmp_path: Path, monkeypatch):
@@ -44,7 +45,31 @@ def test_config_get_prints_known_value(cli_runner, tmp_path: Path, monkeypatch):
     result = cli_runner.invoke(config.app, ["get", "workspace.version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == "1"
+    assert result.output.strip() == "3"
+
+
+def test_config_list_prints_known_values_in_schema_order(cli_runner, tmp_path: Path, monkeypatch):
+    from wv.cli.commands import workspace
+
+    config_dir = tmp_path / "user-config"
+    workspace_path = tmp_path / "workspace"
+    workspace_path.mkdir()
+    monkeypatch.setattr(platformdirs, "user_config_path", lambda *args, **kwargs: config_dir)
+    cli_runner.invoke(workspace.app, ["init", str(workspace_path)])
+
+    result = cli_runner.invoke(config.app, ["list"], terminal_width=160)
+
+    assert result.exit_code == 0
+    assert "KEY" in result.output
+    assert "VALUE" in result.output
+    assert "workspace.version" in result.output
+    assert "workspace.path" in result.output
+    assert "processing.overexposed" in result.output
+    assert "processing.bursts.sim" in result.output
+    assert "processing.detection.batch_s…" in result.output
+    assert result.output.index("workspace.version") < result.output.index(
+        "processing.detection.batch_s…"
+    )
 
 
 def test_config_set_rejects_unknown_key(cli_runner, tmp_path: Path, monkeypatch):

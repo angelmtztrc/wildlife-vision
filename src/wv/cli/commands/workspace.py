@@ -5,11 +5,23 @@ import typer
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
-from wv.use_cases.workspace import WorkspaceError, WorkspaceInitInput
-from wv.use_cases.workspace import get_status as get_workspace_status
-from wv.use_cases.workspace import run_init, validate as validate_workspace
+from wv.use_cases.workspace.activate import (
+    WorkspaceActivateInput,
+    run as run_activate_workspace,
+)
+from wv.use_cases.workspace.initialize import (
+    WorkspaceInitializeInput,
+    run as run_initialize_workspace,
+)
+from wv.use_cases.workspace.migrate import WorkspaceMigrateInput, run as run_migrate_workspace
+from wv.use_cases.workspace.show import WorkspaceShowInput, run as run_show_workspace
+from wv.use_cases.workspace.validate import (
+    WorkspaceValidateInput,
+    run as run_validate_workspace,
+)
+from wv.workspace.common import WorkspaceError
 
-app = typer.Typer(help="Manage workspace initialization and validation.")
+app = typer.Typer(help="Initialize, activate, inspect, migrate, and validate workspaces.")
 
 logger = get_logger(__name__)
 
@@ -19,20 +31,20 @@ def init_workspace(
     path: Annotated[
         Path,
         typer.Argument(
-            help="Existing directory to initialize as a workspace.",
+            help="Existing readable and writable directory to initialize and activate.",
             exists=True,
             file_okay=False,
             dir_okay=True,
             readable=True,
             writable=True,
-            resolve_path=True,
         ),
     ],
 ):
+    """Initialize and activate an existing directory as a workspace."""
     logger.info("Initializing workspace at %s", display_path(path))
 
     try:
-        result = run_init(WorkspaceInitInput(path=path))
+        result = run_initialize_workspace(WorkspaceInitializeInput(path=path))
     except WorkspaceError as exc:
         logger.error("Workspace initialization failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -47,9 +59,76 @@ def init_workspace(
     return None
 
 
+@app.command("activate")
+def activate_workspace(
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help="Existing initialized workspace directory to activate.",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+            writable=True,
+        ),
+    ],
+):
+    """Make an existing initialized workspace active."""
+    logger.info("Activating workspace at %s", display_path(path))
+    try:
+        result = run_activate_workspace(WorkspaceActivateInput(path=path))
+    except WorkspaceError as exc:
+        logger.error("Workspace activation failed: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    if result.changed:
+        logger.done(
+            "Workspace activated at %s (global_config=%s)",
+            display_path(result.workspace_path),
+            display_path(result.global_config_file),
+        )
+    else:
+        logger.done("Workspace is already active at %s", display_path(result.workspace_path))
+    if result.migration_required:
+        logger.warning(
+            "Workspace activated, but migration is required. Run 'wv workspace migrate'."
+        )
+    return None
+
+
+@app.command("migrate")
+def migrate_workspace():
+    """Upgrade the active workspace config and database to current versions."""
+    try:
+        result = run_migrate_workspace(WorkspaceMigrateInput())
+    except WorkspaceError as exc:
+        logger.error("Workspace migration failed: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    if result.migrated:
+        logger.done(
+            "Workspace migrated at %s (config=%s -> %s, database=%s -> %s)",
+            display_path(result.workspace_path),
+            result.previous_config_version,
+            result.current_config_version,
+            result.previous_database_revision,
+            result.current_database_revision,
+        )
+    else:
+        logger.done(
+            "Workspace is already up to date at %s (config=%s, database=%s)",
+            display_path(result.workspace_path),
+            result.current_config_version,
+            result.current_database_revision,
+        )
+
+    return None
+
+
 @app.command("show")
 def show_workspace():
-    status = get_workspace_status()
+    """Show the configured workspace path and required component status."""
+    status = run_show_workspace(WorkspaceShowInput()).status
 
     typer.echo(f"global_config: {status.global_config_file}")
     typer.echo(
@@ -73,8 +152,9 @@ def show_workspace():
 
 @app.command("validate")
 def validate_workspace_command():
+    """Validate the active workspace structure, config, and database revision."""
     try:
-        status = validate_workspace()
+        status = run_validate_workspace(WorkspaceValidateInput()).status
     except WorkspaceError as exc:
         logger.error("Workspace validation failed: %s", exc)
         raise typer.Exit(code=1) from exc

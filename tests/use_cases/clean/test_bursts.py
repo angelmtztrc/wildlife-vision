@@ -1,63 +1,9 @@
-from datetime import datetime, timedelta
 from pathlib import Path
 
-import imagehash
 import pytest
 
-import wv.use_cases.clean.bursts as bursts
-
-
-def test_scan_image_parses_ingested_filenames_with_underscores(tmp_path: Path):
-    file_path = tmp_path / "20240628_101530__GF_STREAM_FEEDER__ABC234.jpg"
-    file_path.write_bytes(b"placeholder")
-
-    scanned = bursts._scan_image(file_path)
-
-    assert scanned.monitoring_site == "GF_STREAM_FEEDER"
-    assert scanned.captured_at == datetime(2024, 6, 28, 10, 15, 30)
-
-
-def test_group_files_into_bursts_splits_by_site_and_gap():
-    start = datetime(2024, 6, 28, 10, 15, 30)
-    scanned_images = [
-        bursts.ScannedImage(Path("a.jpg"), "SITE_A", start),
-        bursts.ScannedImage(Path("b.jpg"), "SITE_A", start + timedelta(seconds=30)),
-        bursts.ScannedImage(Path("c.jpg"), "SITE_A", start + timedelta(seconds=120)),
-        bursts.ScannedImage(Path("d.jpg"), "SITE_B", start + timedelta(seconds=125)),
-    ]
-
-    grouped = bursts._group_files_into_bursts(scanned_images, burst_gap_threshold=60)
-
-    assert [[image.path.name for image in group] for group in grouped] == [
-        ["a.jpg", "b.jpg"],
-        ["c.jpg"],
-        ["d.jpg"],
-    ]
-
-
-def test_build_similarity_clusters_groups_hashes_and_keeps_unreadable_singletons():
-    burst_images = [
-        bursts.BurstImage(Path("a.jpg"), imagehash.hex_to_hash("0000000000000000"), 10.0),
-        bursts.BurstImage(Path("b.jpg"), imagehash.hex_to_hash("0000000000000000"), 9.0),
-        bursts.BurstImage(Path("c.jpg"), imagehash.hex_to_hash("ffffffffffffffff"), 8.0),
-        bursts.BurstImage(Path("d.jpg"), None, 0.0),
-    ]
-
-    clusters = bursts._build_similarity_clusters(burst_images, similarity_threshold=0)
-    cluster_names = sorted(sorted(image.path.name for image in cluster) for cluster in clusters)
-
-    assert cluster_names == [["a.jpg", "b.jpg"], ["c.jpg"], ["d.jpg"]]
-
-
-@pytest.mark.parametrize(
-    ("cluster_size", "expected_keep_amount"),
-    [(1, 1), (5, 1), (6, 2), (20, 2), (21, 3)],
-)
-def test_get_keep_amount_uses_cluster_boundaries(
-    cluster_size: int,
-    expected_keep_amount: int,
-):
-    assert bursts._get_keep_amount(cluster_size) == expected_keep_amount
+from wv.core.bursts import BurstAnalysis
+from wv.use_cases.clean.bursts import CleanBurstsInput, run
 
 
 def test_run_moves_lower_ranked_images_from_a_burst(
@@ -67,7 +13,6 @@ def test_run_moves_lower_ranked_images_from_a_burst(
     source = tmp_path / "source"
     output = tmp_path / "output"
     source.mkdir()
-
     file_paths = [
         source / "20240628_101530__GF_STREAM_FEEDER__ABC234.jpg",
         source / "20240628_101531__GF_STREAM_FEEDER__ABC235.jpg",
@@ -76,34 +21,29 @@ def test_run_moves_lower_ranked_images_from_a_burst(
     for path in file_paths:
         path.write_bytes(b"placeholder")
 
-    burst_image_map = {
-        file_paths[0]: bursts.BurstImage(
-            file_paths[0], imagehash.hex_to_hash("0000000000000000"), 30.0
-        ),
-        file_paths[1]: bursts.BurstImage(
-            file_paths[1], imagehash.hex_to_hash("0000000000000000"), 20.0
-        ),
-        file_paths[2]: bursts.BurstImage(
-            file_paths[2], imagehash.hex_to_hash("0000000000000000"), 10.0
-        ),
-    }
+    def fake_plan(candidates, burst_gap_threshold, similarity_threshold):
+        from wv.core.bursts import BurstDecision, BurstReductionPlan
 
-    def fake_build_burst_images(burst, result):
-        return [burst_image_map[scanned_image.path] for scanned_image in burst]
+        candidates = sorted(candidates, key=lambda candidate: candidate.path.name)
 
-    monkeypatch.setattr(bursts, "_build_burst_images", fake_build_burst_images)
-
-    result = bursts.run(
-        bursts.CleanBurstsInput(
-            source=source,
-            output=output,
-            burst_gap_threshold=60,
-            similarity_threshold=0,
+        return BurstReductionPlan(
+            decisions=(
+                BurstDecision(candidates[0].id, candidates[0].path, "keep"),
+                BurstDecision(candidates[1].id, candidates[1].path, "move"),
+                BurstDecision(candidates[2].id, candidates[2].path, "move"),
+            ),
+            failures=(),
+            bursts=1,
+            processed=3,
         )
-    )
+
+    monkeypatch.setattr("wv.use_cases.clean.bursts.build_burst_reduction_plan", fake_plan)
+
+    result = run(CleanBurstsInput(source=source, output=output, similarity_threshold=0))
 
     destination = output / "ignored" / "bursts"
     assert result.files_discovered == 3
+    assert result.files_processed == 3
     assert result.files_bursts == 1
     assert result.files_reduced == 2
     assert result.files_moved == 2
@@ -116,62 +56,46 @@ def test_run_moves_lower_ranked_images_from_a_burst(
     assert (destination / file_paths[2].name).exists()
 
 
-def test_run_skips_analysis_for_singleton_burst(
+def test_run_keeps_singleton_burst_during_dry_run(make_image, tmp_path: Path):
+    source = tmp_path / "source"
+    output = tmp_path / "output"
+    source.mkdir()
+    file_path = make_image(
+        source / "20240628_101530__GF_STREAM_FEEDER__ABC234.jpg"
+    )
+
+    result = run(CleanBurstsInput(source=source, output=output, dry_run=True))
+
+    assert result.files_discovered == 1
+    assert result.files_processed == 1
+    assert result.files_bursts == 0
+    assert result.files_reduced == 0
+    assert result.files_moved == 0
+    assert result.files_ignored == 1
+    assert result.files_failed == 0
+    assert file_path.exists()
+    assert not (output / "ignored" / "bursts").exists()
+
+
+@pytest.mark.parametrize(
+    ("burst_gap_threshold", "similarity_threshold", "message"),
+    [(-1, 5, "burst_gap_threshold"), (60, -1, "similarity_threshold"), (60, 65, "similarity_threshold")],
+)
+def test_run_rejects_invalid_thresholds(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    burst_gap_threshold: int,
+    similarity_threshold: int,
+    message: str,
 ):
     source = tmp_path / "source"
-    output = tmp_path / "output"
     source.mkdir()
 
-    file_path = source / "20240628_101530__GF_STREAM_FEEDER__ABC234.jpg"
-    file_path.write_bytes(b"placeholder")
-
-    def fail_build_burst_images(*args, **kwargs):
-        raise AssertionError("singleton burst should not be analyzed")
-
-    monkeypatch.setattr(bursts, "_build_burst_images", fail_build_burst_images)
-
-    result = bursts.run(
-        bursts.CleanBurstsInput(
-            source=source,
-            output=output,
-            burst_gap_threshold=60,
-            similarity_threshold=0,
+    with pytest.raises(ValueError, match=message):
+        run(
+            CleanBurstsInput(
+                source=source,
+                output=tmp_path / "output",
+                burst_gap_threshold=burst_gap_threshold,
+                similarity_threshold=similarity_threshold,
+            )
         )
-    )
-
-    assert result.files_discovered == 1
-    assert result.files_bursts == 0
-    assert result.files_reduced == 0
-    assert result.files_moved == 0
-    assert result.files_ignored == 1
-    assert result.files_failed == 0
-    assert file_path.exists()
-
-
-def test_run_keeps_singleton_burst_during_dry_run(tmp_path: Path):
-    source = tmp_path / "source"
-    output = tmp_path / "output"
-    source.mkdir()
-
-    file_path = source / "20240628_101530__GF_STREAM_FEEDER__ABC234.jpg"
-    file_path.write_bytes(b"placeholder")
-
-    result = bursts.run(
-        bursts.CleanBurstsInput(
-            source=source,
-            output=output,
-            burst_gap_threshold=60,
-            similarity_threshold=0,
-            dry_run=True,
-        )
-    )
-
-    assert result.files_discovered == 1
-    assert result.files_bursts == 0
-    assert result.files_reduced == 0
-    assert result.files_moved == 0
-    assert result.files_ignored == 1
-    assert result.files_failed == 0
-    assert file_path.exists()

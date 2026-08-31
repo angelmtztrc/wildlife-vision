@@ -2,11 +2,11 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image
-
 from wv.core.display import display_file, display_path
 from wv.core.files import ensure_directory, is_allowed_image_file
+from wv.core.images import is_image_corrupted
 from wv.core.logger import get_logger, get_progress
+from wv.core.session import get_ignored_corrupted_path
 
 logger = get_logger(__name__)
 
@@ -29,21 +29,8 @@ class CleanCorruptedResult:
     dry_run: bool = False
 
 
-def _is_corrupted_image(file_path: Path) -> bool:
-    try:
-        with Image.open(file_path) as image:
-            image.verify()
-
-        with Image.open(file_path) as image:
-            image.load()
-    except Exception:
-        return True
-
-    return False
-
-
 def run(input_data: CleanCorruptedInput) -> CleanCorruptedResult:
-    destination = input_data.output / "ignored" / "corrupted"
+    destination = get_ignored_corrupted_path(input_data.output)
     result = CleanCorruptedResult(destination=destination, dry_run=input_data.dry_run)
 
     ensure_directory(input_data.source)
@@ -75,7 +62,7 @@ def run(input_data: CleanCorruptedInput) -> CleanCorruptedResult:
                 continue
 
             try:
-                if not _is_corrupted_image(file):
+                if not is_image_corrupted(file):
                     logger.debug("Keeping %s: image is readable", display_file(file))
                     progress.update(process, advance=1)
                     continue

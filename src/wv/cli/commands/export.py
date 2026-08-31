@@ -5,31 +5,22 @@ import typer
 
 from wv.core.display import display_path
 from wv.core.logger import get_logger
-from wv.use_cases.export.research_grade import ExportResearchGradeInput
-from wv.use_cases.export.research_grade import run as run_export_research_grade
+from wv.use_cases.session.export_favorites import ExportFavoritesInput
+from wv.use_cases.session.export_favorites import run as run_export_favorites
 
-app = typer.Typer(help="Export curated images.")
+app = typer.Typer(help="Export curated images from managed sessions.")
 
 logger = get_logger(__name__)
 
 
-@app.command("research-grade")
-def export_research_grade(
-    session_path: Annotated[
-        Path,
-        typer.Argument(
-            help="Session/output directory containing detection/animal.",
-            exists=True,
-            file_okay=False,
-            dir_okay=True,
-            readable=True,
-        ),
-    ],
+@app.command("favorites")
+def export_favorites(
+    session_id: Annotated[str, typer.Argument(help="Managed session ID with completed content detection.")],
     output: Annotated[
         Path | None,
         typer.Option(
             "--output",
-            help="Destination directory for exported research-grade images.",
+            help="Destination directory; defaults to exports/SESSION_ID/favorites in the active workspace.",
             file_okay=False,
             dir_okay=True,
         ),
@@ -38,31 +29,31 @@ def export_research_grade(
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview the export operation without copying any files.",
+            help="Validate candidates and report planned copies and replacements without writing files.",
         ),
     ] = False,
 ):
-    """Copy animal detections marked Research_Grade=true into the export folder."""
+    """Copy favorited animal detections from a completed managed session."""
     logger.info(
-        "Starting research-grade export from %s to %s (dry_run=%s)",
-        display_path(session_path),
+        "Starting favorite export for %s to %s (dry_run=%s)",
+        session_id,
         display_path(output) if output is not None else "default export destination",
         dry_run,
     )
 
     try:
-        result = run_export_research_grade(
-            ExportResearchGradeInput(
-                session_path=session_path,
+        result = run_export_favorites(
+            ExportFavoritesInput(
+                session_id=session_id,
                 output=output,
                 dry_run=dry_run,
             )
         )
     except (FileNotFoundError, NotADirectoryError, ValueError) as exc:
-        raise typer.BadParameter(str(exc), param_hint="session_path") from exc
+        raise typer.BadParameter(str(exc), param_hint="session_id") from exc
 
     logger.done(
-        "Finished research-grade export to %s: discovered=%s candidates=%s exported=%s replaced=%s skipped=%s failed=%s%s",
+        "Finished favorite export to %s: discovered=%s candidates=%s exported=%s replaced=%s skipped=%s failed=%s%s",
         display_path(result.destination),
         result.files_discovered,
         result.files_export_candidates,

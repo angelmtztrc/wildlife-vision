@@ -1,32 +1,118 @@
 # AGENTS.md
 
+## Introduction
+
+This project contains a CLI set of tools built in Python to help organise, clean, auto-detect images files from trail cameras.
+
+## While implementing
+
+When developing or implemeting features, always make sure to review the codebase to align with the way the project is writen or structured. Don't duplicate code, always review what does exist in the /core folder. If something is used in several places maybe it can worth moving it to the core.
+
+## Asking
+
+When you're giving the order to define a plan, always ask for whatever information is needed, and confirm anything that may feel uncertain.
+
 ## Runtime
+
 - Use `uv`; the repo has `uv.lock` and targets Python `3.12` (`.python-version`, `pyproject.toml`).
 - Install deps with `uv sync`; include tests with `uv sync --group dev`.
 
 ## Entry Points
+
 - The real app entrypoint is the Typer CLI in `src/wv/cli/main.py`.
 - Console scripts are `wv` and `wildlife-vision` (`pyproject.toml`). Use `uv run wv --help` as the basic smoke test.
 - Do not treat the repo-root `main.py` as application code; it is just a placeholder that prints `Hello from wildlife-vision!`.
-- The global `--verbose` flag lives on the root app, so it must come before the subcommand: `uv run wv --verbose setup`.
+- The global `--verbose` flag lives on the root app, so it must come before the subcommand: `uv run wv --verbose models setup`.
 
 ## Repo Shape
+
 - `src/wv/cli/commands/` defines the CLI surface only.
 - `src/wv/use_cases/` is the intended home for command logic.
 - `src/wv/core/` holds shared filesystem / image / EXIF / metadata helpers plus the Rich-backed logger in `src/wv/core/logger.py`.
 - `src/wv/config/__init__.py` loads package-local config from `src/wv/config/setup.yml`.
 
+## Core Documentation
+
+- Every function in `src/wv/core/` that is reusable across the project must have a Google-style docstring.
+- Document behavior, arguments, return values, raised exceptions, side effects, fallback behavior, and important constraints when they apply.
+- File-private helpers and framework override methods do not need function docstrings. Internal adapters should have concise class-level documentation instead.
+
+## Persistence Architecture
+
+- Use `SQLAlchemy` ORM models only for database persistence concerns.
+- Keep ORM entities inside `src/wv/persistence/models/`; they must not leak into CLI or use-case layers.
+- Use class-based repositories in `src/wv/persistence/repositories/` for database access.
+- Repositories must accept a `SqlSession` (the local name for SQLAlchemy's `Session`) and return application dataclasses, not ORM entities.
+- Use `SqlSession` as the transaction and unit-of-work boundary.
+- Top-level use cases should own the SQL session lifecycle for their work; repositories should never create their own SQL sessions.
+- Do not use raw `sqlite3` for application persistence. Prefer the shared SQLAlchemy persistence stack.
+
+## Data Boundaries
+
+- Use dataclasses for use-case inputs, outputs, domain values, and internal events.
+- Do not define application-facing result types inside persistence modules.
+- Prefer boundary-correct names like `Device`, `MonitoringSite`, and `Deployment` instead of persistence-oriented `*Record` names.
+- Keep Pydantic models for FastAPI request/response schemas only; do not use them as persistence or domain models.
+
+## Migrations
+
+- Use `Alembic` as the source of truth for schema migrations.
+- Do not add new hand-rolled SQL migration runners.
+- Keep `initialize_database(...)` as the application bootstrap entrypoint, but have it apply Alembic migrations programmatically.
+- Use standard Alembic version tracking.
+
+# Use-cases
+
+Use-case code is organized by feature group packages. Each concrete use case is
+one module inside its group and represents exactly one application operation.
+
+- A use-case group is a package, for example `src/wv/use_cases/device/`.
+- A use-case module exposes one public operation entry point named `run()`.
+- Each operation must define an input dataclass and an explicit result dataclass.
+- Use cases must not call another use case for implementation reuse, including use cases in the same group.
+- Workflow use cases may orchestrate lower-level use cases when that workflow is an application requirement. `src/wv/use_cases/pipeline/run.py` is the approved example: it owns one `run()` workflow and preserves the required clean/detect ordering.
+- Use-case-private helpers must use a leading `_` prefix and stay in the same module.
+- Logic shared by multiple use cases in the same group belongs in that group's private `_shared.py` module.
+- Logic shared across use-case groups belongs in `src/wv/core/` only when it is genuinely reusable and has a stable responsibility.
+- `_shared.py` modules are private infrastructure: they must not expose `run()`, define CLI-facing APIs, or own independent SQL session lifecycles.
+- CLI and GUI code should import specific operation modules, not package-level compatibility re-exports.
+- Do not retain compatibility re-exports when splitting use cases; update internal callers and tests in the same change.
+- Any private function used internally for the use-case must have the prefix "\_" to establish that it is private.
+
+Example shape:
+
+```text
+src/wv/use_cases/device/
+  create.py
+  list.py
+  show.py
+  update.py
+  _shared.py
+```
+
+## Implementation Notes
+
+- Preserve clear separation:
+  - CLI -> use cases
+  - use cases -> repositories
+  - repositories -> SQLAlchemy models/SqlSession
+- Avoid leaking ORM behavior into business logic.
+- When adding persistence-backed features, first check whether an existing repository or domain dataclass should be extended instead of creating parallel patterns.
+
 ## Current State
-- Implemented command paths worth verifying are `setup`, `ingest sd`, `detect content`, and `clean {corrupted,overexposed-ir,bursts}`.
-- `ingest folder` and `pipeline preprocess` are still placeholders; `src/wv/cli/commands/export.py` exists but is not registered in the root app.
-- `wv setup` calls MegaDetector model preparation (`src/wv/use_cases/setup.py`, `src/wv/ml/megadetector.py`) and can trigger model resolution/download, so prefer help or tests for routine smoke checks.
+
+- Implemented command paths worth verifying are `workspace {init,activate,migrate,show,validate}`, `models {list,setup,status}`, `ingest {sd,folder}`, `pipeline run`, `session detect content`, and `clean {corrupted,overexposed-ir,bursts}`.
+- `export favorites` is registered in the root app.
+- `wv models setup` prepares MegaDetector and the isolated SpeciesNet runtime (`src/wv/use_cases/models/setup.py`), and can trigger model resolution/download, so prefer help or tests for routine smoke checks.
 
 ## Config Gotcha
-- `wv.config.load()` is `@lru_cache`d. If code edits `src/wv/config/setup.yml` and needs fresh values in the same process, clear the cache or start a new process.
-- `paths.root` defaults to `./.wv`; `ingest sd` writes sessions under `.wv/sessions/<timestamp>__<device>/initial`.
-- Device IDs and monitoring-site IDs come from `src/wv/config/setup.yml`; the CLI rejects unknown values.
+
+- `src/wv/config/setup.yml` is deprecated and retained only for compatibility with older tests; ingest does not read it.
+- Ingest requires the active workspace configured globally. Sessions are written under `<workspace>/sessions/<timestamp>__<monitoring-site>/init`.
+- `ingest sd` reads the monitoring-site ID from `<sd>/.wv/config.yml`; `ingest folder` receives it as an option. Both validate it against the active workspace database.
 
 ## Logging
+
 - CLI commands now log through `wv.core.logger`, not a CLI-specific runtime layer.
 - `logging.Logger.done(...)` is added dynamically in `src/wv/core/logger.py`; runtime is fine, but type checkers will treat `get_logger()` as returning a plain `logging.Logger` unless you add typing support.
 - `tests/conftest.py` uses `wv.core.logger.reset_logging()` plus config cache clears to isolate CLI tests; keep that fixture in sync if you add more logger globals.
@@ -36,6 +122,7 @@
 - Avoid high-volume `INFO` logs for expected per-file work; if a message only helps diagnose behavior, keep it at `DEBUG`.
 
 ## Verification
+
 - There is a real `tests/` tree and `uv run pytest` currently passes.
 - There is no repo-configured lint, formatter, typechecker, pre-commit, or CI workflow to run.
 - Useful focused checks:

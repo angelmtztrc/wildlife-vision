@@ -3,22 +3,20 @@ from pathlib import Path
 import pytest
 
 from wv.cli.commands import export
-from wv.use_cases.export.research_grade import ExportResearchGradeResult
+from wv.use_cases.session.export_favorites import ExportFavoritesResult
 
 
-def test_export_research_grade_prints_summary_for_success(
+def test_export_favorites_prints_summary_for_success(
     cli_runner,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    session_path = tmp_path / "sessions" / "20240628_120000__HNT001"
-    session_path.mkdir(parents=True)
     output = tmp_path / "custom-export"
 
     monkeypatch.setattr(
         export,
-        "run_export_research_grade",
-        lambda input_data: ExportResearchGradeResult(
+        "run_export_favorites",
+        lambda input_data: ExportFavoritesResult(
             files_discovered=6,
             files_export_candidates=2,
             files_exported=2,
@@ -32,14 +30,14 @@ def test_export_research_grade_prints_summary_for_success(
 
     result = cli_runner.invoke(
         export.app,
-        [str(session_path), "--output", str(output), "--dry-run"],
+        ["SESSION001", "--output", str(output), "--dry-run"],
     )
 
     assert result.exit_code == 0
     assert "[INFO]" in result.output
-    assert "Starting research-grade export" in result.output
+    assert "Starting favorite export" in result.output
     assert "[DONE]" in result.output
-    assert "Finished research-grade export" in result.output
+    assert "Finished favorite export" in result.output
     assert "candidates=2" in result.output
     assert "exported=2" in result.output
     assert "replaced=1" in result.output
@@ -48,24 +46,21 @@ def test_export_research_grade_prints_summary_for_success(
     assert "(dry run)" in result.output
 
 
-def test_export_research_grade_exits_with_code_one_when_use_case_reports_failures(
+def test_export_favorites_exits_with_code_one_when_use_case_reports_failures(
     cli_runner,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    session_path = tmp_path / "sessions" / "20240628_120000__HNT001"
-    session_path.mkdir(parents=True)
-
     monkeypatch.setattr(
         export,
-        "run_export_research_grade",
-        lambda input_data: ExportResearchGradeResult(
+        "run_export_favorites",
+        lambda input_data: ExportFavoritesResult(
             files_failed=1,
             destination=tmp_path / "custom-export",
         ),
     )
 
-    result = cli_runner.invoke(export.app, [str(session_path)])
+    result = cli_runner.invoke(export.app, ["SESSION001"])
 
     assert result.exit_code == 1
     assert "[DONE]" in result.output

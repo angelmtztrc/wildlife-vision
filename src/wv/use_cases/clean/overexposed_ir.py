@@ -2,11 +2,19 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageStat
-
 from wv.core.display import display_file, display_path
 from wv.core.files import ensure_directory, is_allowed_image_file
+from wv.core.images import (
+    DEFAULT_HIGH_LEVEL,
+    DEFAULT_MEAN_THRESHOLD,
+    DEFAULT_PCT_HIGH_THRESHOLD,
+    DEFAULT_STD_THRESHOLD,
+    compute_image_exposure_metrics,
+    is_image_overexposed,
+    validate_exposure_thresholds,
+)
 from wv.core.logger import get_logger, get_progress
+from wv.core.session import get_ignored_overexposed_path
 
 logger = get_logger(__name__)
 
@@ -15,16 +23,17 @@ logger = get_logger(__name__)
 class CleanOverexposedIrInput:
     source: Path
     output: Path
-    mean_threshold: float
-    std_threshold: float
-    high_level: int
-    ptc_high_threshold: float
+    mean_threshold: float = DEFAULT_MEAN_THRESHOLD
+    std_threshold: float = DEFAULT_STD_THRESHOLD
+    high_level: int = DEFAULT_HIGH_LEVEL
+    pct_high_threshold: float = DEFAULT_PCT_HIGH_THRESHOLD
     dry_run: bool = False
 
 
 @dataclass
 class CleanOverexposedIrResult:
     files_discovered: int = 0
+    files_processed: int = 0
     files_moved: int = 0
     files_overexposed: int = 0
     files_ignored: int = 0
@@ -33,57 +42,17 @@ class CleanOverexposedIrResult:
     dry_run: bool = False
 
 
-@dataclass
-class ImageMetrics:
-    mean: float
-    std: float
-    ptc_high: float
-
-
 def _validate_input(input_data: CleanOverexposedIrInput) -> None:
-    if not 0.0 <= input_data.mean_threshold <= 255.0:
-        raise ValueError("mean_threshold must be between 0.0 and 255.0")
-    if input_data.std_threshold < 0.0:
-        raise ValueError("std_threshold must be greater than or equal to 0.0")
-    if not 0 <= input_data.high_level <= 255:
-        raise ValueError("high_level must be between 0 and 255")
-    if not 0.0 <= input_data.ptc_high_threshold <= 1.0:
-        raise ValueError("ptc_high_threshold must be between 0.0 and 1.0")
-
-
-def _compute_metrics(file: Path, high_level: int):
-    with Image.open(file) as image:
-        grayscale = image.convert("L")
-        gs_stats = ImageStat.Stat(grayscale)
-        mean = float(gs_stats.mean[0])
-        std = float(gs_stats.stddev[0])
-
-        gs_hist = grayscale.histogram()
-        pixels_amount = sum(gs_hist)
-        high_pixels = sum(gs_hist[high_level:])
-
-        ptc_high = (high_pixels / pixels_amount) if pixels_amount > 0 else 0.0
-
-    return ImageMetrics(mean=mean, std=std, ptc_high=ptc_high)
-
-
-def _is_overexposed(
-    image_metrics: ImageMetrics,
-    mean_threshold: float,
-    std_threshold: float,
-    ptc_high_threshold: float,
-):
-    is_bright_and_uniform = (
-        image_metrics.mean >= mean_threshold and image_metrics.std <= std_threshold
+    validate_exposure_thresholds(
+        input_data.mean_threshold,
+        input_data.std_threshold,
+        input_data.high_level,
+        input_data.pct_high_threshold,
     )
-
-    has_many_near_white_pixels = image_metrics.ptc_high >= ptc_high_threshold
-
-    return is_bright_and_uniform or has_many_near_white_pixels
 
 
 def run(input_data: CleanOverexposedIrInput) -> CleanOverexposedIrResult:
-    destination = input_data.output / "ignored" / "overexposed"
+    destination = get_ignored_overexposed_path(input_data.output)
     result = CleanOverexposedIrResult(
         destination=destination, dry_run=input_data.dry_run
     )
@@ -97,13 +66,13 @@ def run(input_data: CleanOverexposedIrInput) -> CleanOverexposedIrResult:
     result.files_discovered = len(source_files)
 
     logger.info(
-        "Discovered %s entries for overexposed IR cleanup; destination is %s (mean_threshold=%s, std_threshold=%s, high_level=%s, ptc_high_threshold=%s, dry_run=%s)",
+        "Discovered %s entries for overexposed IR cleanup; destination is %s (mean_threshold=%s, std_threshold=%s, high_level=%s, pct_high_threshold=%s, dry_run=%s)",
         result.files_discovered,
         display_path(destination),
         input_data.mean_threshold,
         input_data.std_threshold,
         input_data.high_level,
-        input_data.ptc_high_threshold,
+        input_data.pct_high_threshold,
         input_data.dry_run,
     )
     logger.info("Processing overexposed IR candidates")
@@ -124,23 +93,24 @@ def run(input_data: CleanOverexposedIrInput) -> CleanOverexposedIrResult:
                 continue
 
             try:
-                image_metrics = _compute_metrics(
-                    file=file, high_level=input_data.high_level
+                image_metrics = compute_image_exposure_metrics(
+                    file_path=file, high_level=input_data.high_level
                 )
 
-                is_overexposed = _is_overexposed(
+                is_overexposed = is_image_overexposed(
                     image_metrics=image_metrics,
                     mean_threshold=input_data.mean_threshold,
                     std_threshold=input_data.std_threshold,
-                    ptc_high_threshold=input_data.ptc_high_threshold,
+                    pct_high_threshold=input_data.pct_high_threshold,
                 )
+                result.files_processed += 1
 
                 logger.debug(
-                    "Classified %s: mean=%.2f std=%.2f ptc_high=%.3f overexposed=%s",
+                    "Classified %s: mean=%.2f std=%.2f pct_high=%.3f overexposed=%s",
                     display_file(file),
                     image_metrics.mean,
                     image_metrics.std,
-                    image_metrics.ptc_high,
+                    image_metrics.pct_high,
                     is_overexposed,
                 )
 

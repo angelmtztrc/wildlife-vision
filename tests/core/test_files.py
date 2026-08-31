@@ -3,10 +3,14 @@ from pathlib import Path
 import pytest
 
 from wv.core.files import (
+    SymlinkPathError,
     copy_file_preserving_metadata,
     ensure_directory,
+    ensure_not_symlink,
+    ensure_tree_has_no_symlinks,
     get_file_id,
     is_allowed_image_file,
+    move_file_with_staged_copy,
     parse_ingested_image_filename,
 )
 
@@ -16,8 +20,8 @@ from wv.core.files import (
     [
         ("photo.jpg", True),
         ("photo.JPEG", True),
-        ("photo.PNG", True),
-        ("photo.HeIc", True),
+        ("photo.PNG", False),
+        ("photo.HeIc", False),
         ("photo.gif", False),
         ("photo", False),
     ],
@@ -41,6 +45,55 @@ def test_ensure_directory_raises_for_file(tmp_path: Path):
 
     with pytest.raises(NotADirectoryError):
         ensure_directory(file_path)
+
+
+def test_ensure_not_symlink_rejects_a_symbolic_link(tmp_path: Path):
+    target = tmp_path / "target.txt"
+    link = tmp_path / "link.txt"
+    target.write_text("content")
+    link.symlink_to(target)
+
+    with pytest.raises(SymlinkPathError, match="Symbolic links are not supported"):
+        ensure_not_symlink(link)
+
+
+def test_ensure_tree_has_no_symlinks_accepts_regular_nested_tree(tmp_path: Path):
+    nested_file = tmp_path / "nested" / "image.jpg"
+    nested_file.parent.mkdir()
+    nested_file.write_bytes(b"image")
+
+    ensure_tree_has_no_symlinks(tmp_path)
+
+
+@pytest.mark.parametrize("link_kind", ["file", "directory", "broken"])
+def test_ensure_tree_has_no_symlinks_rejects_links(tmp_path: Path, link_kind: str):
+    link = tmp_path / "link"
+    if link_kind == "file":
+        target = tmp_path / "target.jpg"
+        target.write_bytes(b"image")
+        link.symlink_to(target)
+    elif link_kind == "directory":
+        target = tmp_path / "target"
+        target.mkdir()
+        link.symlink_to(target, target_is_directory=True)
+    else:
+        link.symlink_to(tmp_path / "missing.jpg")
+
+    with pytest.raises(SymlinkPathError, match=str(link)):
+        ensure_tree_has_no_symlinks(tmp_path)
+
+
+def test_ensure_tree_has_no_symlinks_propagates_walk_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    def fail_walk(path, *, follow_symlinks, on_error):
+        on_error(PermissionError("denied"))
+        return iter(())
+
+    monkeypatch.setattr(Path, "walk", fail_walk)
+
+    with pytest.raises(PermissionError, match="denied"):
+        ensure_tree_has_no_symlinks(tmp_path)
 
 
 def test_get_file_id_is_stable_for_identical_content(tmp_path: Path):
@@ -141,3 +194,77 @@ def test_copy_file_preserving_metadata_raises_for_destination_directory(
 
     with pytest.raises(IsADirectoryError):
         copy_file_preserving_metadata(source, destination)
+
+
+def test_move_file_with_staged_copy_commits_transformed_copy(tmp_path: Path):
+    source = tmp_path / "source.jpg"
+    destination = tmp_path / "nested" / "destination.jpg"
+    source.write_bytes(b"source-bytes")
+    destination.parent.mkdir()
+    destination.write_bytes(b"old-bytes")
+
+    def transform(staged_file: Path) -> None:
+        staged_file.write_bytes(b"updated-bytes")
+
+    moved, replaced_existing = move_file_with_staged_copy(
+        source,
+        destination,
+        transform=transform,
+    )
+
+    assert moved is True
+    assert replaced_existing is True
+    assert not source.exists()
+    assert destination.read_bytes() == b"updated-bytes"
+
+
+def test_move_file_with_staged_copy_preserves_source_when_transform_fails(
+    tmp_path: Path,
+):
+    source = tmp_path / "source.jpg"
+    destination = tmp_path / "destination.jpg"
+    source.write_bytes(b"source-bytes")
+
+    def transform(staged_file: Path) -> None:
+        raise RuntimeError("metadata write failed")
+
+    with pytest.raises(RuntimeError, match="metadata write failed"):
+        move_file_with_staged_copy(source, destination, transform=transform)
+
+    assert source.read_bytes() == b"source-bytes"
+    assert not destination.exists()
+
+
+def test_move_file_with_staged_copy_preserves_source_when_verify_fails(
+    tmp_path: Path,
+):
+    source = tmp_path / "source.jpg"
+    destination = tmp_path / "destination.jpg"
+    source.write_bytes(b"source-bytes")
+
+    with pytest.raises(ValueError, match="verification failed"):
+        move_file_with_staged_copy(source, destination, verify=lambda staged: False)
+
+    assert source.read_bytes() == b"source-bytes"
+    assert not destination.exists()
+
+
+def test_move_file_with_staged_copy_preserves_source_when_replace_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = tmp_path / "source.jpg"
+    destination = tmp_path / "destination.jpg"
+    source.write_bytes(b"source-bytes")
+    destination.write_bytes(b"old-bytes")
+
+    def fail_replace(self: Path, target: Path) -> Path:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        move_file_with_staged_copy(source, destination)
+
+    assert source.read_bytes() == b"source-bytes"
+    assert destination.read_bytes() == b"old-bytes"

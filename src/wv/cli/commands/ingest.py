@@ -3,107 +3,43 @@ from typing import Annotated, Literal
 
 import typer
 
-from wv.config import get_device_ids, get_monitoring_sites_ids
 from wv.core.display import display_path
 from wv.core.logger import get_logger
-from wv.use_cases.ingest.sd import IngestSdInput
-from wv.use_cases.ingest.sd import run as run_ingest_sd
+from wv.use_cases.ingest.ingest import (
+    ExplicitIngestIdentity,
+    IngestInput,
+    IngestResult,
+    SdCardIngestIdentity,
+    run as run_ingest,
+)
+from wv.use_cases.ingest._shared import IngestError
+from wv.use_cases.monitoring_site.list import (
+    ListMonitoringSitesInput,
+    run as run_list_monitoring_sites,
+)
+from wv.workspace.common import WorkspaceError
 
-app = typer.Typer(help="Ingest photos from SD cards and other source locations.")
+app = typer.Typer(help="Create managed sessions from SD cards or folders.")
 
 logger = get_logger(__name__)
 
 
-def _complete_device(incomplete: str) -> list[str]:
-    return [
-        device_id for device_id in get_device_ids() if device_id.startswith(incomplete)
-    ]
-
-
 def _complete_monitoring_site(incomplete: str) -> list[str]:
-    return [
-        site_id
-        for site_id in get_monitoring_sites_ids()
-        if site_id.startswith(incomplete)
-    ]
+    try:
+        return [
+            site.id
+            for site in run_list_monitoring_sites(ListMonitoringSitesInput()).items
+            if site.id.startswith(incomplete)
+        ]
+    except WorkspaceError:
+        return []
 
 
-def _validate_device(value: str) -> str:
-    if value not in get_device_ids():
-        raise typer.BadParameter(f"Unknown device '{value}'.")
-    return value
-
-
-def _validate_monitoring_site(value: str) -> str:
-    if value not in get_monitoring_sites_ids():
-        raise typer.BadParameter(f"Unknown monitoring site '{value}'.")
-    return value
-
-
-@app.command("sd")
-def ingest_sd(
-    source: Annotated[
-        Path,
-        typer.Argument(
-            help="Directory representing the mounted SD card or source folder to ingest from.",
-            exists=True,
-            file_okay=False,
-            dir_okay=True,
-            readable=True,
-        ),
-    ],
-    device: Annotated[
-        str,
-        typer.Option(
-            help="Configured device ID for the camera that produced these images.",
-            autocompletion=_complete_device,
-            callback=_validate_device,
-        ),
-    ],
-    monitoring_site: Annotated[
-        str,
-        typer.Option(
-            help="Configured monitoring site ID to encode into ingested filenames.",
-            autocompletion=_complete_monitoring_site,
-            callback=_validate_monitoring_site,
-        ),
-    ],
-    mode: Annotated[
-        Literal["drain", "copy"],
-        typer.Option(
-            help="Ingestion mode. Use 'drain' to safely copy files and remove them from the source location, or 'copy' to copy files while leaving the source unchanged.",
-        ),
-    ] = "drain",
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help="Preview the ingest operation without copying, moving, or deleting files.",
-        ),
-    ] = False,
-):
-    logger.info(
-        "Starting SD ingest from %s (device=%s, monitoring_site=%s, mode=%s, dry_run=%s)",
-        display_path(source),
-        device,
-        monitoring_site,
-        mode,
-        dry_run,
-    )
-
-    result = run_ingest_sd(
-        IngestSdInput(
-            source=source,
-            device=device,
-            monitoring_site=monitoring_site,
-            mode=mode,
-            dry_run=dry_run,
-        )
-    )
-
+def _log_result(source_kind: str, destination: Path, result: IngestResult) -> None:
     logger.done(
-        "Finished SD ingest to %s: discovered=%s copied=%s replaced=%s ignored=%s deleted=%s failed=%s%s",
-        display_path(result.destination),
+        "Finished %s ingest to %s: discovered=%s copied=%s replaced=%s ignored=%s deleted=%s failed=%s%s",
+        source_kind,
+        display_path(destination),
         result.files_discovered,
         result.files_copied,
         result.files_replaced,
@@ -113,6 +49,64 @@ def ingest_sd(
         " (dry run)" if result.dry_run else "",
     )
 
+
+@app.command("sd")
+def ingest_sd(
+    source: Annotated[
+        Path,
+        typer.Argument(
+            help="Mounted SD-card directory containing .wv/config.yml monitoring-site metadata.",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+        ),
+    ],
+    mode: Annotated[
+        Literal["drain", "copy"],
+        typer.Option(
+            help="Ingestion mode: drain copies and verifies each JPEG before deleting its source; copy retains sources.",
+        ),
+    ] = "drain",
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Preview counts and destinations without creating a session, copying files, or deleting sources.",
+        ),
+    ] = False,
+    recursive: Annotated[
+        bool,
+        typer.Option(
+            "--recursive",
+            help="Include files in nested directories, excluding .wv metadata directories.",
+        ),
+    ] = False,
+):
+    """Ingest JPEGs from an initialized SD card into the active workspace."""
+    logger.info(
+        "Starting SD ingest from %s (mode=%s, dry_run=%s, recursive=%s)",
+        display_path(source),
+        mode,
+        dry_run,
+        recursive,
+    )
+
+    try:
+        result = run_ingest(
+            IngestInput(
+                source=source,
+                mode=mode,
+                identity=SdCardIngestIdentity(),
+                dry_run=dry_run,
+                recursive=recursive,
+            )
+        )
+    except (WorkspaceError, IngestError, ValueError) as exc:
+        logger.error("SD ingest failed: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    _log_result("SD", result.destination, result)
     if result.files_failed > 0:
         raise typer.Exit(code=1)
 
@@ -121,21 +115,73 @@ def ingest_sd(
 
 @app.command("folder")
 def ingest_folder(
-    source: Annotated[str, typer.Argument(help="")],
-    monitoring_site: Annotated[str, typer.Option(help="")],
-    mode: Annotated[
+    source: Annotated[
+        Path,
+        typer.Argument(
+            help="Directory containing .jpg and .jpeg files to ingest.",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+        ),
+    ],
+    monitoring_site: Annotated[
         str,
         typer.Option(
-            help="Ingestion mode. Use 'drain' to safely copy files and remove them from the source location, or 'copy' to copy files while leaving the source unchanged.",
-            autocompletion=lambda: ["drain", "copy"],
+            "--monitoring-site",
+            help="Registered monitoring-site ID for the new session.",
+            autocompletion=_complete_monitoring_site,
+        ),
+    ],
+    mode: Annotated[
+        Literal["drain", "copy"],
+        typer.Option(
+            help="Ingestion mode: drain copies and verifies each JPEG before deleting its source; copy retains sources.",
         ),
     ] = "drain",
     dry_run: Annotated[
         bool,
         typer.Option(
             "--dry-run",
-            help="Preview the ingest operation without copying, moving, or deleting files.",
+            help="Preview counts and destinations without creating a session, copying files, or deleting sources.",
+        ),
+    ] = False,
+    recursive: Annotated[
+        bool,
+        typer.Option(
+            "--recursive",
+            help="Include files in nested directories, excluding .wv metadata directories.",
         ),
     ] = False,
 ):
+    """Ingest JPEGs from a folder into a managed session in the active workspace."""
+    logger.info(
+        "Starting folder ingest from %s (monitoring_site=%s, mode=%s, dry_run=%s, recursive=%s)",
+        display_path(source),
+        monitoring_site,
+        mode,
+        dry_run,
+        recursive,
+    )
+
+    try:
+        result = run_ingest(
+            IngestInput(
+                source=source,
+                mode=mode,
+                identity=ExplicitIngestIdentity(
+                    monitoring_site_id=monitoring_site,
+                ),
+                dry_run=dry_run,
+                recursive=recursive,
+            )
+        )
+    except (WorkspaceError, IngestError, ValueError) as exc:
+        logger.error("Folder ingest failed: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    _log_result("folder", result.destination, result)
+    if result.files_failed > 0:
+        raise typer.Exit(code=1)
+
     return None
