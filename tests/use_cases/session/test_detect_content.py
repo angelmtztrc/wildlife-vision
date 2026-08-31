@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import pytest
 
@@ -127,6 +128,15 @@ def test_run_persists_detection_plan_and_updates_inventory(
     assert result.files_discovered == 2
     assert result.destination == configured_workspace / "sessions" / SESSION_ID / "detection"
     assert result.dry_run is False
+    assert json.loads(result.process.parameters_json or "{}") == {
+        "algorithm_version": 4,
+        "batch_size": 4,
+        "classification_gate": 0.1,
+        "domestic_classification_threshold": 0.65,
+        "minimum_detection_threshold": 0.005,
+        "model": "MDV5A",
+        "speciesnet_model": "kaggle:google/speciesnet/pyTorch/v4.0.3a/1",
+    }
     with sql_session_scope(require_workspace_database_path(configured_workspace)) as sql_session:
         plans = SessionProcessImagePlanRepository(sql_session).list_for_process(
             SESSION_ID, "detect_content"
@@ -239,7 +249,7 @@ def test_recovery_replays_saved_plan_without_model(
             SESSION_ID,
             "detect_content",
             "2026-08-01T12:03:00+00:00",
-            first.process.parameters_json.replace('"algorithm_version":3', '"algorithm_version":2'),
+            first.process.parameters_json.replace('"algorithm_version":4', '"algorithm_version":3'),
         )
 
     monkeypatch.setattr(

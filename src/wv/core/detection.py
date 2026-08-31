@@ -11,6 +11,7 @@ MINIMUM_DETECTION_THRESHOLD = 0.005
 CLASSIFICATION_GATE = 0.1
 TRUSTED_CONTENT_THRESHOLD = 0.2
 TAXONOMIC_ROLLUP_THRESHOLD = 0.65
+DOMESTIC_CLASSIFICATION_THRESHOLD = TAXONOMIC_ROLLUP_THRESHOLD
 
 
 @dataclass(frozen=True)
@@ -24,10 +25,11 @@ class DetectionDecision:
 
 @dataclass(frozen=True)
 class SpeciesNetClassification:
-    """A semantic SpeciesNet classification for one MegaDetector animal crop."""
+    """SpeciesNet evidence for one MegaDetector animal crop."""
 
     label: str
     confidence: float
+    is_domestic: bool = False
 
 
 def validate_detection_settings(batch_size: int, domestic_taxon_ids: list[str]) -> None:
@@ -58,6 +60,11 @@ def classify_detections(
     speciesnet_classifications: dict[int, SpeciesNetClassification],
 ) -> DetectionDecision:
     """Classify MegaDetector detections into a session route.
+
+    MegaDetector and SpeciesNet jointly determine high-level content. Once a
+    crop is accepted as animal content, a configured domestic SpeciesNet taxon
+    at ``DOMESTIC_CLASSIFICATION_THRESHOLD`` routes it to ``domestic`` without
+    competing against MegaDetector's generic animal confidence.
 
     Args:
         detections: Normalized MegaDetector detections for one image.
@@ -110,9 +117,19 @@ def classify_detections(
             winner = DetectionDecision("animal", detection.confidence, "megadetector")
         else:
             _validate_speciesnet_classification(speciesnet)
-            winner = DetectionDecision("animal", detection.confidence, "ensemble")
-            if speciesnet.confidence > detection.confidence:
+            if (
+                (speciesnet.is_domestic or speciesnet.label == "domestic")
+                and speciesnet.confidence >= DOMESTIC_CLASSIFICATION_THRESHOLD
+            ):
+                winner = DetectionDecision("domestic", speciesnet.confidence, "ensemble")
+            elif speciesnet.label == "animal":
+                winner = DetectionDecision(
+                    "animal", max(detection.confidence, speciesnet.confidence), "ensemble"
+                )
+            elif speciesnet.confidence > detection.confidence:
                 winner = DetectionDecision(speciesnet.label, speciesnet.confidence, "ensemble")
+            else:
+                winner = DetectionDecision("animal", detection.confidence, "ensemble")
 
         if winner.confidence < TRUSTED_CONTENT_THRESHOLD:
             unresolved = True

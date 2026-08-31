@@ -8,6 +8,7 @@ from wv.core.detection import (
     classify_detections,
     validate_detection_settings,
     CLASSIFICATION_GATE,
+    DOMESTIC_CLASSIFICATION_THRESHOLD,
     MINIMUM_DETECTION_THRESHOLD,
     SpeciesNetClassification,
 )
@@ -49,7 +50,7 @@ from ._shared import (
 from wv.workspace.workspace_config import load_processing_config
 
 PROCESS_NAME = "detect_content"
-ALGORITHM_VERSION = 3
+ALGORITHM_VERSION = 4
 logger = get_logger(__name__)
 @dataclass(frozen=True)
 class SessionDetectContentInput:
@@ -108,6 +109,7 @@ def _parameters_json(input_data: SessionDetectContentInput) -> str:
             "speciesnet_model": input_data.speciesnet_model,
             "minimum_detection_threshold": MINIMUM_DETECTION_THRESHOLD,
             "classification_gate": CLASSIFICATION_GATE,
+            "domestic_classification_threshold": DOMESTIC_CLASSIFICATION_THRESHOLD,
         }
     )
 
@@ -289,12 +291,9 @@ def _build_plan(
         inference_result = inference_by_path[source_path]
         speciesnet_classifications = {
             index: SpeciesNetClassification(
-                label=(
-                    "domestic"
-                    if species_result.final_taxon_id in domestic_taxon_ids
-                    else species_result.final_label
-                ),
+                label=species_result.final_label,
                 confidence=species_result.final_taxon_confidence,
+                is_domestic=species_result.final_taxon_id in domestic_taxon_ids,
             )
             for index, _ in enumerate(inference_result.detections)
             if (species_result := species_results.get((source_path, index))) is not None

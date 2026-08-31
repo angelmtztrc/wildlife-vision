@@ -2,6 +2,7 @@ import pytest
 
 from wv.core.detection import (
     DEFAULT_BATCH_SIZE,
+    DOMESTIC_CLASSIFICATION_THRESHOLD,
     SpeciesNetClassification,
     classify_detections,
     validate_detection_settings,
@@ -15,16 +16,39 @@ def test_classify_detections_uses_human_first_precedence():
     assert classify_detections(detections, {}).label == "human"
 
 
-def test_classify_detections_uses_speciesnet_domestic_result():
-    detections = [MlDetection("animal", 0.9)]
+def test_classify_detections_routes_high_confidence_domestic_subtype():
+    detections = [MlDetection("animal", 0.977)]
 
     decision = classify_detections(
-        detections, {0: SpeciesNetClassification("domestic", 0.95)}
+        detections, {0: SpeciesNetClassification("animal", 0.9661, is_domestic=True)}
     )
 
     assert decision.label == "domestic"
-    assert decision.confidence == 0.95
+    assert decision.confidence == 0.9661
     assert decision.source == "ensemble"
+
+
+def test_classify_detections_requires_domestic_subtype_threshold():
+    decision = classify_detections(
+        [MlDetection("animal", 0.9)],
+        {
+            0: SpeciesNetClassification(
+                "animal", DOMESTIC_CLASSIFICATION_THRESHOLD - 0.01, is_domestic=True
+            )
+        },
+    )
+
+    assert decision.label == "animal"
+    assert decision.confidence == 0.9
+
+
+def test_classify_detections_keeps_human_precedence_over_domestic():
+    decision = classify_detections(
+        [MlDetection("animal", 0.977), MlDetection("human", 0.8)],
+        {0: SpeciesNetClassification("animal", 0.9661, is_domestic=True)},
+    )
+
+    assert decision.label == "human"
 
 
 def test_classify_detections_uses_speciesnet_blank_when_it_has_higher_confidence():
